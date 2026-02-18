@@ -27,7 +27,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <java.version>21</java.version>
-    <keycloak.version>17.0.0</keycloak.version>
+    <!-- springdoc is not managed by Spring Boot's dependency BOM -->
+    <springdoc.version>2.0.0</springdoc.version>
+    <!-- Keycloak 17.x is javax.* based; Spring Boot 4.x is jakarta.* based -->
+    <keycloak.version>24.0.5</keycloak.version>
     <!-- force at least version 2.16 due to https://logging.apache.org/log4j/2.x/security.html -->
     <log4j.version>2.17.1</log4j.version>
     <openapi.generator.maven.version>6.6.0</openapi.generator.maven.version>
@@ -121,6 +124,7 @@
     <dependency>
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
     </dependency>
 
     <dependency>
