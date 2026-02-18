@@ -9,6 +9,7 @@ import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.Ex
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
 /**
@@ -38,7 +39,8 @@ public class ConsultingTypeService {
   }
 
   private void addDefaultHeaders(ApiClient apiClient) {
-    var headers = this.securityHeaderSupplier.getCsrfHttpHeaders();
+    // Don't send CSRF headers for internal service calls
+    var headers = new HttpHeaders();
     tenantHeaderSupplier.addTenantHeader(headers);
     headers.forEach((key, value) -> apiClient.addDefaultHeader(key, value.iterator().next()));
   }

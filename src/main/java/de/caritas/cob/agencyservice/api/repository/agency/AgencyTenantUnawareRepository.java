@@ -3,8 +3,8 @@ package de.caritas.cob.agencyservice.api.repository.agency;
 import de.caritas.cob.agencyservice.api.repository.TenantUnaware;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository("agencyTenantUnawareRepository")
 @TenantUnaware
-public interface AgencyTenantUnawareRepository extends CrudRepository<Agency, Long>, AgencyRepository {
+public interface AgencyTenantUnawareRepository extends JpaRepository<Agency, Long>, AgencyRepository {
 
   @Query(
       value = SELECT_WITHOUT_TOPICS
@@ -44,4 +44,5 @@ public interface AgencyTenantUnawareRepository extends CrudRepository<Agency, Lo
 
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
+  List<Agency> findByTenantId(Long tenantId);
 }

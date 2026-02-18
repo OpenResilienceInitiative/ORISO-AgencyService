@@ -8,9 +8,11 @@ import lombok.Data;
 @Data
 public class AgencySearch {
 
-  private String postCode;
+  private Optional<String> postCode;
   private Optional<Integer> consultingTypeId;
   private Optional<Integer> topicId;
   private Optional<Integer> age;
   private Optional<String> gender;
+
+  private Optional<String> counsellingRelation;
 }

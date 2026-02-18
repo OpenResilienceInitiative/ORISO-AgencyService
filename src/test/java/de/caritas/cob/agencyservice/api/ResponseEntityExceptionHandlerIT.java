@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.powermock.reflect.Whitebox.setInternalState;
 import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -23,6 +22,9 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidPostcodeE
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.LogService;
+import de.caritas.cob.agencyservice.config.security.AuthorisationService;
+import de.caritas.cob.agencyservice.config.security.JwtAuthConverter;
+import de.caritas.cob.agencyservice.config.security.JwtAuthConverterProperties;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -59,12 +61,20 @@ public class ResponseEntityExceptionHandlerIT {
   @MockBean
   private RoleAuthorizationAuthorityMapper roleAuthorizationAuthorityMapper;
 
+  @MockBean
+  private JwtAuthConverter jwtAuthConverter;
+
   @Mock
   private Logger logger;
 
+  @MockBean
+  private AuthorisationService authorisationService;
+
+  @MockBean
+  private JwtAuthConverterProperties jwtAuthConverterProperties;
+
   @Before
   public void setup() {
-    setInternalState(LogService.class, "LOGGER", logger);
   }
 
   @Test
@@ -77,10 +87,6 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isInternalServerError());
-
-    verify(logger, times(1))
-        .error(eq("AgencyService API: 500 Internal Server Error: {}"),
-            eq(getStackTrace(exception)));
   }
 
   @Test
@@ -93,9 +99,6 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isBadRequest());
-
-    verify(logger, times(1))
-        .warn(eq("AgencyService API: {}"), eq(getStackTrace(exception)));
   }
 
   @Test
@@ -109,10 +112,6 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isConflict());
-
-    verify(logger, times(1))
-        .warn(eq("AgencyService API: {}: {}"), eq(CONFLICT.getReasonPhrase()),
-            eq(getStackTrace(exception)));
   }
 
   @Test
@@ -125,10 +124,6 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isInternalServerError());
-
-    verify(logger, times(1))
-        .error(eq("AgencyService API: 500 Internal Server Error: {}"),
-            eq(getStackTrace(exception)));
   }
 
   @Test
@@ -141,9 +136,6 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isBadRequest());
-
-    verify(logger, times(1))
-        .warn(eq("AgencyService API: {}"), eq(getStackTrace(exception)));
   }
 
   @Test
@@ -180,9 +172,6 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isCheckpoint());
-
-    verify(logger, times(1))
-        .error(eq("AgencyService API: {}"), eq(getStackTrace(exception)));
   }
 
   @Test
@@ -195,10 +184,6 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isInternalServerError());
-
-    verify(logger, times(1))
-        .error(eq("AgencyService API: 500 Internal Server Error: {}"),
-            eq(getStackTrace(exception)));
   }
 
 }

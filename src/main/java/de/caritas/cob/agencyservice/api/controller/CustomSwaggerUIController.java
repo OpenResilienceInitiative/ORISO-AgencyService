@@ -3,16 +3,14 @@ package de.caritas.cob.agencyservice.api.controller;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
-import springfox.documentation.annotations.ApiIgnore;
 
 @Controller
-@ApiIgnore
 public class CustomSwaggerUIController {
-  @Value("${springfox.docuPath}")
-  private String docuPath;
+  @Value("${springdoc.swagger-ui.path:${springfox.docuPath:/swagger-ui.html}}")
+  private String swaggerUiPath;
 
   @RequestMapping(value = "${springfox.docuPath}")
   public String index() {
-    return "redirect:" + docuPath + "/swagger-ui.html";
+    return "redirect:" + swaggerUiPath;
   }
 }

@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
 /**
@@ -13,7 +13,7 @@ import org.springframework.data.repository.query.Param;
  */
 @Primary
 @ConditionalOnExpression("${multitenancy.enabled:true}")
-public interface AgencyTenantAwareRepository extends CrudRepository<Agency, Long>, AgencyRepository {
+public interface AgencyTenantAwareRepository extends JpaRepository<Agency, Long>, AgencyRepository {
 
 
   String AND_A_TENANT_ID_FILTER = "AND a.tenant_id = :tenantId ";
@@ -34,6 +34,7 @@ public interface AgencyTenantAwareRepository extends CrudRepository<Agency, Long
       @Param(value = "length") int length, @Param(value = "type") Integer consultingTypeId,
       @Param(value = "age") Integer age,
       @Param(value = "gender") String gender,
+      @Param(value = "counselling_relation") String counsellingRelation,
       @Param(value = "tenantId") Long tenantId);
 
   @Query(
@@ -46,7 +47,15 @@ public interface AgencyTenantAwareRepository extends CrudRepository<Agency, Long
       @Param(value = "topicId") int topicId,
       @Param(value = "age") Integer age,
       @Param(value = "gender") String gender,
+      @Param(value = "counselling_relation") String counsellingRelation,
       Long tenantId);
+
+  @Query(
+      value = SELECT_ALL_AGENCIES_TOPICS
+          + AND_A_TENANT_ID_FILTER
+          + ORDER_BY_TOPIC,
+      nativeQuery = true)
+  List<Integer> findAllAgenciesTopics(Long tenantId);
 
   @Query("select a from Agency as a where a.id = :agencyId ")
   Optional<Agency> findById(Long agencyId);

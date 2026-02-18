@@ -8,13 +8,12 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.CustomValidation
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidDemographicsException;
-import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidDioceseException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidOfflineStatusException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidPostcodeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import java.net.UnknownHostException;
-import javax.validation.ConstraintViolationException;
+import jakarta.validation.ConstraintViolationException;
 import lombok.NoArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -23,9 +22,6 @@ import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.lang.NonNull;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.client.HttpClientErrorException;
@@ -71,48 +67,6 @@ public class ApiResponseEntityExceptionHandler extends ResponseEntityExceptionHa
     LogService.logWarning(ex);
 
     return handleExceptionInternal(ex, null, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
-  }
-
-  /**
-   * Incoming request body could not be deserialized.
-   *
-   * @param ex      the thrown exception
-   * @param headers http headers
-   * @param status  http status
-   * @param request web request
-   * @return response entity
-   */
-  @NonNull
-  @Override
-  protected ResponseEntity<Object> handleHttpMessageNotReadable(
-      final @NonNull HttpMessageNotReadableException ex,
-      final @NonNull HttpHeaders headers,
-      final @NonNull HttpStatus status,
-      final @NonNull WebRequest request) {
-    LogService.logWarning(status, ex);
-
-    return handleExceptionInternal(ex, null, headers, status, request);
-  }
-
-  /**
-   * Valid on object fails validation.
-   *
-   * @param ex      the thrown exception
-   * @param headers http headers
-   * @param status  http status
-   * @param request web request
-   * @return response entity
-   */
-  @NonNull
-  @Override
-  protected ResponseEntity<Object> handleMethodArgumentNotValid(
-      final @NonNull MethodArgumentNotValidException ex,
-      final @NonNull HttpHeaders headers,
-      final @NonNull HttpStatus status,
-      final @NonNull WebRequest request) {
-    LogService.logWarning(status, ex);
-
-    return handleExceptionInternal(ex, null, headers, status, request);
   }
 
   /**
@@ -171,8 +125,7 @@ public class ApiResponseEntityExceptionHandler extends ResponseEntityExceptionHa
    * @param request WebRequest
    * @return a ResponseEntity instance
    */
-  @ExceptionHandler({InvalidPostcodeException.class, InvalidConsultingTypeException.class,
-      InvalidDioceseException.class, InvalidOfflineStatusException.class,
+  @ExceptionHandler({InvalidPostcodeException.class, InvalidConsultingTypeException.class, InvalidOfflineStatusException.class,
       InvalidDemographicsException.class
   })
   public ResponseEntity<Object> handleInternal(

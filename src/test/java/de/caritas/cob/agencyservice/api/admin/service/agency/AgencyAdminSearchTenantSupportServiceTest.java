@@ -2,7 +2,8 @@ package de.caritas.cob.agencyservice.api.admin.service.agency;
 
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.AgencyServiceApplication;
-import de.caritas.cob.agencyservice.api.helper.AuthenticatedUser;
+import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
+import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.model.Sort;
 import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
@@ -35,6 +36,9 @@ class AgencyAdminSearchTenantSupportServiceTest {
   private AgencyAdminSearchTenantSupportService agencyAdminSearchTenantSupportService;
 
   @MockBean
+  private TopicEnrichmentService topicEnrichmentService;
+
+  @MockBean
   private AuthenticatedUser authenticatedUser;
 
   @MockBean
@@ -60,14 +64,34 @@ class AgencyAdminSearchTenantSupportServiceTest {
   void searchAgency_Should_FindAllAgenciesForGivenTenant() {
     // given, when
     var agencySearchResult = agencyAdminSearchTenantSupportService.searchAgencies("", 1, 10, new Sort());
+
     // then
-    assertThat(agencySearchResult.getEmbedded()).isNotEmpty();
-    assertThat(agencySearchResult.getEmbedded()).hasSize(2);
-    assertThat(agencySearchResult.getEmbedded()).extracting("embedded.id").containsOnly(1735L, 1737L);
+    assertThat(agencySearchResult.getTotal()).isEqualTo(2);
+    assertThat(agencySearchResult.getEmbedded())
+            .isNotEmpty()
+            .hasSize(2)
+            .extracting("embedded.id").containsOnly(1735L, 1737L);
   }
 
   @Test
-  void searchAgency_Should_FindOnlyAgenciesManagedByTheAdminAndInTheTenant_WhenUserIsAgencyAdmin() {
+  void searchAgency_Should_FindAllAgenciesForAllTenants_When_UserIsSuperAdmin() {
+    // given
+    when(authenticatedUser.isTenantSuperAdmin()).thenReturn(true);
+    when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
+
+    // when
+    var agencySearchResult = agencyAdminSearchTenantSupportService.searchAgencies("", 1, 10, new Sort());
+
+    // then
+    assertThat(agencySearchResult.getTotal()).isEqualTo(3);
+    assertThat(agencySearchResult.getEmbedded())
+            .isNotEmpty()
+            .hasSize(3)
+            .extracting("embedded.id").contains(1735L, 1737L, 1738L);
+  }
+
+  @Test
+  void searchAgency_Should_FindOnlyAgenciesManagedByTheAdminAndInTheTenant_When_UserIsAgencyAdmin() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
     when(authenticatedUser.getUserId()).thenReturn("userId");
@@ -78,12 +102,15 @@ class AgencyAdminSearchTenantSupportServiceTest {
     var agencySearchResult = agencyAdminSearchTenantSupportService.searchAgencies("", 1, 10, new Sort());
 
     // then
-    assertThat(agencySearchResult.getEmbedded()).hasSize(1);
-    assertThat(agencySearchResult.getEmbedded()).extracting("embedded.id").containsOnly(1735L);
+    assertThat(agencySearchResult.getTotal()).isEqualTo(1);
+    assertThat(agencySearchResult.getEmbedded())
+            .isNotEmpty()
+            .hasSize(1)
+            .extracting("embedded.id").containsOnly(1735L);
   }
 
   @Test
-  void searchAgency_Should_NotFindAnyAgencies_WhenUserIsAgencyAdminButDoesntManageAnyAgencies() {
+  void searchAgency_Should_NotFindAnyAgencies_When_UserIsAgencyAdminButDoesntManageAnyAgencies() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
     when(authenticatedUser.getUserId()).thenReturn("userId");

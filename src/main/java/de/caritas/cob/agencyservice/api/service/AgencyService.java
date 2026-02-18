@@ -4,26 +4,30 @@ package de.caritas.cob.agencyservice.api.service;
 import static java.util.Objects.nonNull;
 import static org.apache.commons.lang3.BooleanUtils.isTrue;
 
+import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
+import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings;
+import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +36,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for agencies.
@@ -47,9 +52,14 @@ public class AgencyService {
 
   private final @NonNull ConsultingTypeManager consultingTypeManager;
   private final @NonNull AgencyRepository agencyRepository;
+  private final @NonNull MatrixProvisioningService matrixProvisioningService;
 
   private final @NonNull TenantService tenantService;
   private final @NonNull DemographicsConverter demographicsConverter;
+
+  private final @NonNull CentralDataProtectionTemplateService centralDataProtectionTemplateService;
+
+  private final @NonNull ApplicationSettingsService applicationSettingsService;
 
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
@@ -63,6 +73,8 @@ public class AgencyService {
   @Value("${feature.multitenancy.with.single.domain.enabled}")
   private boolean multitenancyWithSingleDomain;
 
+  private static final String DB_POSTCODES_ERROR = "Database error while getting postcodes";
+
   /**
    * Returns a list of {@link AgencyResponseDTO} which match the provided agencyIds.
    *
@@ -72,9 +84,8 @@ public class AgencyService {
   public List<AgencyResponseDTO> getAgencies(List<Long> agencyIds) {
     return getAgencyRepositoryForSearch().findByIdIn(agencyIds).stream()
         .map(this::convertToAgencyResponseDTO)
-        .collect(Collectors.toList());
+        .toList();
   }
-
 
   /**
    * Returns a list of {@link AgencyResponseDTO} which match the provided consulting type.
@@ -88,7 +99,7 @@ public class AgencyService {
 
       return agencyRepository.findByConsultingTypeId(consultingTypeId).stream()
           .map(this::convertToAgencyResponseDTO)
-          .collect(Collectors.toList());
+          .toList();
 
     } catch (MissingConsultingTypeException ex) {
       throw new BadRequestException(
@@ -96,10 +107,9 @@ public class AgencyService {
     }
   }
 
-
-  public List<FullAgencyResponseDTO> getAgencies(String postCode, int consultingTypeId,
+  public List<FullAgencyResponseDTO> getAgencies(Optional<String> postCode, int consultingTypeId,
       Optional<Integer> topicId) {
-    return getAgencies(postCode, consultingTypeId, topicId, Optional.empty(), Optional.empty());
+    return getAgencies(postCode, consultingTypeId, topicId, Optional.empty(), Optional.empty(), Optional.empty());
   }
 
   /**
@@ -110,46 +120,117 @@ public class AgencyService {
    * @param consultingTypeId the consulting type used for filtering agencies
    * @return a list containing regarding agencies
    */
-  public List<FullAgencyResponseDTO> getAgencies(String postCode, int consultingTypeId,
+  public List<FullAgencyResponseDTO> getAgencies(Optional<String> postCode,
+      Integer consultingTypeId,
       Optional<Integer> topicId,
-      Optional<Integer> age, Optional<String> gender) {
+      Optional<Integer> age, Optional<String> gender, Optional<String> counsellingRelation) {
 
     var consultingTypeSettings = retrieveConsultingTypeSettings(
         consultingTypeId);
-
-    if (doesPostCodeNotMatchMinSize(postCode, consultingTypeSettings)) {
+    if (postCode.isPresent() && doesPostCodeNotMatchMinSize(postCode.get(),
+        consultingTypeSettings)) {
       return Collections.emptyList();
     }
 
     var agencies = findAgencies(postCode, getConsultingTypeIdForSearch(consultingTypeId), topicId,
-        age, gender);
+        age, gender, counsellingRelation);
     Collections.shuffle(agencies);
     var agencyResponseDTOs = agencies.stream()
         .map(this::convertToFullAgencyResponseDTO)
-        .collect(Collectors.toList());
+        .toList();
+
+    var mutableResponseDTO = Lists.newArrayList(agencyResponseDTOs);
 
     if (agencyResponseDTOs.isEmpty()) {
-      addWhiteSpotAgency(consultingTypeSettings, agencyResponseDTOs);
+      addWhiteSpotAgency(consultingTypeSettings, mutableResponseDTO);
     }
 
-    return agencyResponseDTOs;
+    return mutableResponseDTO;
+  }
+
+  public List<FullAgencyResponseDTO> getAgencies(String postCode, Integer topicId) {
+
+    var agencies = findAgenciesForCurrentTenant(postCode, topicId);
+    return agencies.stream()
+        .map(this::convertToFullAgencyResponseDTO)
+        .toList();
+  }
+
+  public List<Integer> getAgenciesTopics() {
+    return agencyRepository.findAllAgenciesTopics(TenantContext.getCurrentTenant());
+  }
+
+  @Transactional
+  public Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Long agencyId) {
+    var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
+    return provisionMatrixCredentials(agency);
+  }
+
+  @Transactional
+  public Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Agency agency) {
+    return provisionMatrixCredentials(agency, true);
+  }
+
+  private Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Agency agency, boolean saveEntity) {
+    log.info("Attempting to provision Matrix credentials for agency {} (id={})", agency.getName(), agency.getId());
+    
+    if (nonNull(agency.getMatrixUserId()) && nonNull(agency.getMatrixPassword())) {
+      log.info("Agency {} already has Matrix credentials: {}", agency.getName(), agency.getMatrixUserId());
+      return Optional.of(new AgencyMatrixCredentialsDTO(agency.getMatrixUserId(), agency.getMatrixPassword()));
+    }
+
+    log.info("No existing Matrix credentials found. Provisioning new account for agency {}", agency.getName());
+    
+    try {
+      var optionalCredentials =
+          matrixProvisioningService.ensureAgencyAccount(
+              "agency-" + agency.getId(), agency.getName());
+
+      if (optionalCredentials.isEmpty()) {
+        log.warn("Matrix provisioning returned empty result for agency {} (id={})", agency.getName(), agency.getId());
+        return Optional.empty();
+      }
+
+      var creds = optionalCredentials.get();
+      agency.setMatrixUserId(creds.getUserId());
+      agency.setMatrixPassword(creds.getPassword());
+      if (saveEntity) {
+        agencyRepository.updateMatrixCredentials(
+            agency.getId(), creds.getUserId(), creds.getPassword());
+        log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}", 
+                 agency.getName(), agency.getId(), creds.getUserId());
+      }
+
+      return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId(), creds.getPassword()));
+    } catch (Exception ex) {
+      log.warn(
+          "Matrix provisioning failed for agency {} (id={}): {}",
+          agency.getName(),
+          agency.getId(),
+          ex.getMessage(), ex);
+      return Optional.empty();
+    }
+  }
+
+  public Optional<AgencyMatrixCredentialsDTO> getMatrixCredentials(Long agencyId) {
+    return agencyRepository
+        .findById(agencyId)
+        .map(
+            agency ->
+                new AgencyMatrixCredentialsDTO(
+                    agency.getMatrixUserId(), agency.getMatrixPassword()));
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
     return multitenancyWithSingleDomain ? Optional.empty() : Optional.of(consultingTypeId);
   }
 
-  private List<Agency> findAgencies(String postCode, Optional<Integer> consultingTypeId,
+  private List<Agency> findAgencies(Optional<String> postCode, Optional<Integer> consultingTypeId,
       Optional<Integer> optionalTopicId, Optional<Integer> age,
-      Optional<String> gender) {
+      Optional<String> gender, Optional<String> counsellingRelation) {
 
-    AgencySearch agencySearch = AgencySearch.builder()
-        .postCode(postCode)
-        .consultingTypeId(consultingTypeId)
-        .topicId(optionalTopicId)
-        .age(age)
-        .gender(gender)
-        .build();
+    AgencySearch agencySearch = buildAgencySearch(postCode,
+        consultingTypeId, optionalTopicId, age, gender, counsellingRelation);
 
     if (demographicsFeatureEnabled) {
       assertAgeAndGenderAreProvided(age, gender);
@@ -166,15 +247,38 @@ public class AgencyService {
   private List<Agency> findAgencies(AgencySearch agencySearch) {
     try {
       return getAgencyRepositoryForSearch()
-          .searchWithoutTopic(agencySearch.getPostCode(),
-              agencySearch.getPostCode().length(), agencySearch.getConsultingTypeId().orElse(null),
+          .searchWithoutTopic(agencySearch.getPostCode().orElse(null),
+              agencySearch.getPostCode().orElse("").length(), agencySearch.getConsultingTypeId().orElse(null),
               agencySearch.getAge().orElse(null),
               agencySearch.getGender().orElse(null),
+              agencySearch.getCounsellingRelation().orElse(null),
               TenantContext.getCurrentTenant());
     } catch (DataAccessException ex) {
       throw new InternalServerErrorException(LogService::logDatabaseError,
-          "Database error while getting postcodes");
+          DB_POSTCODES_ERROR);
     }
+  }
+
+  private List<Agency> findAgenciesForCurrentTenant(String postCode, Integer topicId) {
+
+    AgencySearch agencySearch = buildAgencySearch(Optional.of(postCode),
+        Optional.empty(), Optional.of(topicId), Optional.empty(),
+        Optional.empty(), Optional.empty());
+
+    return findAgenciesWithTopicForCurrentTenant(agencySearch);
+  }
+
+  private static AgencySearch buildAgencySearch(Optional<String> postCode,
+      Optional<Integer> consultingTypeId, Optional<Integer> optionalTopicId, Optional<Integer> age,
+      Optional<String> gender, Optional<String> counsellingRelation) {
+    return AgencySearch.builder()
+        .postCode(postCode)
+        .consultingTypeId(consultingTypeId)
+        .topicId(optionalTopicId)
+        .age(age)
+        .gender(gender)
+        .counsellingRelation(counsellingRelation)
+        .build();
   }
 
   private void assertTopicIdIsProvided(Optional<Integer> topicId) {
@@ -228,15 +332,32 @@ public class AgencyService {
   private List<Agency> findAgenciesWithTopic(AgencySearch agencySearch) {
     try {
       return getAgencyRepositoryForSearch()
-          .searchWithTopic(agencySearch.getPostCode(), agencySearch.getPostCode().length(),
+          .searchWithTopic(agencySearch.getPostCode().orElse(null), agencySearch.getPostCode().orElse("").length(),
               agencySearch.getConsultingTypeId().orElse(null),
               agencySearch.getTopicId().orElseThrow(),
               agencySearch.getAge().orElse(null), agencySearch.getGender().orElse(null),
+              agencySearch.getCounsellingRelation().orElse(null),
               TenantContext.getCurrentTenant());
 
     } catch (DataAccessException ex) {
       throw new InternalServerErrorException(LogService::logDatabaseError,
-          "Database error while getting postcodes");
+          DB_POSTCODES_ERROR);
+    }
+  }
+
+  private List<Agency> findAgenciesWithTopicForCurrentTenant(AgencySearch agencySearch) {
+    try {
+      return agencyRepository
+          .searchWithTopic(agencySearch.getPostCode().orElse(null), agencySearch.getPostCode().orElse("").length(),
+              agencySearch.getConsultingTypeId().orElse(null),
+              agencySearch.getTopicId().orElseThrow(),
+              agencySearch.getAge().orElse(null), agencySearch.getGender().orElse(null),
+              agencySearch.getCounsellingRelation().orElse(null),
+              TenantContext.getCurrentTenant());
+
+    } catch (DataAccessException ex) {
+      throw new InternalServerErrorException(LogService::logDatabaseError,
+          DB_POSTCODES_ERROR);
     }
   }
 
@@ -273,7 +394,20 @@ public class AgencyService {
     }
   }
 
+  private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
+    if (multitenancyWithSingleDomain) {
+      String mainTenantSubdomain = applicationSettingsService.getApplicationSettings()
+          .getMainTenantSubdomainForSingleDomainMultitenancy().getValue();
+      return tenantService.getRestrictedTenantDataBySubdomain(mainTenantSubdomain);
+    } else {
+
+      return agency.getTenantId() != null ? tenantService.getRestrictedTenantDataByTenantId(
+          agency.getTenantId()) : null;
+    }
+  }
+
   private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency) {
+    String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency);
     return new AgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
@@ -283,7 +417,22 @@ public class AgencyService {
         .teamAgency(agency.isTeamAgency())
         .offline(agency.isOffline())
         .tenantId(agency.getTenantId())
-        .consultingType(agency.getConsultingTypeId());
+        .consultingType(agency.getConsultingTypeId())
+        .agencySpecificPrivacy(renderedAgencySpecificPrivacy)
+        .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
+        .agencyLogo(agency.getAgencyLogo());
+  }
+
+  protected String getRenderedAgencySpecificPrivacy(Agency agency) {
+    RestrictedTenantDTO tenantDataHoldingFeatureToggles = getTenantDataRelevantForFeatureToggles(
+        agency);
+    Settings settings = tenantDataHoldingFeatureToggles != null ? tenantDataHoldingFeatureToggles.getSettings() : null;
+    if (settings != null && settings.getFeatureCentralDataProtectionTemplateEnabled() != null && Boolean.TRUE.equals(settings.getFeatureCentralDataProtectionTemplateEnabled())) {
+      return centralDataProtectionTemplateService.renderPrivacyTemplateWithRenderedPlaceholderValues(
+          agency);
+    } else {
+      return null;
+    }
   }
 
 
@@ -300,7 +449,10 @@ public class AgencyService {
         .url(agency.getUrl())
         .external(agency.isExternal())
         .demographics(getDemographics(agency))
-        .tenantId(agency.getTenantId());
+        .tenantId(agency.getTenantId())
+        .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
+        .agencyLogo(agency.getAgencyLogo());
+
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

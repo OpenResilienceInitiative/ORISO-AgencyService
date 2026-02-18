@@ -42,6 +42,12 @@ public class AgencyServiceTenantAwareTest {
   @Mock
   private AgencyRepository agencyRepository;
 
+  @Mock
+  private CentralDataProtectionTemplateService centralDataProtectionTemplateService;
+
+  @Mock
+  private ApplicationSettingsService applicationSettingsService;
+
   private static final Long TENANT_ID = 1L;
 
   @Before
@@ -71,11 +77,11 @@ public class AgencyServiceTenantAwareTest {
         restrictedTenantDTO);
 
     // when
-    this.agencyService.getAgencies("12123", 1, Optional.empty());
+    this.agencyService.getAgencies(Optional.of("12123"), 1, Optional.empty());
 
     // then
     verify(agencyRepository).searchWithTopic("12123", 5, 1, 2, null,
-        null,
+        null, null,
         TENANT_ID);
   }
 
@@ -93,11 +99,11 @@ public class AgencyServiceTenantAwareTest {
         restrictedTenantDTO);
 
     // when
-    this.agencyService.getAgencies("12123", 1, Optional.of(2), Optional.empty(), Optional.empty());
+    this.agencyService.getAgencies(Optional.of("12123"), 1, Optional.of(2), Optional.empty(), Optional.empty(), Optional.empty());
 
     // then
     verify(agencyRepository).searchWithTopic("12123", 5, 1, 2, null,
-        null,
+        null, null,
         TENANT_ID);
   }
 }

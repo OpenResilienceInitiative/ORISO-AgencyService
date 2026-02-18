@@ -36,4 +36,13 @@ public class AgencyServiceIT extends AgencyServiceITBase {
     super.getAgenciesByConsultingType_Should_returnResults_When_ConsultingTypeIsValid();
   }
 
+  @Test
+  public void getAgenciesTopics_Should_ReturnResults_When_topics_exist() {
+    super.getAgenciesTopics_Should_ReturnResults_When_topics_exist();
+  }
+
+  @Test
+  public void getAgencies_Should_returnMatchingAgencies_When_postcodeAndTopicIdIsGiven() {
+    super.getAgencies_Should_returnMatchingAgencies_When_postcodeAndTopicIdIsGiven();
+  }
 }

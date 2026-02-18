@@ -22,7 +22,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
-import static org.powermock.api.mockito.PowerMockito.when;
+import static org.mockito.Mockito.when;
 
 public class AgencyServiceITBase {
 
@@ -32,6 +32,8 @@ public class AgencyServiceITBase {
   private AgencyRepository agencyRepository;
   @MockBean
   private ConsultingTypeManager consultingTypeManager;
+  @MockBean
+  private TopicEnrichmentService topicEnrichmentService;
 
   public void getAgencies_Should_returnMatchingAgencies_When_postcodeAndConsultingTypeIsGiven()
       throws MissingConsultingTypeException {
@@ -40,7 +42,7 @@ public class AgencyServiceITBase {
     String postCode = "88662";
 
     List<FullAgencyResponseDTO> resultAgencies = agencyService
-        .getAgencies(postCode, CONSULTING_TYPE_PREGNANCY, Optional.empty(), Optional.empty(), Optional.empty());
+        .getAgencies(Optional.of(postCode), CONSULTING_TYPE_PREGNANCY, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
     assertThat(resultAgencies, hasSize(1));
     FullAgencyResponseDTO resultAgency = resultAgencies.get(0);
@@ -62,6 +64,24 @@ public class AgencyServiceITBase {
     List<AgencyResponseDTO> agencies = this.agencyService.getAgencies(CONSULTING_TYPE_U25);
 
     assertThat(agencies, hasSize(greaterThan(0)));
+  }
+
+  public void getAgenciesTopics_Should_ReturnResults_When_topics_exist() {
+    List<Integer> topicIds = this.agencyService.getAgenciesTopics();
+
+    assertThat(topicIds, hasSize(greaterThan(0)));
+  }
+
+  public void getAgencies_Should_returnMatchingAgencies_When_postcodeAndTopicIdIsGiven() {
+
+    String postCode = "45501";
+    Integer topicId = 1;
+
+    List<FullAgencyResponseDTO> resultAgencies = agencyService.getAgencies(postCode, topicId);
+
+    assertThat(resultAgencies, hasSize(1));
+    FullAgencyResponseDTO resultAgency = resultAgencies.get(0);
+    assertThat(resultAgency.getId(), is(14352L));
   }
 
 }

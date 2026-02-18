@@ -82,14 +82,11 @@ public class UserAdminService {
       int perPage) {
     var controllerApi = userAdminServiceApiControllerFactory.createControllerApi();
     addDefaultHeaders(controllerApi.getApiClient());
-    ConsultantFilter consultantFilter = new ConsultantFilter().agencyId(agencyId);
-
-    Sort sortBy = new Sort();
-    sortBy.setField(FieldEnum.LASTNAME);
-    sortBy.setOrder(OrderEnum.ASC);
-
+    
+    // Use the correct endpoint: /useradmin/agencies/{agencyId}/consultants
+    // instead of /useradmin/consultants which requires sort parameter
     return controllerApi
-        .getConsultants(currentPage, perPage, consultantFilter, sortBy)
+        .getAgencyConsultants(String.valueOf(agencyId))
         .getEmbedded();
   }
 }

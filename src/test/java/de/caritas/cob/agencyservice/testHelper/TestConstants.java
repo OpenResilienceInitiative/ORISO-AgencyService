@@ -3,14 +3,17 @@ package de.caritas.cob.agencyservice.testHelper;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.registration.Registration;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.whiteSpot.WhiteSpot;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyTopicsDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.util.Lists;
 
 public class TestConstants {
 
@@ -147,13 +150,13 @@ public class TestConstants {
   public static final String VALID_POSTCODE_6 = "33445";
   public static final String AGENCY_CITY = "Test city";
   public static final String VALID_POSTCODE_QUERY = "postcode=88488";
+  public static final String VALID_TOPIC_ID_QUERY = "topicId=1";
   public static final int VALID_POSTCODE_LENGTH = 5;
   public static final Long AGENCY_ID = 98L;
   public static final String AGENCY_NAME = "Test agency";
   public static final String AGENCY_DESCRIPTION = "Test description";
   public static final Agency AGENCY_SUCHT = Agency.builder()
       .id(AGENCY_ID)
-      .dioceseId(10L)
       .name(AGENCY_NAME)
       .description(AGENCY_DESCRIPTION)
       .postCode(POSTCODE)
@@ -164,26 +167,75 @@ public class TestConstants {
       .isExternal(false)
       .build();
 
-  public static final Agency AGENCY_KREUZBUND = new Agency(AGENCY_ID, 10L, AGENCY_NAME,
-      AGENCY_DESCRIPTION,
-      POSTCODE, "Test city", false, CONSULTING_TYPE_KREUZBUND, false, null, false, null, null, null,
-      null, null, null, null, null, null);
+  public static final Long TOPIC_ID = 1L;
+
+  public static final AgencyTopic AGENCY_TOPIC = AgencyTopic.builder()
+      .topicId(TOPIC_ID)
+      .agency(AGENCY_SUCHT)
+      .build();
+
+  public static final Agency AGENCY_SEARCH_WITH_TOPICS = Agency.builder()
+      .id(AGENCY_ID)
+      .name(AGENCY_NAME)
+      .description(AGENCY_DESCRIPTION)
+      .postCode(POSTCODE)
+      .city("Test city")
+      .teamAgency(false)
+      .consultingTypeId(CONSULTING_TYPE_SUCHT)
+      .offline(false)
+      .isExternal(false)
+      .agencyTopics(Collections.singletonList(AGENCY_TOPIC))
+      .build();
+
+  public static final Integer TOPIC_SUCHT = 1;
+
+  public static final Agency AGENCY_KREUZBUND = Agency.builder()
+      .id(AGENCY_ID)
+      .name(AGENCY_NAME)
+      .description(AGENCY_DESCRIPTION)
+      .postCode(POSTCODE)
+      .city("Test city")
+      .teamAgency(false)
+      .consultingTypeId(CONSULTING_TYPE_KREUZBUND)
+      .offline(false)
+      .isExternal(false)
+      .build();
   public static final Agency AGENCY_ONLINE_U25 =
-      new Agency(AGENCY_ID, 10L, AGENCY_NAME, AGENCY_DESCRIPTION, POSTCODE, "Test city",
-          false, CONSULTING_TYPE_U25, false, null, false, null, null, null, null, null, null, null, null, null);
-  public static final Agency AGENCY_OFFLINE = new Agency(AGENCY_ID, 10L, AGENCY_NAME,
-      AGENCY_DESCRIPTION,
-      POSTCODE, "Test city", false, CONSULTING_TYPE_SUCHT, true, null, false, null, null, null, null, null, null, null, null, null);
+      Agency.builder()
+          .id(AGENCY_ID)
+          .name(AGENCY_NAME)
+          .description(AGENCY_DESCRIPTION)
+          .postCode(POSTCODE)
+          .city("Test city")
+          .teamAgency(false)
+          .consultingTypeId(CONSULTING_TYPE_U25)
+          .offline(false)
+          .isExternal(false)
+          .build();
+  public static final Agency AGENCY_OFFLINE = Agency.builder()
+      .id(AGENCY_ID)
+      .name(AGENCY_NAME)
+      .description(AGENCY_DESCRIPTION)
+      .postCode(POSTCODE)
+      .city("Test city")
+      .teamAgency(false)
+      .consultingTypeId(CONSULTING_TYPE_SUCHT)
+      .offline(true)
+      .isExternal(false)
+      .build();
   public static final AgencyResponseDTO AGENCY_RESPONSE_DTO =
       new AgencyResponseDTO().id(AGENCY_ID).name(AGENCY_NAME).postcode(POSTCODE)
           .city(AGENCY_CITY).description(AGENCY_DESCRIPTION).teamAgency(false).offline(false)
-          .consultingType(CONSULTING_TYPE_SUCHT);
+          .consultingType(CONSULTING_TYPE_SUCHT)
+          .topicIds(Lists.newArrayList(1L, 2L));
   public static final List<AgencyResponseDTO> AGENCY_RESPONSE_DTO_LIST = Collections.singletonList(
       AGENCY_RESPONSE_DTO);
   public static final FullAgencyResponseDTO FULL_AGENCY_RESPONSE_DTO =
       new FullAgencyResponseDTO().id(AGENCY_ID).name(AGENCY_NAME).postcode(POSTCODE)
           .city(AGENCY_CITY).description(AGENCY_DESCRIPTION).teamAgency(false).offline(false)
           .consultingType(CONSULTING_TYPE_SUCHT).url(null).external(false);
+  public static final AgencyTopicsDTO AGENCY_TOPICS_DTO =
+      new AgencyTopicsDTO().id(AGENCY_ID).name(AGENCY_NAME);
   public static final List<FullAgencyResponseDTO> FULL_AGENCY_RESPONSE_DTO_LIST = Collections.singletonList(
       FULL_AGENCY_RESPONSE_DTO);
   public static final int MIN_POSTCODE_SIZE_3 = 3;
@@ -199,6 +251,9 @@ public class TestConstants {
 
   public static final List<Agency> EMPTY_AGENCY_LIST = new ArrayList<>();
   public static final List<Agency> AGENCY_LIST = Collections.singletonList(AGENCY_SUCHT);
+  public static final List<Agency> AGENCY_LIST_WITH_TOPICS = Collections.singletonList(
+      AGENCY_SEARCH_WITH_TOPICS);
+  public static final List<Integer> TOPIC_ID_LIST = Collections.singletonList(TOPIC_SUCHT);
   public static final List<Long> AGENCY_IDS_LIST = Collections.singletonList(AGENCY_ID);
 
   public static final String VALID_CONSULTING_TYPE_QUERY = "consultingType=0";
@@ -208,18 +263,10 @@ public class TestConstants {
   public static final String INVALID_CONSULTING_TYPE_QUERY = "consultingType=xyz";
   public static final String INVALID_AGENCY_ID = "12xX";
 
-  public static final Long INVALID_DIOCESE_ID = -1L;
-
-  public static final Integer PAGE_1 = 1;
-  public static final Integer PAGE_2 = 2;
-  public static final Integer PAGE_3 = 3;
-  public static final Integer PER_PAGE_1 = 1;
-
   public static final String VALID_AGENCY_DTO = "{\n"
       + "  \"city\": \"City\",\n"
       + "  \"consultingType\": " + CONSULTING_TYPE_AIDS + ",\n"
       + "  \"description\": \"Description\",\n"
-      + "  \"dioceseId\": 1,\n"
       + "  \"name\": \"Agency\",\n"
       + "  \"postcode\": \"76000\",\n"
       + "  \"teamAgency\": false,\n"
@@ -230,7 +277,6 @@ public class TestConstants {
   public static final String VALID_AGENCY_UPDATE_DTO = "{\n"
       + "  \"city\": \"City\",\n"
       + "  \"description\": \"Description\",\n"
-      + "  \"dioceseId\": 1,\n"
       + "  \"name\": \"Agency\",\n"
       + "  \"postcode\": \"76000\",\n"
       + "  \"offline\": true,\n"

@@ -10,10 +10,8 @@ import de.caritas.cob.agencyservice.config.apiclient.ApplicationSettingsApiContr
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import java.util.Optional;
-import javax.servlet.http.HttpServletRequest;
-import liquibase.pro.packaged.R;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -88,14 +86,14 @@ class MultitenancyWithSingleDomainTenantResolverTest {
     when(applicationsettingsControllerApi.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().mainTenantSubdomainForSingleDomainMultitenancy(
             new ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy().value("app")));
-    when(tenantControllerApi.getRestrictedTenantDataBySubdomain("app")).thenReturn(
+    when(tenantControllerApi.getRestrictedTenantDataBySubdomain("app", null)).thenReturn(
         new RestrictedTenantDTO().id(1L));
     // when
     Optional<Long> resolve = resolver.resolve(request);
 
     // then
     assertThat(resolve).isPresent().contains(1L);
-    verify(tenantControllerApi).getRestrictedTenantDataBySubdomain("app");
+    verify(tenantControllerApi).getRestrictedTenantDataBySubdomain("app", null);
     verify(applicationsettingsControllerApi).getApplicationSettings();
   }
 }

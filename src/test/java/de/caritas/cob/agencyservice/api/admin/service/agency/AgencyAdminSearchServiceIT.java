@@ -5,8 +5,10 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.AgencyServiceApplication;
-import de.caritas.cob.agencyservice.api.helper.AuthenticatedUser;
+import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
+import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.model.Sort;
+import de.caritas.cob.agencyservice.api.model.Sort.FieldEnum;
 import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
 import de.caritas.cob.agencyservice.config.apiclient.UserAdminServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AdminAgencyResponseDTO;
@@ -36,6 +38,9 @@ class AgencyAdminSearchServiceIT {
   private static final long FIRST_AGENCY_ID = 2L;
   @Autowired
   private AgencyAdminSearchService agencyAdminSearchService;
+
+  @MockBean
+  private TopicEnrichmentService topicEnrichmentService;
 
   @MockBean
   private AuthenticatedUser authenticatedUser;
@@ -91,6 +96,26 @@ class AgencyAdminSearchServiceIT {
     assertThat(agencySearchResult.getEmbedded()).hasSize(20);
 
     List<String> collect = agencySearchResult.getEmbedded().stream().filter(result -> result.getEmbedded().getPostcode() != null).map(p -> p.getEmbedded().getPostcode()).collect(Collectors.toList());
+    assertThat(collect).isSorted();
+  }
+
+  @Test
+  void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin_AndSortByOffline() {
+    // given
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
+    when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
+    when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
+
+    // when
+    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20, new Sort().field(
+        FieldEnum.OFFLINE).order(Sort.OrderEnum.ASC));
+
+    // then
+    assertThat(agencySearchResult.getEmbedded()).hasSize(20);
+
+    List<Boolean> collect = agencySearchResult.getEmbedded().stream().filter(result -> result.getEmbedded().getOffline() != null).map(p -> p.getEmbedded().getOffline()).collect(Collectors.toList());
     assertThat(collect).isSorted();
   }
 

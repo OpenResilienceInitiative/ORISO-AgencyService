@@ -19,7 +19,8 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 @DataJpaTest
 class AgencyRepositoryIT {
 
-  @Autowired private AgencyRepository agencyRepository;
+  @Autowired
+  private AgencyRepository agencyRepository;
 
   @Test
   void findById_Should_loadAgencyWithTopics() {
@@ -49,16 +50,24 @@ class AgencyRepositoryIT {
   @Test
   void searchWithoutTopic_Should_findAgencyByPostcodeAndConsultingType() {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("53113", 5, 0, null, null, 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("53113", 5, 0, null, null, null, 1L);
     // then
     assertThat(agencyList).hasSize(2);
+  }
+
+  @Test
+  void searchWithoutTopic_Should_findAgencyByOnlyConsultingTypeSkippingPostCodeFiltering() {
+    // given, when
+    var agencyList = agencyRepository.searchWithoutTopic(null, 5, 0, null, null, null, 1L);
+    // then
+    assertThat(agencyList).hasSize(104);
   }
 
 
   @Test
   void searchWithTopic_Should_findAgencyByPostcodeAndConsultingTypeAndTopicId() {
     // given, when
-    var agencyList = agencyRepository.searchWithTopic("53113", 5, 0, 1, null, null, 1L);
+    var agencyList = agencyRepository.searchWithTopic("53113", 5, 0, 1, null, null, null, 1L);
     // then
     assertThat(agencyList).hasSize(1);
     assertThat(agencyList.get(0).getId()).isZero();
@@ -66,9 +75,17 @@ class AgencyRepositoryIT {
   }
 
   @Test
+  void searchWithTopic_Should_findAgencyConsultingTypeAndTopicIdSkippingPostCode() {
+    // given, when
+    var agencyList = agencyRepository.searchWithTopic(null, 5, 0, 1, null, null, null, 1L);
+    // then
+    assertThat(agencyList).hasSize(2);
+  }
+
+  @Test
   void searchWithTopic_Should_findAgencyByPostcodeAndConsultingTypeAndTopicId_When_ConsultingTypeIsNotProvided() {
     // given, when
-    var agencyList = agencyRepository.searchWithTopic("53113", 5, null, 1, null, null, 1L);
+    var agencyList = agencyRepository.searchWithTopic("53113", 5, null, 1, null, null, null, 1L);
     // then
     assertThat(agencyList).hasSize(1);
     assertThat(agencyList.get(0).getId()).isZero();
@@ -78,17 +95,16 @@ class AgencyRepositoryIT {
   @Test
   void searchWithTopic_Should_notFindAgencyByPostcodeAndConsultingTypeAndTopicId_When_ConsultingTypeDoesNotMatch() {
     // given, when
-    var agencyList = agencyRepository.searchWithTopic("53113", 5, 1, 1, null, null, 1L);
+    var agencyList = agencyRepository.searchWithTopic("53113", 5, 1, 1, null, null, null, 1L);
     // then
     assertThat(agencyList).isEmpty();
   }
 
 
-
   @Test
   void searchWithoutTopic_Should_findAgenciesByPostcodeAndConsultingTypeAndAgeAndGender_WhenGenderIsMale() {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "MALE", 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "MALE", null, 1L);
     // then
     assertThat(agencyList).hasSize(2);
     assertThat(agencyList).extracting(a -> a.getId()).containsExactly(1736L, 1738L);
@@ -97,7 +113,7 @@ class AgencyRepositoryIT {
   @Test
   void searchWithoutTopic_Should_findDifferentAgenciesByPostcodeAndConsultingTypeAndAgeAndGender_WhenGenderIsDivers() {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "DIVERS", 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "DIVERS", null, 1L);
     // then
     assertThat(agencyList).hasSize(2);
     assertThat(agencyList).extracting(a -> a.getId()).containsExactly(1737L, 1738L);
@@ -106,7 +122,7 @@ class AgencyRepositoryIT {
   @Test
   void searchWithoutTopic_Should_notFindAnyAgenciesByPostcodeAndConsultingTypeAndAgeAndGender_WhenGenderIsNotMatchingAnyAgency() {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "NOTMATCHING", 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "NOTMATCHING", null, 1L);
     // then
     assertThat(agencyList).isEmpty();
   }
@@ -114,7 +130,7 @@ class AgencyRepositoryIT {
   @Test
   void searchWithoutTopic_Should_ignoreConsultingTypeId_WhenConsultingTypeIdIsNotProvided() {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, null, null, null, 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, null, null, null, null, 1L);
     // then
     assertThat(agencyList).hasSize(6);
   }
@@ -124,9 +140,9 @@ class AgencyRepositoryIT {
   @ValueSource(strings = {"\";", "';", ";"})
   void searchWithoutTopic_Should_searchForGenderBeProtectedAgainstSqlInjection_WhenGenderIsProvided(String prefix) {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, prefix + "DROP TABLE AGENCY;", 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, prefix + "DROP TABLE AGENCY;", null, 1L);
     // then
-    var existingAgencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "DIVERS", 1L);
+    var existingAgencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 30, "DIVERS", null, 1L);
 
     assertThat(agencyList).isEmpty();
     assertThat(existingAgencyList).isNotEmpty();
@@ -135,7 +151,7 @@ class AgencyRepositoryIT {
   @Test
   void searchWithoutTopic_Should_findExactlyOneAgencyByPostcodeAndConsultingTypeAndAge_WhenAgeMatchesWithJustOneAgency() {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 15, "MALE", 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 15, "MALE", null, 1L);
     // then
     assertThat(agencyList).hasSize(1);
     assertThat(agencyList).extracting(a -> a.getId()).containsExactly(1736L);
@@ -144,7 +160,7 @@ class AgencyRepositoryIT {
   @Test
   void searchWithoutTopic_Should_notFindAnyAgencyByPostcodeAndConsultingTypeAndAge_WhenAgeDoesNotMatchWithAnyAgency() {
     // given, when
-    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 5, "MALE", 1L);
+    var agencyList = agencyRepository.searchWithoutTopic("99999", 5, 19, 5, "MALE", null, 1L);
     // then
     assertThat(agencyList).isEmpty();
   }
