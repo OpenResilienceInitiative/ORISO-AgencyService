@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.2.xsd">
+    <include file="db/changelog/changeset/0002_agency_id_old_null/0002_changeSet.xml"/>
+	<include file="db/changelog/changeset/0003_agency_consulting_type/0003_changeSet.xml"/>
+	<include file="db/changelog/changeset/0004_agency_offline/0004_changeSet.xml"/>
+	<include file="db/changelog/changeset/0005_agency_delete_flag/0005_changeSet.xml"/>
+	<include file="db/changelog/changeset/0006_agency_url_and_external_flag/0006_changeSet.xml"/>
+	<include file="db/changelog/changeset/0007_tenant_id/0007_changeSet.xml"/>
+	<include file="db/changelog/changeset/0008_tenant_id_remove/0008_changeSet.xml"/>
+	<include file="db/changelog/changeset/0009_agency_topic/0009_changeSet.xml"/>
+	<include file="db/changelog/changeset/0010_agency_demographics/0010_changeSet.xml"/>
+	<include file="db/changelog/changeset/0011_agency_demographics_gender_column_change/0011_changeSet.xml"/>
+	<include file="db/changelog/changeset/0012_agency_counseling_relations/0012_changeSet.xml"/>
+	<include file="db/changelog/changeset/0013_make_diocese_nullable/0013_changeSet.xml"/>
+	<!-- uncomment it once confirmed diocese has been migrated correctly to tenant by migration tool
+	<include file="db/changelog/changeset/0014_drop_diocese/0014_changeSet.xml"/>-->
+	<include file="db/changelog/changeset/0015_change_consultingtype_column_type/0015_changeSet.xml"/>
+	<include file="db/changelog/changeset/0016_add_data_protection_attributes/0016_changeSet.xml"/>
+	<include file="db/changelog/changeset/0017_add_agency_logo/0017_changeSet.xml"/>
+</databaseChangeLog>
