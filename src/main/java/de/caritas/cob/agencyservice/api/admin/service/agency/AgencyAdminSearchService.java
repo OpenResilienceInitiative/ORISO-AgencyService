@@ -5,6 +5,7 @@ import static io.micrometer.common.util.StringUtils.isBlank;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.hallink.SearchResultLinkBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
 import de.caritas.cob.agencyservice.api.model.SearchResultLinks;
@@ -172,16 +173,30 @@ public class AgencyAdminSearchService {
   }
 
   Predicate agencyAdminFilterPredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
+    Predicate tenantScopePredicate = tenantScopePredicate(criteriaBuilder, root);
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
       var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
       if (!adminAgencyIds.isEmpty()) {
-        return createPredicateForAgencyAdmin(criteriaBuilder, root, adminAgencyIds);
+        return criteriaBuilder.and(
+            tenantScopePredicate, createPredicateForAgencyAdmin(criteriaBuilder, root, adminAgencyIds));
       } else {
         return alwaysFalsePredicate(criteriaBuilder);
       }
     } else {
+      return tenantScopePredicate;
+    }
+  }
+
+  private Predicate tenantScopePredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
+    Long tenantId = authenticatedUser.getTenantId();
+    if (tenantId == null) {
+      tenantId = TenantContext.getCurrentTenant();
+    }
+    // technical/super context is represented by tenant 0 and may see all tenants
+    if (tenantId == null || tenantId.equals(0L)) {
       return alwaysTruePredicate(criteriaBuilder);
     }
+    return criteriaBuilder.equal(root.get(TENANT_ID_SEARCH_FIELD), tenantId);
   }
 
   private Predicate alwaysFalsePredicate(CriteriaBuilder criteriaBuilder) {

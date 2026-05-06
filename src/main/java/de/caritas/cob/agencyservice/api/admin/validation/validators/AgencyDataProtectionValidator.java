@@ -36,12 +36,24 @@ public class AgencyDataProtectionValidator implements ConcreteAgencyValidator {
     }
 
     if (multitenancyWithSingleDomain) {
-      var mainTenantSubdomainForSingleDomainMultitenancy = applicationSettingsService.getApplicationSettings()
-          .getMainTenantSubdomainForSingleDomainMultitenancy();
-      de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO mainTenant = tenantService.getRestrictedTenantDataBySubdomain(
-          mainTenantSubdomainForSingleDomainMultitenancy.getValue());
-      if (Boolean.TRUE.equals(mainTenant.getSettings().getFeatureCentralDataProtectionTemplateEnabled())) {
-        agencyDataProtectionValidationService.validate(validateAgencyDto);
+      try {
+        var mainTenantSubdomainForSingleDomainMultitenancy =
+            applicationSettingsService
+                .getApplicationSettings()
+                .getMainTenantSubdomainForSingleDomainMultitenancy();
+        de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO mainTenant =
+            tenantService.getRestrictedTenantDataBySubdomain(
+                mainTenantSubdomainForSingleDomainMultitenancy.getValue());
+        if (Boolean.TRUE.equals(mainTenant.getSettings().getFeatureCentralDataProtectionTemplateEnabled())) {
+          agencyDataProtectionValidationService.validate(validateAgencyDto);
+        }
+      } catch (Exception exception) {
+        // Do not block agency updates (e.g. visibility toggle) if optional main-tenant
+        // settings lookup is temporarily unavailable.
+        log.warn(
+            "Skipping optional main tenant data-protection validation for agency {} due to settings lookup error: {}",
+            validateAgencyDto.getId(),
+            exception.getMessage());
       }
     }
   }

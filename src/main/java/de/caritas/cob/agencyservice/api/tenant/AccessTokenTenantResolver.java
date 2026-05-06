@@ -1,7 +1,9 @@
 package de.caritas.cob.agencyservice.api.tenant;
 
-import de.caritas.cob.agencyservice.api.service.TenantService;
-import de.caritas.cob.agencyservice.filter.SubdomainExtractor;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,14 +21,17 @@ import org.springframework.stereotype.Component;
 public class AccessTokenTenantResolver implements TenantResolver {
 
   private static final String TENANT_ID = "tenantId";
+  private static final String AUTHORIZATION = "Authorization";
+  private static final String BEARER_PREFIX = "Bearer ";
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Override
   public Optional<Long> resolve(HttpServletRequest request) {
-    return resolveTenantIdFromTokenClaims();
+    return resolveTenantIdFromTokenClaims(request);
   }
 
-  private Optional<Long> resolveTenantIdFromTokenClaims() {
-    Map<String, Object> claimMap = getClaimMap();
+  private Optional<Long> resolveTenantIdFromTokenClaims(HttpServletRequest request) {
+    Map<String, Object> claimMap = getClaimMap(request);
     log.debug("Found tenantId in claim : " + claimMap.toString());
     return getUserTenantIdAttribute(claimMap);
   }
@@ -40,20 +45,47 @@ public class AccessTokenTenantResolver implements TenantResolver {
       if (tenantIdObject instanceof Integer tenantId) {
         return Optional.of(Long.valueOf(tenantId));
       }
+      if (tenantIdObject instanceof String tenantId) {
+        try {
+          return Optional.of(Long.parseLong(tenantId));
+        } catch (NumberFormatException ignored) {
+          return Optional.empty();
+        }
+      }
     }
     return Optional.empty();
   }
 
-  private Map<String, Object> getClaimMap() {
+  private Map<String, Object> getClaimMap(HttpServletRequest request) {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication != null) {
-      var jwt = (Jwt) authentication.getPrincipal();
-      return jwt.getClaims();
-    } else {
+      Object principal = authentication.getPrincipal();
+      if (principal instanceof Jwt jwt) {
+        return jwt.getClaims();
+      }
+    }
+    return getClaimMapFromAuthorizationHeader(request);
+  }
+
+  private Map<String, Object> getClaimMapFromAuthorizationHeader(HttpServletRequest request) {
+    String authHeader = request.getHeader(AUTHORIZATION);
+    if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+      return Map.of();
+    }
+    String token = authHeader.substring(BEARER_PREFIX.length()).trim();
+    String[] parts = token.split("\\.");
+    if (parts.length < 2) {
+      return Map.of();
+    }
+    try {
+      byte[] decodedPayload = Base64.getUrlDecoder().decode(parts[1]);
+      String payload = new String(decodedPayload, StandardCharsets.UTF_8);
+      return objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {});
+    } catch (Exception e) {
+      log.warn("Could not parse JWT payload from Authorization header for tenant resolution");
       return Map.of();
     }
   }
-
 
   @Override
   public boolean canResolve(HttpServletRequest request) {

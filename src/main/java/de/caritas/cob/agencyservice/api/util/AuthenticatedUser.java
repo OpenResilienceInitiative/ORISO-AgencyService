@@ -32,6 +32,8 @@ public class AuthenticatedUser {
 
   private Set<String> roles;
 
+  private Long tenantId;
+
   @JsonIgnore
   public boolean isRestrictedAgencyAdmin() {
     return nonNull(roles) && roles.contains(Authority.RESTRICTED_AGENCY_ADMIN.getRoleName());

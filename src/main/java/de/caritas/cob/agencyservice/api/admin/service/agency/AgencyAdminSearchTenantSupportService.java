@@ -35,7 +35,7 @@ public class AgencyAdminSearchTenantSupportService extends AgencyAdminSearchServ
   }
 
   protected Predicate tenantPredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
-    if (authenticatedUser.isTenantSuperAdmin()) {
+    if (TenantContext.getCurrentTenant() != null && TenantContext.getCurrentTenant().equals(0L)) {
       return criteriaBuilder.isNotNull(root.get(TENANT_ID_SEARCH_FIELD));
     } else {
       return criteriaBuilder.and(
