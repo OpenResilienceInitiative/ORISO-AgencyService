@@ -116,9 +116,9 @@ public class ConfigurationValidator {
 
     if (!missingConfigs.isEmpty()) {
       String errorMessage = String.format(
-          "CRITICAL: Missing required configuration values. Please provide the following via ConfigMap/Secrets:\n%s\n\n" +
-          "IMPORTANT: Use Kubernetes DNS names (e.g., mariadb.caritas.svc.cluster.local:3306) NOT hardcoded IPs.\n" +
-          "DNS names ensure services can find resources even when pods are rescheduled or scaled.",
+          "CRITICAL: Missing required configuration values. Please provide the following via ConfigMap/Secrets:\n%s\n\n"
+              + "IMPORTANT: Use Kubernetes DNS names (e.g., mariadb.caritas.svc.cluster.local:3306) NOT hardcoded IPs.\n"
+              + "DNS names ensure services can find resources even when pods are rescheduled or scaled.",
           String.join("\n", missingConfigs.stream()
               .map(config -> "  - config '" + config + "' is missing")
               .toArray(String[]::new))
@@ -131,4 +131,3 @@ public class ConfigurationValidator {
     return value == null || value.trim().isEmpty();
   }
 }
-
