@@ -1,0 +1,20 @@
+flowchart TD
+  Request[HTTP request] --> SecurityConfig
+  SecurityConfig --> Csrf[StatelessCsrfFilter]
+  SecurityConfig --> JWT[OAuth2 JWT resource server]
+  JWT --> JwtAuthConverter
+  JwtAuthConverter --> AuthorisationService
+  AuthorisationService --> AuthorityMapper[RoleAuthorizationAuthorityMapper]
+  AuthorityMapper --> Authorities[AUTHORIZATION_* authorities]
+  SecurityConfig --> PathRules[requestMatchers and denyAll]
+  JWT --> TenantFilter{multitenancy.enabled?}
+  TenantFilter -->|yes| HttpTenantFilter
+  HttpTenantFilter --> TenantResolverService
+  TenantResolverService --> TokenClaim[AccessTokenTenantResolver]
+  TenantResolverService --> Technical[TechnicalUserTenantResolver]
+  TenantResolverService --> Header[CustomHeaderTenantResolver]
+  TenantResolverService --> Subdomain[SubdomainTenantResolver]
+  TenantResolverService --> SingleDomain[MultitenancyWithSingleDomainTenantResolver]
+  TenantResolverService --> TenantContext
+  TenantContext --> TenantAspect
+  TenantAspect --> HibernateFilter[Hibernate tenantFilter]

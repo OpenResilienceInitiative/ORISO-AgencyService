@@ -1,0 +1,17 @@
+flowchart TD
+  Client[Frontend or service caller] --> AgencyAPI[GET /agencies]
+  AgencyAPI --> AgencyController
+  AgencyController --> AgencyService
+  AgencyService --> ConsultingTypeManager
+  ConsultingTypeManager --> ConsultingTypeService
+  ConsultingTypeService --> ConsultingTypePeer[ConsultingTypeService]
+  AgencyService --> TenantSettings[TenantService/ApplicationSettingsService]
+  AgencyService --> QueryChoice{topics feature active?}
+  QueryChoice -->|yes| SearchWithTopic[AgencyRepository.searchWithTopic]
+  QueryChoice -->|no| SearchWithoutTopic[AgencyRepository.searchWithoutTopic]
+  SearchWithTopic --> MariaDB[(agency, agency_postcode_range, agency_topic)]
+  SearchWithoutTopic --> MariaDB
+  AgencyService --> DTOs[Agency DTOs]
+  AgencyService --> WhiteSpot[white-spot fallback when empty]
+  DTOs --> Client
+  WhiteSpot --> DTOs

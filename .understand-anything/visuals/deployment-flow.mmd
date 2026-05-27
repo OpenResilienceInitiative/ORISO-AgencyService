@@ -1,0 +1,14 @@
+flowchart TD
+  Pom[pom.xml] --> OpenApiGen[OpenAPI Generator executions]
+  OpenApiGen --> GeneratedServer[target/generated-sources server interfaces]
+  OpenApiGen --> GeneratedClients[target/generated-sources peer clients]
+  Source[src/main/java handwritten code] --> MavenPackage[Maven package]
+  GeneratedServer --> MavenPackage
+  GeneratedClients --> MavenPackage
+  Resources[application*.properties and db/changelog] --> MavenPackage
+  MavenPackage --> Jar[AgencyService.jar]
+  Jar --> Dockerfile
+  Dockerfile --> Image[Container image]
+  RuntimeEnv[Env vars: DB, Keycloak, Matrix, service URLs] --> Image
+  Image --> K8s[Kubernetes or local runtime]
+  K8s --> Actuator[/actuator/health]
