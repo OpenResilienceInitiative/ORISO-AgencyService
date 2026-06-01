@@ -1,76 +1,16 @@
-# ORISO AgencyService
+# Caritas Online-Beratung AgencyService
+The AgencyService provides all information of agencies and their postcode ranges. Currently it doesn't contain authorization within the public REST API calls.
+It also provides an admin API with which it is possible to retrieve, create, change and delete the core data of dioceses, agencies and its postcode ranges.
 
-## Overview
-Spring Boot service for managing counseling agencies in the Online Beratung platform.
+## Help and Documentation
+In the project [documentation](https://caritasdeutschland.github.io/documentation/docs/setup/setup-backend) you'll find information for setting up and running the project.
+You can find some detailled information of the service architecture and its processes in the repository [documentation](https://github.com/CaritasDeutschland/caritas-onlineBeratung-agencyService/tree/master/documentation).
 
-## Quick Start
+## License
+The project is licensed under the AGPLv3 which you'll find [here](https://github.com/CaritasDeutschland/caritas-onlineBeratung-agencyService/blob/master/LICENSE).
 
-### Run in Kubernetes
-The service automatically starts via Kubernetes deployment using Maven Spring Boot plugin.
+## Code of Conduct
+Please have a look at our [Code of Conduct](https://github.com/CaritasDeutschland/.github/blob/master/CODE_OF_CONDUCT.md) before participating in the community.
 
-```bash
-# Check service status
-kubectl get pods -n caritas | grep agencyservice
-kubectl logs -n caritas -l app=agencyservice --tail=100
-```
-
-### Run Locally (Development)
-```bash
-cd /home/caritas/Desktop/online-beratung/caritas-workspace/ORISO-AgencyService
-chmod +x mvnw
-./mvnw spring-boot:run -Dspring-boot.run.profiles=local -DskipTests
-```
-
-## Configuration
-
-### Database Connection
-**MariaDB ClusterIP:** `10.43.123.72:3306`
-
-```properties
-# application-local.properties
-spring.datasource.url=jdbc:mariadb://10.43.123.72:3306/agencyservice
-spring.datasource.username=agencyservice
-spring.datasource.password=agencyservice
-```
-
-### Liquibase
-**STATUS:** ⚠️ **DISABLED**
-
-```properties
-spring.liquibase.enabled=false
-```
-
-Database schemas are managed separately in `ORISO-Database` repository.
-
-### Keycloak
-```properties
-keycloak.auth-server-url=http://localhost:8080
-keycloak.realm=online-beratung
-keycloak.resource=agency-service
-```
-
-## Important Notes
-- **Port:** `8084`
-- **Profile:** `local`
-- **Liquibase:** DISABLED - schemas managed in ORISO-Database
-- **Database:** Uses MariaDB ClusterIP (NOT localhost)
-- **Host Network:** Enabled in Kubernetes for direct localhost access
-- **Caching:** Ehcache enabled for agency data
-
-## Kubernetes Deployment Path
-```
-/home/caritas/Desktop/online-beratung/caritas-workspace/ORISO-AgencyService
-```
-
-## Health Check
-```bash
-curl http://localhost:8084/actuator/health
-```
-
-## Dependencies
-- Java 17
-- Spring Boot 2.7.14
-- MariaDB
-- Keycloak
-- Ehcache
-
+## Contributing
+Please read our [contribution guidelines](https://github.com/CaritasDeutschland/.github/blob/master/CONTRIBUTING.md) before contributing to this project.
