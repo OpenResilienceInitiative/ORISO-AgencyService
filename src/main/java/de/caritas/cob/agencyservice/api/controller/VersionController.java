@@ -41,6 +41,7 @@ public class VersionController {
         }
       }
     } catch (IOException e) {
+      // Ignore and return defaults when version.properties is unavailable.
     }
     return props;
   }
@@ -76,5 +77,4 @@ public class VersionController {
     return ResponseEntity.ok(info);
   }
 }
-
 
