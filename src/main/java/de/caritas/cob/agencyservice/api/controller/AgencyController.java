@@ -73,9 +73,8 @@ public class AgencyController implements AgenciesApi {
     var agencies = agencyService.getAgencies(Optional.ofNullable(postcode), consultingType,
         ofNullable(topicId), ofNullable(age), ofNullable(gender), ofNullable(counsellingRelation));
 
-    return !CollectionUtils.isEmpty(agencies)
-        ? new ResponseEntity<>(agencies, HttpStatus.OK)
-        : new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    // Return an empty array instead of 204 to keep frontend flow stable on topics without matches.
+    return new ResponseEntity<>(agencies, HttpStatus.OK);
   }
 
   @Override
@@ -84,9 +83,8 @@ public class AgencyController implements AgenciesApi {
 
     var agencies = agencyService.getAgencies(postcode, topicId);
 
-    return !CollectionUtils.isEmpty(agencies)
-        ? new ResponseEntity<>(agencies, HttpStatus.OK)
-        : new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    // Return an empty array instead of 204 to keep frontend flow stable on topics without matches.
+    return new ResponseEntity<>(agencies, HttpStatus.OK);
   }
 
   /**

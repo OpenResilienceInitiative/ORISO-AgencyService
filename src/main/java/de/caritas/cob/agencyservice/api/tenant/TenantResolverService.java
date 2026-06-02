@@ -54,7 +54,7 @@ public class TenantResolverService {
   }
 
   public Long resolve(HttpServletRequest request) {
-    if (userIsAuthenticated()) {
+    if (userIsAuthenticated() || hasBearerToken(request)) {
       return resolveForAuthenticatedUser(request);
     } else {
       return resolveForNonAuthenticatedUser(request);
@@ -119,5 +119,10 @@ public class TenantResolverService {
     SecurityContext context = SecurityContextHolder.getContext();
     return context.getAuthentication() != null
         && context.getAuthentication().isAuthenticated();
+  }
+
+  private boolean hasBearerToken(HttpServletRequest request) {
+    String authorization = request.getHeader("Authorization");
+    return authorization != null && authorization.startsWith("Bearer ");
   }
 }

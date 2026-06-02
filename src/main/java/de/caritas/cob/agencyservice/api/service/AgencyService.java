@@ -222,7 +222,7 @@ public class AgencyService {
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
-    return multitenancyWithSingleDomain ? Optional.empty() : Optional.of(consultingTypeId);
+    return Optional.of(consultingTypeId);
   }
 
   private List<Agency> findAgencies(Optional<String> postCode, Optional<Integer> consultingTypeId,
@@ -304,6 +304,10 @@ public class AgencyService {
     if (multitenancy) {
       Long tenantId = TenantContext.getCurrentTenant();
       return tenantService.getRestrictedTenantDataByTenantId(tenantId);
+    } else if (multitenancyWithSingleDomain) {
+      // In single-domain mode with multiple tenants configured, "/tenant/public/single"
+      // is no longer stable. Resolve using configured main tenant instead.
+      return tenantService.getMainTenant();
     } else {
       return tenantService.getRestrictedTenantDataForSingleTenant();
     }
@@ -396,9 +400,12 @@ public class AgencyService {
 
   private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
     if (multitenancyWithSingleDomain) {
-      String mainTenantSubdomain = applicationSettingsService.getApplicationSettings()
-          .getMainTenantSubdomainForSingleDomainMultitenancy().getValue();
-      return tenantService.getRestrictedTenantDataBySubdomain(mainTenantSubdomain);
+      // In single-domain mode, use the agency's own tenant when available.
+      // This avoids failing the whole agencies response when consulting type settings are temporarily unavailable.
+      if (agency.getTenantId() != null) {
+        return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
+      }
+      return null;
     } else {
 
       return agency.getTenantId() != null ? tenantService.getRestrictedTenantDataByTenantId(

@@ -1,5 +1,6 @@
 package de.caritas.cob.agencyservice.api.tenant;
 
+import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy;
 import de.caritas.cob.agencyservice.config.apiclient.ApplicationSettingsApiControllerFactory;
@@ -29,17 +30,27 @@ public class MultitenancyWithSingleDomainTenantResolver implements TenantResolve
   @Autowired
   private TenantServiceApiControllerFactory tenantServiceApiControllerFactory;
 
+  @Autowired
+  private AgencyTenantUnawareRepository agencyTenantUnawareRepository;
+
   @Override
   public Optional<Long> resolve(HttpServletRequest request) {
     if (multitenancyWithSingleDomain) {
-      return resolveForMultitenancyWithSingleDomain();
+      return resolveForMultitenancyWithSingleDomain(request);
     } else {
       return Optional.empty();
     }
   }
 
-  private Optional<Long> resolveForMultitenancyWithSingleDomain() {
+  private Optional<Long> resolveForMultitenancyWithSingleDomain(HttpServletRequest request) {
     log.debug("MultitenancyWithSingleDomainTenantResolver resolves tenantId");
+    // Prefer resolving from agencyId header for internal/non-auth calls.
+    // This is required for endpoints like /internal/agencies/{id}/matrix-service-account.
+    Optional<Long> tenantFromAgencyHeader = resolveTenantFromAgencyHeader(request);
+    if (tenantFromAgencyHeader.isPresent()) {
+      return tenantFromAgencyHeader;
+    }
+
     Optional<String> mainTenantSubdomain = getMainTenantSubdomainFromApplicationSettings();
     if (mainTenantSubdomain.isPresent() && StringUtils.isNotBlank(mainTenantSubdomain.get())) {
       return resolveFromTenantServiceBasedOnMainTenantSubdomain(mainTenantSubdomain.get());
@@ -50,12 +61,40 @@ public class MultitenancyWithSingleDomainTenantResolver implements TenantResolve
     }
   }
 
+  private Optional<Long> resolveTenantFromAgencyHeader(HttpServletRequest request) {
+    String agencyIdHeader = request.getHeader("agencyId");
+    if (StringUtils.isBlank(agencyIdHeader)) {
+      agencyIdHeader = request.getHeader("agencyid");
+    }
+    if (StringUtils.isBlank(agencyIdHeader)) {
+      return Optional.empty();
+    }
+    try {
+      Long agencyId = Long.parseLong(agencyIdHeader);
+      return agencyTenantUnawareRepository
+          .findByIdAndDeleteDateNull(agencyId)
+          .map(agency -> agency.getTenantId());
+    } catch (NumberFormatException ex) {
+      log.warn("Invalid agencyId header value for tenant resolution: {}", agencyIdHeader);
+      return Optional.empty();
+    }
+  }
+
   private Optional<Long> resolveFromTenantServiceBasedOnMainTenantSubdomain(
       String rootTenantSubdomain) {
-    var tenantControllerApi = tenantServiceApiControllerFactory.createControllerApi();
-    RestrictedTenantDTO rootTenantData = tenantControllerApi.getRestrictedTenantDataBySubdomain(
-        rootTenantSubdomain, null);
-    return Optional.of(rootTenantData.getId());
+    try {
+      var tenantControllerApi = tenantServiceApiControllerFactory.createControllerApi();
+      RestrictedTenantDTO rootTenantData =
+          tenantControllerApi.getRestrictedTenantDataBySubdomain(rootTenantSubdomain, null);
+      if (rootTenantData != null && rootTenantData.getId() != null) {
+        return Optional.of(rootTenantData.getId());
+      }
+    } catch (Exception exception) {
+      log.warn(
+          "Could not resolve tenant by main subdomain '{}'. Falling back to global tenant context.",
+          rootTenantSubdomain);
+    }
+    return Optional.of(0L);
   }
 
   private Optional<String> getMainTenantSubdomainFromApplicationSettings() {

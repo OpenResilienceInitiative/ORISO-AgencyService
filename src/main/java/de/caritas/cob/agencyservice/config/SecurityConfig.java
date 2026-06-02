@@ -8,19 +8,17 @@ import de.caritas.cob.agencyservice.filter.HttpTenantFilter;
 import de.caritas.cob.agencyservice.filter.StatelessCsrfFilter;
 import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
+import org.keycloak.adapters.springsecurity.KeycloakConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authorization.method.AuthorizationManagerBeforeMethodInterceptor;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
-import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
@@ -29,8 +27,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * Provides the Keycloak/Spring Security configuration.
  */
-@Configuration
-@EnableMethodSecurity(prePostEnabled = true)
+@KeycloakConfiguration
+@EnableGlobalMethodSecurity(
+    prePostEnabled = true)
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig implements WebMvcConfigurer {
@@ -79,10 +78,8 @@ public class SecurityConfig implements WebMvcConfigurer {
           .addFilterAfter(httpTenantFilter, BearerTokenAuthenticationFilter.class);
     }
 
-    httpSecurity.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-
-    httpSecurity
-        .authorizeHttpRequests(auth -> auth
+    httpSecurity.sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        .and().authorizeRequests()
         .requestMatchers(WHITE_LIST).permitAll()
         // Allow public topics without auth
         .requestMatchers(HttpMethod.OPTIONS, "/service/topic/public", "/service/topic/public/**").permitAll()
@@ -94,15 +91,16 @@ public class SecurityConfig implements WebMvcConfigurer {
         .hasAuthority(AuthorityValue.SEARCH_AGENCIES)
         .requestMatchers("/agencies/by-tenant").hasAuthority(AuthorityValue.SEARCH_AGENCIES_WITHIN_TENANT)
         .requestMatchers("/agencyadmin/agencies/tenant/*")
-        .access(new WebExpressionAuthorizationManager("hasAuthority('" + AuthorityValue.AGENCY_ADMIN
-            + "') and hasAuthority('" + AuthorityValue.TENANT_ADMIN + "')"))
+        .access("hasAuthority('" + AuthorityValue.AGENCY_ADMIN
+            + "') and hasAuthority('" + AuthorityValue.TENANT_ADMIN + "')")
         .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
         .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
         .requestMatchers("/agencies/**").permitAll()
         .requestMatchers("/internal/agencies/**").permitAll()
-        .anyRequest().denyAll());
+        .anyRequest().denyAll();
 
-    httpSecurity.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())));
+
+    httpSecurity.oauth2ResourceServer().jwt().jwtAuthenticationConverter(jwtAuthConverter());
     return httpSecurity.build();
   }
 

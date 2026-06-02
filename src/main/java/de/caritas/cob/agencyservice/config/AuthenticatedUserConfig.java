@@ -26,6 +26,7 @@ public class AuthenticatedUserConfig {
 
   private static final String CLAIM_NAME_USER_ID = "userId";
   private static final String CLAIM_NAME_USERNAME = "username";
+  private static final String CLAIM_NAME_TENANT_ID = "tenantId";
 
   /**
    * Returns the currently authenticated user.
@@ -43,6 +44,7 @@ public class AuthenticatedUserConfig {
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
     authenticatedUser.setUserId(getUserAttribute(claimMap, CLAIM_NAME_USER_ID));
     authenticatedUser.setUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME));
+    authenticatedUser.setTenantId(getTenantId(claimMap));
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
         Collectors.toSet()));
     return authenticatedUser;
@@ -65,6 +67,24 @@ public class AuthenticatedUserConfig {
       throw new KeycloakException("Keycloak user attribute '" + claimValue + "' not found.");
     }
     return claimMap.get(claimValue).toString();
+  }
+
+  private Long getTenantId(Map<String, Object> claimMap) {
+    Object value = claimMap.get(CLAIM_NAME_TENANT_ID);
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    if (value instanceof String stringValue) {
+      try {
+        return Long.parseLong(stringValue);
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   private HttpServletRequest getRequest() {

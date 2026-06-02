@@ -10,7 +10,7 @@ import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtec
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
-import jakarta.annotation.Nullable;
+import javax.annotation.Nullable;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

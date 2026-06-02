@@ -13,6 +13,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.keycloak.adapters.springsecurity.token.KeycloakAuthenticationToken;
+import org.keycloak.representations.AccessToken;
+import org.keycloak.representations.AccessToken.Access;
+import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +30,15 @@ class TechnicalUserTenantResolverTest {
   public static final long TECHNICAL_CONTEXT = 0L;
   @Mock
   HttpServletRequest authenticatedRequest;
+
+  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+  KeycloakAuthenticationToken token;
+
+  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+  AccessToken accessToken;
+
+  @Mock
+  Access access;
 
   @Mock
   SecurityContext mockSecurityContext;

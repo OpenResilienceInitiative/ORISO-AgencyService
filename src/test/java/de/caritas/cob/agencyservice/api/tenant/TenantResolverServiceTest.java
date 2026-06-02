@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.keycloak.adapters.springsecurity.token.KeycloakAuthenticationToken;
+import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -35,6 +37,9 @@ class TenantResolverServiceTest {
 
   @Mock
   HttpServletRequest nonAuthenticatedRequest;
+
+  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+  KeycloakAuthenticationToken token;
 
   @InjectMocks
   TenantResolverService tenantResolverService;

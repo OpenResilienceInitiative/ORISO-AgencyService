@@ -120,11 +120,17 @@ public class AgencyAdminService {
   }
 
   private void setTenantIdOnCreate(AgencyDTO agencyDTO, Agency agency) {
-    if (authenticatedUser.isTenantSuperAdmin()) {
+    Long effectiveTenantId = authenticatedUser.getTenantId();
+    if (effectiveTenantId == null) {
+      effectiveTenantId = TenantContext.getCurrentTenant();
+    }
+
+    if (effectiveTenantId != null && effectiveTenantId.equals(0L)) {
       notNull(agencyDTO.getTenantId());
       agency.setTenantId(agencyDTO.getTenantId());
     } else {
-      agency.setTenantId(TenantContext.getCurrentTenant());
+      notNull(effectiveTenantId);
+      agency.setTenantId(effectiveTenantId);
     }
   }
 
