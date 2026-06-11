@@ -17,7 +17,9 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
 import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
@@ -87,6 +89,12 @@ class AgencyAdminServiceTest {
   @Mock
   AuthenticatedUser authenticatedUser;
 
+  @Mock
+  AgencyAdminControlsService agencyAdminControlsService;
+
+  @Mock
+  AgencySettingsService agencySettingsService;
+
   @Captor private ArgumentCaptor<Agency> agencyArgumentCaptor;
 
   private EasyRandom easyRandom;
@@ -95,6 +103,13 @@ class AgencyAdminServiceTest {
   public void setup() {
     ReflectionTestUtils.setField(agencyAdminService, "agencyTopicEnrichmentService", agencyTopicEnrichmentService);
     ReflectionTestUtils.setField(agencyAdminService, "demographicsConverter", demographicsConverter);
+
+    when(agencySettingsService.toSettings(any())).thenReturn(new Settings());
+    when(agencySettingsService.toSettingsJson(any())).thenReturn("{}");
+    when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0) != null
+            ? invocation.getArgument(0)
+            : new Settings());
 
     this.easyRandom = new EasyRandom();
   }

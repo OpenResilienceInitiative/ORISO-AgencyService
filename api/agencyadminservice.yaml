@@ -157,7 +157,7 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Updates an agency [Authorization: Role: agency-admin]'
+      summary: 'Updates an agency including settings.agencyAdminControls [Authorization: Role: agency-admin]'
       operationId: updateAgency
       requestBody:
         content:
@@ -755,6 +755,9 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        settings:
+          $ref: '#/components/schemas/Settings'
+          description: Agency settings including platform-level agencyAdminControls
 
     DemographicsDTO:
       type: object
