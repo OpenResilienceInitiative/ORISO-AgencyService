@@ -1,6 +1,9 @@
 /target/
 !.mvn/wrapper/maven-wrapper.jar
 /node_modules
+
+# Local Spring profile — contains secrets and machine-specific config
+src/main/resources/application-local.properties
 **/application-local.properties
 
 ### STS ###
