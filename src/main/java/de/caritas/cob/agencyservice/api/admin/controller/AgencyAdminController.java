@@ -2,10 +2,12 @@ package de.caritas.cob.agencyservice.api.admin.controller;
 
 import de.caritas.cob.agencyservice.api.admin.hallink.RootDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsFacade;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
+import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
@@ -41,6 +43,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyPostcodeRangeAdminService agencyPostcodeRangeAdminService;
   private final @NonNull AgencyAdminService agencyAdminService;
   private final @NonNull AgencyValidator agencyValidator;
+  private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
 
   /**
    * Creates the root hal based navigation entity.
@@ -213,6 +216,20 @@ public class AgencyAdminController implements AgencyadminApi {
             .fromAgency()).toList();
 
     return new ResponseEntity<>(agenciesResponse, HttpStatus.OK);
+  }
+
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_GET_ALL_AGENCIES')")
+  public ResponseEntity<AgencyAdminControls> getAgencyAdminControls() {
+    return new ResponseEntity<>(agencyAdminControlsFacade.getAgencyAdminControls(), HttpStatus.OK);
+  }
+
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_GET_ALL_AGENCIES')")
+  public ResponseEntity<AgencyAdminControls> updateAgencyAdminControls(
+      @Valid AgencyAdminControls agencyAdminControls) {
+    return new ResponseEntity<>(
+        agencyAdminControlsFacade.updateAgencyAdminControls(agencyAdminControls), HttpStatus.OK);
   }
 
 }

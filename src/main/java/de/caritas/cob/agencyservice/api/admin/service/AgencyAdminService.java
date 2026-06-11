@@ -8,6 +8,7 @@ import static org.apache.commons.lang3.Validate.notNull;
 
 import com.google.common.base.Joiner;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
@@ -57,6 +58,7 @@ public class AgencyAdminService {
   private final @NonNull AgencyService agencyService;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull DataProtectionConverter dataProtectionConverter;
+  private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -80,8 +82,21 @@ public class AgencyAdminService {
   public AgencyAdminFullResponseDTO findAgency(Long agencyId) {
     var agency = findAgencyById(agencyId);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(agency);
-    return new AgencyAdminFullResponseDTOBuilder(agency)
-        .fromAgency();
+    return buildAgencyAdminFullResponse(agency);
+  }
+
+  private AgencyAdminFullResponseDTO buildAgencyAdminFullResponse(Agency agency) {
+    var response = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency();
+    enrichWithAgencyAdminControls(response);
+    return response;
+  }
+
+  private void enrichWithAgencyAdminControls(AgencyAdminFullResponseDTO response) {
+    if (response.getEmbedded() != null) {
+      response.getEmbedded().setSettings(
+          agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(
+              response.getEmbedded().getSettings()));
+    }
   }
 
   private void enrichWithAgencyTopicsIfTopicFeatureEnabled(Agency agency) {

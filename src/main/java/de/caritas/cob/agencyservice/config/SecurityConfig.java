@@ -93,6 +93,8 @@ public class SecurityConfig implements WebMvcConfigurer {
         .requestMatchers("/agencyadmin/agencies/tenant/*")
         .access("hasAuthority('" + AuthorityValue.AGENCY_ADMIN
             + "') and hasAuthority('" + AuthorityValue.TENANT_ADMIN + "')")
+        .requestMatchers("/agencyadmin/controls", "/agencyadmin/controls/")
+        .hasAuthority(AuthorityValue.GET_ALL_AGENCIES)
         .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
         .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
         .requestMatchers("/agencies/**").permitAll()
