@@ -141,7 +141,7 @@ paths:
     get:
       tags:
         - agency-controller
-      summary: 'Returns the information of provided agencies (Ids). [Authorization: none]'
+      summary: 'Returns the information of provided agencies (Ids) including settings. [Authorization: none]'
       operationId: getAgenciesByIds
       parameters:
         - name: agencyIds
@@ -244,6 +244,8 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        settings:
+          $ref: '#/components/schemas/Settings'
 
     FullAgencyResponseDTO:
       type: object
@@ -289,6 +291,14 @@ components:
           items:
             type: string
           example: "[MALE,FEMALE,DIVERS]"
+
+    AgencyAdminAllowedPermissionToggles:
+      $ref: './components/agency-settings.yaml#/components/schemas/AgencyAdminAllowedPermissionToggles'
+    AgencyAdminControls:
+      $ref: './components/agency-settings.yaml#/components/schemas/AgencyAdminControls'
+    Settings:
+      $ref: './components/agency-settings.yaml#/components/schemas/Settings'
+
   securitySchemes:
     Bearer:
       type: apiKey
