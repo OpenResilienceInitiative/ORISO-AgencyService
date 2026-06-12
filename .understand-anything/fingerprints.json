@@ -1,0 +1,1975 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "972078ea7d50225e02e2aea8a0743b98aaa31a04",
+  "generatedAt": "2026-06-12T03:32:00.339Z",
+  "files": {
+    ".github/actions/docker-build-push/action.yml": {
+      "sha1": "4c7338678fce24d22ab076be7d9e2b8e239812dc",
+      "sizeLines": 47,
+      "language": "yaml",
+      "category": "config"
+    },
+    ".github/actions/maven-build/action.yml": {
+      "sha1": "9004d94a6b3cc3a4b9b7fa15c6bb0ea5d8f696f6",
+      "sizeLines": 21,
+      "language": "yaml",
+      "category": "config"
+    },
+    ".github/workflows/ci-feature-branch.yml": {
+      "sha1": "3041de801318faf42584c5ca1c59f655802407a6",
+      "sizeLines": 21,
+      "language": "yaml",
+      "category": "pipeline"
+    },
+    ".github/workflows/ci-main.yml": {
+      "sha1": "7f3c9fbce942dd55f9d1d0155f45d736e31ed6d0",
+      "sizeLines": 36,
+      "language": "yaml",
+      "category": "pipeline"
+    },
+    ".github/workflows/ci-pull-request.yml": {
+      "sha1": "fa3b881e545e8d1072ffb2d6822100e7d82b4c2a",
+      "sizeLines": 29,
+      "language": "yaml",
+      "category": "pipeline"
+    },
+    ".gitignore": {
+      "sha1": "199bda68225be6c5e35568209cb0e971804c24b5",
+      "sizeLines": 35,
+      "language": "unknown",
+      "category": "code"
+    },
+    ".mvn/wrapper/maven-wrapper.properties": {
+      "sha1": "2cdd495bd7aa6ee86d041cc8eed3aadc1ddfe660",
+      "sizeLines": 4,
+      "language": "properties",
+      "category": "config"
+    },
+    ".swagger-codegen-ignore": {
+      "sha1": "acdf19686b32eead7a504336522e72393fbfc78f",
+      "sizeLines": 25,
+      "language": "unknown",
+      "category": "code"
+    },
+    "CHANGELOG.md": {
+      "sha1": "bcf79740184511a0789f4e5ad07219124968ef87",
+      "sizeLines": 231,
+      "language": "markdown",
+      "category": "docs"
+    },
+    "Dockerfile": {
+      "sha1": "9368b37ee4190898d4d86a360cd9d2e9d968013b",
+      "sizeLines": 8,
+      "language": "dockerfile",
+      "category": "infra"
+    },
+    "LICENSE": {
+      "sha1": "a2f9ffbf32eeb6284afa81bc4fb4c27b80d044e9",
+      "sizeLines": 662,
+      "language": "unknown",
+      "category": "code"
+    },
+    "README.md": {
+      "sha1": "13a64c35b645de3580878d3554992b26e62d417d",
+      "sizeLines": 77,
+      "language": "markdown",
+      "category": "docs"
+    },
+    "api/agencyadminservice.yaml": {
+      "sha1": "225b3edd5a63e5a7ce8cda623eb24fed8e13d0d2",
+      "sizeLines": 1131,
+      "language": "yaml",
+      "category": "config"
+    },
+    "api/agencyservice.yaml": {
+      "sha1": "401d5b2a77a030504d5fc08127b486a7e97152f4",
+      "sizeLines": 297,
+      "language": "yaml",
+      "category": "config"
+    },
+    "check-version.sh": {
+      "sha1": "a93451b1ef85cda27d9f21581c80c073d163ce1e",
+      "sizeLines": 30,
+      "language": "shell",
+      "category": "script"
+    },
+    "commitlint.config.js": {
+      "sha1": "3c7b6ee4882014742d8433ff581b885582bac3a8",
+      "sizeLines": 2,
+      "language": "javascript",
+      "category": "code"
+    },
+    "deploy-development.sh": {
+      "sha1": "3600d380562d530dfec14626c735b7d80747b594",
+      "sizeLines": 16,
+      "language": "shell",
+      "category": "script"
+    },
+    "docker-build.cmd": {
+      "sha1": "51f8cf175bab58c86ab97c4932f8afaf8f184c61",
+      "sizeLines": 1,
+      "language": "batch",
+      "category": "script"
+    },
+    "documentation/AgencyService-Architektur.graphml": {
+      "sha1": "d7ba5afe4167d92b9e47083d8c4e74791d90e2cb",
+      "sizeLines": 7203,
+      "language": "xml",
+      "category": "data"
+    },
+    "google_checks_light.xml": {
+      "sha1": "9ca20933603a91d4b0aa9208b4661cc0b91fc0bf",
+      "sizeLines": 303,
+      "language": "xml",
+      "category": "config"
+    },
+    "mvnw": {
+      "sha1": "9d2eac957492e35022d8decc60d05e7ac6778706",
+      "sizeLines": 296,
+      "language": "unknown",
+      "category": "code"
+    },
+    "mvnw.cmd": {
+      "sha1": "ee62d6142050635a917760f5f429367006807e95",
+      "sizeLines": 190,
+      "language": "batch",
+      "category": "script"
+    },
+    "package-lock.json": {
+      "sha1": "1a29ec864352c8a0fe15c55f2a904cc7c394d7da",
+      "sizeLines": 3032,
+      "language": "json",
+      "category": "config"
+    },
+    "package.json": {
+      "sha1": "572877b07cbb16062fe1d8d3aa489a766413d77a",
+      "sizeLines": 18,
+      "language": "json",
+      "category": "config"
+    },
+    "pom.xml": {
+      "sha1": "51ca6fc9c81d66b5f49dffa68c5a034064aaa6be",
+      "sizeLines": 672,
+      "language": "xml",
+      "category": "config"
+    },
+    "readme.md": {
+      "sha1": "6608c12e32437ba100e3a5ed1f24b0a8bb5be412",
+      "sizeLines": 17,
+      "language": "markdown",
+      "category": "docs"
+    },
+    "run-trivy.sh": {
+      "sha1": "bc7d267af251d4e7ec915724f05fc1350e951ac7",
+      "sizeLines": 2,
+      "language": "shell",
+      "category": "script"
+    },
+    "services/applicationsettingsservice.yml": {
+      "sha1": "efc8034c9bd99f6b4b13ef2fda0c92c83f2267ff",
+      "sizeLines": 143,
+      "language": "yaml",
+      "category": "config"
+    },
+    "services/appointmentService.yaml": {
+      "sha1": "b2d964b7a77062bde257dea8622fd10ae6363d0e",
+      "sizeLines": 768,
+      "language": "yaml",
+      "category": "config"
+    },
+    "services/consultingtypeservice.yaml": {
+      "sha1": "c58fc49547fd6133195cfbf4473be287b477a4e2",
+      "sizeLines": 690,
+      "language": "yaml",
+      "category": "config"
+    },
+    "services/tenantservice.yaml": {
+      "sha1": "f6124ce0b7bea234cb8397d2a405342a10befef0",
+      "sizeLines": 705,
+      "language": "yaml",
+      "category": "config"
+    },
+    "services/topicservice.yaml": {
+      "sha1": "e6fc6f5e2306b9702323cd51dad725f9efef59aa",
+      "sizeLines": 147,
+      "language": "yaml",
+      "category": "config"
+    },
+    "services/useradminservice.yaml": {
+      "sha1": "3b17eae352b9c33440b0118bd951e8754155727e",
+      "sizeLines": 1366,
+      "language": "yaml",
+      "category": "config"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/AgencyServiceApplication.java": {
+      "sha1": "1b0976bf6540a34ffad2bab3dd7fef911aca5c53",
+      "sizeLines": 16,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/ApiDefaultResponseEntityExceptionHandler.java": {
+      "sha1": "1ef90f0aa11c86299cf489f01772a1a9b85ffa6c",
+      "sizeLines": 48,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/ApiResponseEntityExceptionHandler.java": {
+      "sha1": "a2572eb4e3da8ce0ad07eb0c21347f4c4b837c22",
+      "sizeLines": 198,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminController.java": {
+      "sha1": "0e7c57b0c6691c3a01a7b90a7e87de742e748c4d",
+      "sizeLines": 236,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/AgencyLinksBuilder.java": {
+      "sha1": "edcb37cc3f7d1fc19d90a90180c5c668bccb3efd",
+      "sizeLines": 66,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/HalLinkBuilder.java": {
+      "sha1": "02a4ab4c22153fd2ce103a7e4d154e1abd8ef21b",
+      "sizeLines": 22,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/RootDTOBuilder.java": {
+      "sha1": "0f49e8d43b63832f6cb614c8461903441fb50219",
+      "sizeLines": 55,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/SearchResultLinkBuilder.java": {
+      "sha1": "fc84001096baea6ca2f989a6733ce81be4efc554",
+      "sizeLines": 130,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminService.java": {
+      "sha1": "1a3770a34b499d606d2a83402ff12584d75a18cf",
+      "sizeLines": 347,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/AgencyTopicMergeService.java": {
+      "sha1": "18b780fdcd656d2489eefc3a8d77e8b58c335679",
+      "sizeLines": 73,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/UserAdminService.java": {
+      "sha1": "8c5e8defef50767c2c50374e9731709b48a01720",
+      "sizeLines": 93,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminFullResponseDTOBuilder.java": {
+      "sha1": "11d5f93344b675eff85de8c3fd52424c274ec80e",
+      "sizeLines": 98,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearch.java": {
+      "sha1": "b38316823a5dd105ed33c979016b1f3cabf12188",
+      "sizeLines": 18,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchService.java": {
+      "sha1": "40df9117e3b9cd455589c584205b246e555e3baf",
+      "sizeLines": 272,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchTenantSupportService.java": {
+      "sha1": "e0c3d74cc1fec63566d42d18129e0757e70a8853",
+      "sizeLines": 53,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencySettingsService.java": {
+      "sha1": "3b377b97fd9354b47e1e8fa047c50fe342a846bb",
+      "sizeLines": 44,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyTopicEnrichmentService.java": {
+      "sha1": "2082fc39f37118788c402c27d43bf9bfb231d93a",
+      "sizeLines": 76,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionConverter.java": {
+      "sha1": "f98a8226640b439d7c10bb4084b37d8263df518b",
+      "sizeLines": 53,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionDTOBuilder.java": {
+      "sha1": "1d51c7c6152633ce4dc9c13efbaa0b4bad9bc341",
+      "sizeLines": 60,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DemographicsConverter.java": {
+      "sha1": "8af61340b79dc34c6eb7fa28c781856e4fe49b98",
+      "sizeLines": 77,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/SearchResult.java": {
+      "sha1": "b10aa86b9a65f046577319ad24234c80a446d546",
+      "sizeLines": 23,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminAllowedPermissionTogglesSettings.java": {
+      "sha1": "dd84d214363755dff6675d6b599e5be683e77b2b",
+      "sizeLines": 42,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsConverter.java": {
+      "sha1": "beeacbfde089f6f4a2f3cde14175b85182c43d12",
+      "sizeLines": 109,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsFacade.java": {
+      "sha1": "62ed88d20ae2f3e98a1a340c16654b55a417e6a2",
+      "sizeLines": 33,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsService.java": {
+      "sha1": "9830267cb6a99a2dbc8e911a50866c0b5a0794e1",
+      "sizeLines": 81,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsSettings.java": {
+      "sha1": "d50bd38c41633a9ba1bf87e1c9506563dc413698",
+      "sizeLines": 17,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/AgencyPostcodeRangeAdminService.java": {
+      "sha1": "6a5cad64d856cc878df733d193de039098f428df",
+      "sizeLines": 156,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/AgencyPostcodeRangeResponseDTOBuilder.java": {
+      "sha1": "fe572fd185626ed5365732a3860f6176ba08b0b6",
+      "sizeLines": 92,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/PostcodeRangeTransformer.java": {
+      "sha1": "751c840d81e4c9e1368ee2768d4066fe6cd47c5e",
+      "sizeLines": 84,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/PostcodeRangeValidator.java": {
+      "sha1": "bf798306015ad056adfec15b24e965f4360e9f47",
+      "sizeLines": 76,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/AgencyValidator.java": {
+      "sha1": "1b987eebcac48c5189458a208f1374cf5358e423",
+      "sizeLines": 76,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/DeleteAgencyValidator.java": {
+      "sha1": "7905cf2de873fbddc1d74f5af8e72a784e5bd89b",
+      "sizeLines": 85,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyConsultingTypeValidator.java": {
+      "sha1": "b5e3d64eb2ffc4fd5d1202eddf04d502ead1c1b1",
+      "sizeLines": 36,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyDataProtectionValidationService.java": {
+      "sha1": "162da96a5053465cdf9e7b32a8ab0c27c9d211e6",
+      "sizeLines": 84,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyDataProtectionValidator.java": {
+      "sha1": "b90da2df95796c7dd5e929c159752e37f06ed343",
+      "sizeLines": 61,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyDemographicsValidator.java": {
+      "sha1": "4f19d6b5b3a46f0576407afe7fdd459e35079843",
+      "sizeLines": 47,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyOfflineStatusValidator.java": {
+      "sha1": "41c152335318065d109039414de4ef011a628497",
+      "sizeLines": 101,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyPostcodeValidator.java": {
+      "sha1": "bdebe381cb7ca4c69625dbeaee8ea774e8543b8c",
+      "sizeLines": 30,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyTenantValidator.java": {
+      "sha1": "bc2f4117200ba1fd324a8e53cbb6298452b4aab3",
+      "sizeLines": 47,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyUpdatePermissionValidator.java": {
+      "sha1": "e7c4276e5584c42330cf9a6258b4b55907aac07d",
+      "sizeLines": 33,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/ConcreteAgencyValidator.java": {
+      "sha1": "01f7f785db8a4bff6a73c37b7fc14a1248d8b26f",
+      "sizeLines": 9,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/annotation/CreateAgencyValidator.java": {
+      "sha1": "859571045aabde2d182c042ab73209140b3e33ae",
+      "sizeLines": 12,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/annotation/UpdateAgencyValidator.java": {
+      "sha1": "2e28742c34d58ad8610e4d671d5a13963bb2911a",
+      "sizeLines": 12,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/model/ValidateAgencyDTO.java": {
+      "sha1": "89c825bb980579807928c30aff236db2957e312c",
+      "sizeLines": 28,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/authorization/Authority.java": {
+      "sha1": "9b90767e466d31bda82ed74bb15c5fcbc77a50c0",
+      "sizeLines": 67,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/authorization/RoleAuthorizationAuthorityMapper.java": {
+      "sha1": "78295ee9d18e8e507668f358715dcea358e5f634",
+      "sizeLines": 40,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/controller/AgencyController.java": {
+      "sha1": "85e35785d16a57c48abf4d4bd1a832ef96b147d3",
+      "sizeLines": 136,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/controller/CustomSwaggerUIController.java": {
+      "sha1": "fa04b822d360bd8a2f55e544a6aae1110f90726d",
+      "sizeLines": 19,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/controller/VersionController.java": {
+      "sha1": "928d34b26a91db6807e7fe26d81ac228a5e694c8",
+      "sizeLines": 81,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/KeycloakException.java": {
+      "sha1": "e695094fe719a7aa75e5aba25f851a5f96da6100",
+      "sizeLines": 17,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/MissingConsultingTypeException.java": {
+      "sha1": "64ec6708796fbe06d1cbb472a6cb15c83475411f",
+      "sizeLines": 17,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/customheader/CustomHttpHeader.java": {
+      "sha1": "a25214a5e1253c96c14de61f2eedb401e30a6471",
+      "sizeLines": 27,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/AgencyAccessDeniedException.java": {
+      "sha1": "7c641ff76a5430176d26950f49cf90b306be70e3",
+      "sizeLines": 15,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/BadRequestException.java": {
+      "sha1": "58a0726a35ba729ee18621e80d06ef4c0bd686d2",
+      "sizeLines": 18,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/ConflictException.java": {
+      "sha1": "bf341663b8f65cc1475980fbe3d69c9b1de56895",
+      "sizeLines": 19,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/CustomHttpStatusException.java": {
+      "sha1": "761b7c789927c29b255e4db36c28e00e690f73ad",
+      "sizeLines": 33,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/CustomValidationHttpStatusException.java": {
+      "sha1": "af6cab853f95e70a18ce1a54bbe6449de0e01397",
+      "sizeLines": 45,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/HttpStatusExceptionReason.java": {
+      "sha1": "4aa7a11af04861a3fbe56f1107f451f27a64d94f",
+      "sizeLines": 23,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/InternalServerErrorException.java": {
+      "sha1": "85eb633ddc7c35471d20473458a233989475714a",
+      "sizeLines": 42,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/InvalidConsultingTypeException.java": {
+      "sha1": "f9e589311fcab2e441aeccb661de383a3cbee38a",
+      "sizeLines": 16,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/InvalidDemographicsException.java": {
+      "sha1": "c83e3c5777a358968539eeba5d0b5bb0d5f30385",
+      "sizeLines": 18,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/InvalidOfflineStatusException.java": {
+      "sha1": "f3909f724a455f74ad8ca129d511f9bfeb65dac4",
+      "sizeLines": 25,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/InvalidPostcodeException.java": {
+      "sha1": "c60d6320eb178bde115996ce22b190e20ccd1c16",
+      "sizeLines": 15,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/exception/httpresponses/NotFoundException.java": {
+      "sha1": "f5c2729146e6e756d865e95135114dd14119a6dc",
+      "sizeLines": 12,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/manager/consultingtype/ConsultingTypeManager.java": {
+      "sha1": "0d173a6b3a586a8269a23cce132ab607a68f99a8",
+      "sizeLines": 36,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/manager/consultingtype/registration/Registration.java": {
+      "sha1": "c01da5925b58d1395103410326f24500e69f8e39",
+      "sizeLines": 22,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/manager/consultingtype/whiteSpot/WhiteSpot.java": {
+      "sha1": "9f74b9c8a97767aeec7918eabedbb0a6bb9eadaa",
+      "sizeLines": 22,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/model/AgencyMatrixCredentialsDTO.java": {
+      "sha1": "e57784df50a2d227b46f7a7da8d7fa6e510a90ad",
+      "sizeLines": 21,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/TenantAware.java": {
+      "sha1": "5f30285859fff19d0e26dd28101e5a5ab4093cea",
+      "sizeLines": 20,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/TenantUnaware.java": {
+      "sha1": "be791090873e6ba5c5fee39dfc65944f03267d4b",
+      "sizeLines": 10,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Agency.java": {
+      "sha1": "d5e897ca916ffcb98232bbbe2a7d01c3b86c606e",
+      "sizeLines": 173,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepository.java": {
+      "sha1": "7b3136a0063b68ff083750cb2c39365af87ac0c4",
+      "sizeLines": 114,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantAwareRepository.java": {
+      "sha1": "7a37d856709483e98e645cea6fda0d880bf5f023",
+      "sizeLines": 70,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantUnawareRepository.java": {
+      "sha1": "9964d8e4910a770a0c9eb3e89d75955e708b59e3",
+      "sizeLines": 49,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionPlaceHolderType.java": {
+      "sha1": "cdededd64170ab07989c2738b9e8a00162e9682a",
+      "sizeLines": 29,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleContact.java": {
+      "sha1": "c66255184d95c0d8500ac6062a66725a7af486e3",
+      "sizeLines": 21,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleEntity.java": {
+      "sha1": "db12cdec65306c8580fb19a63ae585ca40bc8911",
+      "sizeLines": 19,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Gender.java": {
+      "sha1": "b9ddc73a15c6ac5499bb1853200f3a3fa5af0608",
+      "sizeLines": 9,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlEntity.java": {
+      "sha1": "ec50c5d2878ce10ebac17c9b13fa57a9d7f60f1d",
+      "sizeLines": 39,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlRepository.java": {
+      "sha1": "2bec10f2c9654c0a4f39c2def42713ea00d69725",
+      "sizeLines": 10,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRange.java": {
+      "sha1": "baf992fc7ebe9fa998fa3c428b954a050034433f",
+      "sizeLines": 91,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRangeRepository.java": {
+      "sha1": "a9f0053e848a4c182b97e8a7edba836bfaa09581",
+      "sizeLines": 41,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/repository/agencytopic/AgencyTopic.java": {
+      "sha1": "16300276766f91278cb2e1c6829646279390d655",
+      "sizeLines": 53,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/AgencySearch.java": {
+      "sha1": "428aa712e553296b2622eed7954a6d9d3d59cecd",
+      "sizeLines": 19,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/AgencyService.java": {
+      "sha1": "200ec48e95558f1e1c8899c51ca94828d4222852",
+      "sizeLines": 484,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/ApplicationSettingsService.java": {
+      "sha1": "ecc7c76441ff45b1918a78abbfdb4d486b323f97",
+      "sizeLines": 41,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/AppointmentService.java": {
+      "sha1": "3d1979370a42e388770f5ce553550d710770b966",
+      "sizeLines": 55,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/CentralDataProtectionTemplateService.java": {
+      "sha1": "37154feb145dee5cf0b1623a3167d5bd584cd2a5",
+      "sizeLines": 229,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/ConsultingTypeService.java": {
+      "sha1": "31c6c5f5717cd2ed2c819e32d54afe56147c771b",
+      "sizeLines": 49,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/DataProtectionPlaceHolderType.java": {
+      "sha1": "86ac22f958523f9bb5e5e06420bdc6462ac6ec00",
+      "sizeLines": 16,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/LogService.java": {
+      "sha1": "7664bf68cf906e9701b286e58923c66904389ba3",
+      "sizeLines": 94,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/TemplateRenderer.java": {
+      "sha1": "7069f19ada10eebbeabf357b66c74af9f65acff9",
+      "sizeLines": 32,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/TenantHeaderSupplier.java": {
+      "sha1": "b9d1c42d60f0ab2395b0c262441932ee3ccfdcb2",
+      "sizeLines": 40,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/TenantHibernateInterceptor.java": {
+      "sha1": "5b0e3c58ec11c579a7b1453de994a44cf88f9f6f",
+      "sizeLines": 71,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/TenantService.java": {
+      "sha1": "a827be4846899bab96b0c5f5a82c2c8c3b72d67b",
+      "sizeLines": 57,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/TopicEnrichmentService.java": {
+      "sha1": "0e55af2e297f82f94ccdb6e7ccea06104b74a8b5",
+      "sizeLines": 69,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/TopicService.java": {
+      "sha1": "9f2a258fb37eb5497a7a33ed8c46e2d60dc353b1",
+      "sizeLines": 42,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/matrix/MatrixConfig.java": {
+      "sha1": "bc59e92c7c46cba1699b1f07d1709277ed834378",
+      "sizeLines": 31,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/matrix/MatrixProvisioningService.java": {
+      "sha1": "a271c923942d373254ef5df9034982913cf19e2c",
+      "sizeLines": 275,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/service/securityheader/SecurityHeaderSupplier.java": {
+      "sha1": "c143820c341053b5f70f3a815b7cea3c89de7cc8",
+      "sizeLines": 56,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/AccessTokenTenantResolver.java": {
+      "sha1": "dc6a0180e63b58fcfe3722bd1f99f11dfbf41af8",
+      "sizeLines": 97,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/CustomHeaderTenantResolver.java": {
+      "sha1": "be6694980914a7352fce3f8ada44b22373f6b03f",
+      "sizeLines": 25,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/MultitenancyWithSingleDomainTenantResolver.java": {
+      "sha1": "93dd02bcd856ef1e6f1aec0c9ad603d09fccd88b",
+      "sizeLines": 116,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/SubdomainTenantResolver.java": {
+      "sha1": "097036e89ee4152575609a6103b36863f0393854",
+      "sizeLines": 46,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/TechnicalUserTenantResolver.java": {
+      "sha1": "8e6011d0e86870452b956dade9d156f39f031443",
+      "sizeLines": 52,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/TenantAspect.java": {
+      "sha1": "57639edeb8fc5c71deb4170ae13b41dd2a2a9c0d",
+      "sizeLines": 45,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/TenantContext.java": {
+      "sha1": "7e4deff36d19b18d24f01162f462179635917fe6",
+      "sizeLines": 26,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/TenantContextProvider.java": {
+      "sha1": "5f0a2f389351a806397397d8bde7cf214852dcc3",
+      "sizeLines": 19,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/TenantResolver.java": {
+      "sha1": "ba8107c5084d562a7d925d96bf87194297c26d65",
+      "sizeLines": 12,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/tenant/TenantResolverService.java": {
+      "sha1": "f32450fdb8058be7ab128fd7003f63973d6a0c87",
+      "sizeLines": 129,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/util/AuthenticatedUser.java": {
+      "sha1": "bdfc8e45f1e3cdd991de4f917698c09319711c86",
+      "sizeLines": 59,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/util/HttpUrlUtils.java": {
+      "sha1": "9b66dc8146fe651ac0e4102b8878af8e22f41483",
+      "sizeLines": 15,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/util/JsonConverter.java": {
+      "sha1": "cfe1210ed200eb1af6d313d70c04a56072868657",
+      "sizeLines": 54,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/workflow/DeleteAgenciesMarkedForDeletionScheduler.java": {
+      "sha1": "be18af2474c87995e64481b6b3c35e2e37ee9e73",
+      "sizeLines": 22,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/api/workflow/DeleteAgencyService.java": {
+      "sha1": "454560e9d44cbcba4b6411fed2b9fa6f491caa04",
+      "sizeLines": 40,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/AppConfig.java": {
+      "sha1": "1ac9616d938ff92107f9960ee213cb810e0b52c5",
+      "sizeLines": 30,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/AuthenticatedUserConfig.java": {
+      "sha1": "fb0ee4b4cdf1d71f333b794120a0409a5ecc079e",
+      "sizeLines": 95,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/CacheManagerConfig.java": {
+      "sha1": "9db437152571eb15186fb973fa58a0c4e7affb53",
+      "sizeLines": 119,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/ConfigurationValidator.java": {
+      "sha1": "a54419f945b52f0589902503dcb0fb39452fc611",
+      "sizeLines": 134,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/CustomSwaggerUIPathWebMvcConfigurer.java": {
+      "sha1": "927ac5b9c5c32c0628587d4b02870bb21813600c",
+      "sizeLines": 21,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/FreeMarkerConfig.java": {
+      "sha1": "5fe42556976c2795ae323c663f5aeb47f1e9cc5a",
+      "sizeLines": 29,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/SecurityConfig.java": {
+      "sha1": "d4e78eecf934fce945aae7a58c5deb866b87d167",
+      "sizeLines": 126,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/SpringFoxConfig.java": {
+      "sha1": "9a4536634ba9947b4be14ef0d2dceaca428eef8b",
+      "sizeLines": 122,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/ApplicationSettingsApiClient.java": {
+      "sha1": "edf181f95813632047b6045a028940ef6a5e341e",
+      "sizeLines": 85,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/ApplicationSettingsApiControllerFactory.java": {
+      "sha1": "0f443b220f02b3689d10b64869a01fc53b5d4a9b",
+      "sizeLines": 22,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/AppointmentServiceAgencyApiControllerFactory.java": {
+      "sha1": "1f710ca6e250c1a38c7bcf3ea223913e231578de",
+      "sizeLines": 24,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/ConsultingTypeServiceApiControllerFactory.java": {
+      "sha1": "b4e81b724eba80a9555f10246adacf93a07d8284",
+      "sizeLines": 24,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/TenantServiceApiClient.java": {
+      "sha1": "d2c8207999684641ad1a40197a6f4992e2e84cf1",
+      "sizeLines": 85,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/TenantServiceApiControllerFactory.java": {
+      "sha1": "448b1ea79e60872e516a9c0bd47ceb601a8a55cb",
+      "sizeLines": 24,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/TopicServiceApiClient.java": {
+      "sha1": "7940c91da87face41f619ba6b053e6159d8d0439",
+      "sizeLines": 85,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/TopicServiceApiControllerFactory.java": {
+      "sha1": "a29565a70f49914a16a10d02dac57c9ec4e37302",
+      "sizeLines": 24,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/UserAdminApiClient.java": {
+      "sha1": "58639c708dc790bb94e66dc0bc1d52f98750d6be",
+      "sizeLines": 85,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/apiclient/UserAdminServiceApiControllerFactory.java": {
+      "sha1": "4dd06417ff312e2895e6d6dda2192a0a162e1da8",
+      "sizeLines": 23,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/resttemplate/CustomResponseErrorHandler.java": {
+      "sha1": "59dcdbedef11308e106217a62a4092a75bd3e8c8",
+      "sizeLines": 23,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/resttemplate/RestTemplateConfig.java": {
+      "sha1": "9cd3aaeed150583eb3e27f9749998a3cda052c2c",
+      "sizeLines": 27,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/security/AuthorisationService.java": {
+      "sha1": "06dcf14284bccd90d5f419886ac17314465bc375",
+      "sizeLines": 53,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/security/JwtAuthConverter.java": {
+      "sha1": "53970c7bae667467385b71143b3376caa031b7eb",
+      "sizeLines": 62,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/security/JwtAuthConverterProperties.java": {
+      "sha1": "f044f368f675b9566cf7aac2af2cf4c044f07485",
+      "sizeLines": 17,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/config/security/KeycloakLogoutHandler.java": {
+      "sha1": "cedf818d3892ac1e32b110f1358a1d48c4f9c1e0",
+      "sizeLines": 45,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/filter/HttpTenantFilter.java": {
+      "sha1": "e689ee9dacff094a317c6050f257e82724ae6285",
+      "sizeLines": 69,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/filter/StatelessCsrfFilter.java": {
+      "sha1": "bf3c43a49a2491f06a1322602829af8398b06dff",
+      "sizeLines": 81,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/java/de/caritas/cob/agencyservice/filter/SubdomainExtractor.java": {
+      "sha1": "79a600a793728995357554e7e0137911b086c66c",
+      "sizeLines": 43,
+      "language": "java",
+      "category": "code"
+    },
+    "src/main/resources/application-dev.properties": {
+      "sha1": "6e106713c366d0cc5a9cbdea404edd88b51cc9e2",
+      "sizeLines": 105,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/main/resources/application-prod.properties": {
+      "sha1": "6e106713c366d0cc5a9cbdea404edd88b51cc9e2",
+      "sizeLines": 105,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/main/resources/application-staging.properties": {
+      "sha1": "6e106713c366d0cc5a9cbdea404edd88b51cc9e2",
+      "sizeLines": 105,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/main/resources/application-testing.properties": {
+      "sha1": "6e106713c366d0cc5a9cbdea404edd88b51cc9e2",
+      "sizeLines": 105,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/main/resources/application.properties": {
+      "sha1": "86c8eff7733519293930d254153494dbf6d361af",
+      "sizeLines": 175,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/main/resources/db/changelog/agencyservice-dev-master.xml": {
+      "sha1": "98b121c42c11546295ccb593a6e7242b85857eb8",
+      "sizeLines": 31,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/agencyservice-local-master.xml": {
+      "sha1": "fecf8a5d0b2bae66310a72d5b311e4b549a09f8e",
+      "sizeLines": 30,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/agencyservice-prod-master.xml": {
+      "sha1": "0c702d5070475536864c13c39466216fc7549a5d",
+      "sizeLines": 27,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/agencyservice-staging-master.xml": {
+      "sha1": "8d394cf942baba4de48944162679d7675129381a",
+      "sizeLines": 27,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/agencyservice-testing-master.xml": {
+      "sha1": "958f0e0e43a571e3e203ae6c83cd17fd85d5b35d",
+      "sizeLines": 9,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0001_initsql/initSql.xml": {
+      "sha1": "b3c06de8a78939ae47502400e8b4b90a0d5fdccf",
+      "sizeLines": 11,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0001_initsql/initTables.sql": {
+      "sha1": "67e516f439ce70460bc862492fd7f899fd272258",
+      "sizeLines": 52,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0001_initsql/initTrigger.sql": {
+      "sha1": "0b87b96b19b3d7c35eaf22d0623b44b36d36f043",
+      "sizeLines": 9,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0002_agency_id_old_null/0002_changeSet.xml": {
+      "sha1": "4494858e1bdab19fd68b7ea49393db03cd4fd925",
+      "sizeLines": 9,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0002_agency_id_old_null/agenyIdOldNull-rollback.sql": {
+      "sha1": "b4497d19c7fdf3c95c8baaf3bc10ae3ef293b3d6",
+      "sizeLines": 1,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0002_agency_id_old_null/agenyIdOldNull.sql": {
+      "sha1": "b67d343d803034a30415408b5d93a8ca33679f28",
+      "sizeLines": 1,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0003_agency_consulting_type/0003_changeSet.xml": {
+      "sha1": "6b762893abf37f39639d172f28ce3626c76e3d3a",
+      "sizeLines": 9,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0003_agency_consulting_type/agencyConsultingType-rollback.sql": {
+      "sha1": "5b807221b2927878db46cd6c7687f430cf2b5b1f",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0003_agency_consulting_type/agencyConsultingType.sql": {
+      "sha1": "d8d832772ce01b4720b3acac2145309b0a58d813",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0004_agency_offline/0004_changeSet.xml": {
+      "sha1": "abe63bd3176ddd346bd450d571385ba938821197",
+      "sizeLines": 9,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0004_agency_offline/agencyOffline-rollback.sql": {
+      "sha1": "f441f1ef6de5f5ba04ffcd2e949bab89e9f530d1",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0004_agency_offline/agencyOffline.sql": {
+      "sha1": "d7a73261b98a4adcf3cf8c053389fc87e2d31472",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0005_agency_delete_flag/0005_changeSet.xml": {
+      "sha1": "66770c81f3b11f19314371c7b66463cad837fc71",
+      "sizeLines": 9,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0005_agency_delete_flag/agencyDeleteFlag-rollback.sql": {
+      "sha1": "dc3a098b8e5e8ff565407a4d44193a37d1238f56",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0005_agency_delete_flag/agencyDeleteFlag.sql": {
+      "sha1": "83240654f0203ea880eb2d9325abf0d25ac3b75a",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0006_agency_url_and_external_flag/0006_changeSet.xml": {
+      "sha1": "189f737ebfc82f4cc0bf7f5b293dd38ad1e8bc03",
+      "sizeLines": 10,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0006_agency_url_and_external_flag/agencyUrlAndExternalFlag-rollback.sql": {
+      "sha1": "ed9692dbad4e6d03f6714b33bda589bd534b8e39",
+      "sizeLines": 5,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0006_agency_url_and_external_flag/agencyUrlAndExternalFlag.sql": {
+      "sha1": "f5ff0a7715d3c2c142e198be3422c180941456dc",
+      "sizeLines": 5,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0007_tenant_id/0007_changeSet.xml": {
+      "sha1": "d0b36438b60d2c71e0ae47325c973655033bda7a",
+      "sizeLines": 13,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0007_tenant_id/tenant_id-rollback.sql": {
+      "sha1": "8efe63ab3fbf8a02290171d620c74acb8ad6420a",
+      "sizeLines": 6,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0007_tenant_id/tenant_id.sql": {
+      "sha1": "650a59ecb49643591cc22553aa77be2f7e7f7df8",
+      "sizeLines": 8,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0008_tenant_id_remove/0008_changeSet.xml": {
+      "sha1": "933f0f139ac42f4b1dd097912cfcb9fe7f8fdcea",
+      "sizeLines": 9,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0008_tenant_id_remove/tenant_id.sql": {
+      "sha1": "cdea054bf4ec09dcf8800b13d7e44e50ccec3174",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0009_agency_topic/0009_changeSet.xml": {
+      "sha1": "16f374acf365b99ee7522166a364b8c80dded524",
+      "sizeLines": 20,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0009_agency_topic/agencyTopic-rollback.sql": {
+      "sha1": "fd8061d35e78a73a4883ae9449a5b10599518c8c",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0009_agency_topic/agencyTopic.sql": {
+      "sha1": "0223d9ad40de04ee79624f9aa7360b0418f3173b",
+      "sizeLines": 17,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0009_agency_topic/agencyTopicTrigger-rollback.sql": {
+      "sha1": "fb14bb923002f97951b1b79597b10fd20791ecf2",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0009_agency_topic/agencyTopicTrigger.sql": {
+      "sha1": "aee9a83243efff12ee739336f8e63cb231f30a51",
+      "sizeLines": 4,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0010_agency_demographics/0010_changeSet.xml": {
+      "sha1": "6b62746328177d38014067168df104b06d5068e4",
+      "sizeLines": 12,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0010_agency_demographics/agencyDemographics-rollback.sql": {
+      "sha1": "1e931a7e9385f9952d9c2e2e17d517c6e691b7e1",
+      "sizeLines": 9,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0010_agency_demographics/agencyDemographics.sql": {
+      "sha1": "2b5ecc4b0eb280d0e5e72dc7d4f9a7701ea3213c",
+      "sizeLines": 9,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0011_agency_demographics_gender_column_change/0011_changeSet.xml": {
+      "sha1": "100685a67d2b1edb8702bdb245f613a9195ef8f1",
+      "sizeLines": 12,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0011_agency_demographics_gender_column_change/genderColumn-rename-rollback.sql": {
+      "sha1": "5a77a2251de36d824a1d2a1a639417fcd44382ca",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0011_agency_demographics_gender_column_change/genderColumn-rename.sql": {
+      "sha1": "64bb20c03f53fd85cc3ac0cfa3dee14c41909ae6",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0012_agency_counseling_relations/0012_changeSet.xml": {
+      "sha1": "b2851fb6154f5c3d2c967668f2211f95ffa49f33",
+      "sizeLines": 12,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0012_agency_counseling_relations/agencyCounselingRelations-rollback.sql": {
+      "sha1": "448a51117cf5589da19aa0587f950262c80d5662",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0012_agency_counseling_relations/agencyCounselingRelations.sql": {
+      "sha1": "3dd10f3a44b440db0a000b0b80a2d88cba969e0a",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0013_make_diocese_nullable/0013_changeSet.xml": {
+      "sha1": "e2ee980ab4a32345828ac57ffa2c98b554bbe3f1",
+      "sizeLines": 12,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0013_make_diocese_nullable/makeDioceseNullable-rollback.sql": {
+      "sha1": "d03e9b931ecb339d15de13cbed38a069095246e8",
+      "sizeLines": 7,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0013_make_diocese_nullable/makeDioceseNullable.sql": {
+      "sha1": "a2b362fe1bb8bce2ea108ce090f97f3191347150",
+      "sizeLines": 5,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0014_drop_diocese/0014_changeSet.xml": {
+      "sha1": "8903b8daa6beab22ac57f3663460e3fa20f48ea0",
+      "sizeLines": 12,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0014_drop_diocese/dropDiocese-rollback.sql": {
+      "sha1": "61b701f954fe106f302baed685ee5a73687ca2e1",
+      "sizeLines": 14,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0014_drop_diocese/dropDiocese.sql": {
+      "sha1": "2fbf8e976f3f4b41d3b405ab8cab004ea68d3242",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0015_change_consultingtype_column_type/0015_changeSet.xml": {
+      "sha1": "e92c16537c9a6dff5fbe2d7361b51a36f781bcb1",
+      "sizeLines": 12,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0015_change_consultingtype_column_type/changeConsultingtypeColumnType-rollback.sql": {
+      "sha1": "4d11303aa7b079652f9a8352d9eb3d4b644d211f",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0015_change_consultingtype_column_type/changeConsultingtypeColumnType.sql": {
+      "sha1": "c1ff3010f88c8121cf76095e5f347a70cc1ebf2d",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0016_add_data_protection_attributes/0016_changeSet.xml": {
+      "sha1": "b84bddc77ac32891f84a75c18e86c3d782965bd5",
+      "sizeLines": 12,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0016_add_data_protection_attributes/addDataProtectionAttributes-rollback.sql": {
+      "sha1": "7b77c4fc210e9a29e04bdd042ef524f5d46d53b4",
+      "sizeLines": 11,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0016_add_data_protection_attributes/addDataProtectionAttributes.sql": {
+      "sha1": "33a365e7651e3cdce055d210ca20bc466feb31d5",
+      "sizeLines": 11,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0017_add_agency_logo/0017_changeSet.xml": {
+      "sha1": "5976ff7528f9dfbf1687b7cde429b33381f39c78",
+      "sizeLines": 8,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0017_add_agency_logo/addAgencyLogo-rollback.sql": {
+      "sha1": "c7a392d5961a8125bfd9cb89d8d6a898f570f879",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0017_add_agency_logo/addAgencyLogo.sql": {
+      "sha1": "ea747f1cd3872d374eecab1c9af880a313b45422",
+      "sizeLines": 2,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0018_agency_matrix_credentials/0018_changeSet.xml": {
+      "sha1": "e0d3860037d0fd43895c0591f451ec8a9d72beec",
+      "sizeLines": 27,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0019_agency_admin_control/0019_changeSet.xml": {
+      "sha1": "35f393af5a1ee8a39a248ecf9822fd0479374e1b",
+      "sizeLines": 16,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0019_agency_admin_control/addAgencyAdminControl-rollback.sql": {
+      "sha1": "a85dd48ea038759967f792486684ed34ecbd2ef6",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0019_agency_admin_control/addAgencyAdminControl.sql": {
+      "sha1": "7b4fac1acfd397ff818ca9590f9596dfe7e0ee75",
+      "sizeLines": 14,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0020_agency_settings/0020_changeSet.xml": {
+      "sha1": "798890d37deb203669ecdfd9b1c9bad8a6fd4faf",
+      "sizeLines": 14,
+      "language": "xml",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0020_agency_settings/addAgencySettingsColumn-rollback.sql": {
+      "sha1": "bb0951a287ad5fbd810e8d81385255e8cd054473",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/db/changelog/changeset/0020_agency_settings/addAgencySettingsColumn.sql": {
+      "sha1": "07350f38a67d7ee7ebe7f86ba3ea6eaa0293607e",
+      "sizeLines": 3,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/main/resources/hibernate.properties": {
+      "sha1": "9718bd51678d2d57d73147b5b31751818417a98a",
+      "sizeLines": 2,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/main/resources/liquibase.properties": {
+      "sha1": "9698a1f225b2d0684aa168bd36ba7b894b5073e6",
+      "sizeLines": 2,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/main/resources/version.properties": {
+      "sha1": "49270a1f070f2b22bbdcbfb67908dca5ef538434",
+      "sizeLines": 6,
+      "language": "properties",
+      "category": "config"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/ResponseEntityExceptionHandlerIT.java": {
+      "sha1": "73f601319f09ea4ce2633b3f5e8083fb4d3d2fbc",
+      "sizeLines": 190,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerAuthorizationIT.java": {
+      "sha1": "7f07ab0492700a1f0ea665074d46fde5747db67f",
+      "sizeLines": 361,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerTest.java": {
+      "sha1": "758e60a975197c128e8b3b6bbbdf6fdcad47cb5b",
+      "sizeLines": 401,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/hallink/AgencyLinksBuilderTest.java": {
+      "sha1": "e8ea1aaf3c25c477033e859e0d91bc1b4db2c92a",
+      "sizeLines": 52,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/hallink/RootDTOBuilderTest.java": {
+      "sha1": "f60108f4b643d291fe1cbb723d4f88cd26791524",
+      "sizeLines": 37,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/hallink/SearchResultLinkBuilderTest.java": {
+      "sha1": "5beeaf330cd4a82541e595514444745ca3b97f16",
+      "sizeLines": 120,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminServiceIT.java": {
+      "sha1": "60f8a5db3ffec31393440ce82cba39bc2e000247",
+      "sizeLines": 55,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminServiceITBase.java": {
+      "sha1": "7bcd637732327f1c70c0c6b2506fa7f207aa0724",
+      "sizeLines": 184,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminServiceTenantAwareIT.java": {
+      "sha1": "c488d863e95f1b3963d6612e3e2f839f089c3d98",
+      "sizeLines": 189,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminServiceTest.java": {
+      "sha1": "78a75104b00edd7c75c8d0b86f46efb6cf7a9edb",
+      "sizeLines": 319,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/AgencyTopicMergeServiceTest.java": {
+      "sha1": "7f131d4e3cc5ce8554cda8027788fef9ce5fd611",
+      "sizeLines": 123,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/UserAdminServiceTest.java": {
+      "sha1": "1333a0ca172358b2a6cb6084c74deb9645da1630",
+      "sizeLines": 115,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminFullResponseDTOBuilderTest.java": {
+      "sha1": "4251351dec8c22c949b77d0fafadb03cfc88dcbe",
+      "sizeLines": 125,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchServiceIT.java": {
+      "sha1": "6108e7fe4b4d37cd7f05ff911f1bbbad4f97a4ff",
+      "sizeLines": 168,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchServiceIntegrationTests.java": {
+      "sha1": "62bba9a8a9c928b0c2639fe13df3e53fcc7760d7",
+      "sizeLines": 307,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchTenantSupportServiceTest.java": {
+      "sha1": "a6ea9fdc73d52d04a1c227deb8653201db2266d4",
+      "sizeLines": 136,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyTopicEnrichmentServiceTest.java": {
+      "sha1": "35be5c3c4d9a9d3761d1949820f323a7ba8a76f6",
+      "sizeLines": 116,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionConverterTest.java": {
+      "sha1": "5a8f0e1cb2a5934716de035fd1ccf2a0f048eec7",
+      "sizeLines": 113,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionDTOBuilderTest.java": {
+      "sha1": "eccb9836ad986b98f9a9f2049dffb0e719e48f74",
+      "sizeLines": 101,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agency/DemographicsConverterTest.java": {
+      "sha1": "34d63de6d13237f9e6268fa21597a95f9cda8253",
+      "sizeLines": 62,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/AgencyPostcodeRangeAdminServiceIT.java": {
+      "sha1": "51f0a40305591dcae92bb46d45e3c702768539f4",
+      "sizeLines": 50,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/AgencyPostcodeRangeAdminServiceITBase.java": {
+      "sha1": "7e8d3bf07419a1eb855e857fdc1d8bb9b4cedd4a",
+      "sizeLines": 59,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/AgencyPostcodeRangeAdminServiceTenantAwareIT.java": {
+      "sha1": "685fee3fe2eb8d5c141d1e1731f3bd1a75945ebf",
+      "sizeLines": 88,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/AgencyPostcodeRangeAdminServiceTest.java": {
+      "sha1": "060d43632e45ebbb6ef17e3eda1ae355fab2870e",
+      "sizeLines": 159,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/AgencyPostcodeRangeResponseDTOBuilderTest.java": {
+      "sha1": "e41d83b6406d9cf9644091404014b139e1b01d4f",
+      "sizeLines": 63,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/PostcodeRangeTransformerTest.java": {
+      "sha1": "a760b4f88e337f3d3f4ad77269db3af1978b4eba",
+      "sizeLines": 78,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/PostcodeRangeValidatorTest.java": {
+      "sha1": "c8152a7d9fa931beb056f8184801aaab8d72c493",
+      "sizeLines": 80,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/AgencyValidatorIT.java": {
+      "sha1": "895f3c78ea78870534979959770989b0ebdb3bbd",
+      "sizeLines": 152,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/DeleteAgencyValidatorTest.java": {
+      "sha1": "4040473abb7c8b07f928a57f1a363839a4e2cd33",
+      "sizeLines": 68,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyConsultingTypeValidatorTest.java": {
+      "sha1": "3930c2101e6a90e758c07f46d305828c60f8c467",
+      "sizeLines": 64,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyDataProtectionValidationServiceTest.java": {
+      "sha1": "f463cb87ebc17aa51ed8c143065e8028af9c2219",
+      "sizeLines": 133,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyDataProtectionValidatorTest.java": {
+      "sha1": "905af6e9b57ec880567ed0a875fc2e6a9b8dd2d8",
+      "sizeLines": 109,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyDemographicsValidatorTest.java": {
+      "sha1": "21b95a06635928f35d9a5d6eedd69ab9fa862fd8",
+      "sizeLines": 71,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyOfflineStatusValidatorTest.java": {
+      "sha1": "558105929a932afa569ad9910cb57ce6bdc462d8",
+      "sizeLines": 159,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyPostcodeValidatorTest.java": {
+      "sha1": "4afc08d8ac1f192084a2eda72527c3e93e1692d2",
+      "sizeLines": 53,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyTenantValidatorTest.java": {
+      "sha1": "90e822c447304dde2185c554b47f9d5dc1dd5a0f",
+      "sizeLines": 77,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyUpdatePermissionValidatorTest.java": {
+      "sha1": "94575b470d78e64d602c0a9701ac8a867661551d",
+      "sizeLines": 69,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/authorization/AuthorityTest.java": {
+      "sha1": "9f979afb78443051fab7cc8f63903def48b13fd1",
+      "sizeLines": 42,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/authorization/RoleAuthorizationAuthorityMapperTest.java": {
+      "sha1": "2d567f73505dac0af951822ba61b15c4cae2e5b2",
+      "sizeLines": 85,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/config/apiclient/UserAdminApiClientTest.java": {
+      "sha1": "7eef0b20bfe19e2a6fe3b948ba12b8ba70f3728f",
+      "sizeLines": 79,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/ActuatorControllerIT.java": {
+      "sha1": "28089b19cc1c44712ee4b3df5ac96ab788dfde45",
+      "sizeLines": 59,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerIT.java": {
+      "sha1": "cd672e85bd1cab0643c3af8cf65a7dd1778d3ede",
+      "sizeLines": 601,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithDemographicsIT.java": {
+      "sha1": "73829c8a8ee396baa968a188389f27b5e8eabab1",
+      "sizeLines": 182,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithTopicsIT.java": {
+      "sha1": "aa0ce54b8e7a8b2b942179c9b2f5fe90d227556c",
+      "sizeLines": 203,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerIT.java": {
+      "sha1": "9dce2aa3f21cd031393bb4a6788107d2ed547f37",
+      "sizeLines": 125,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerTest.java": {
+      "sha1": "44b653d53f68ffd3773dad6af2c26ceed519b4b7",
+      "sizeLines": 346,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerWithDemographicsIT.java": {
+      "sha1": "af1061a409b55c92176b74ef7b4d98824eee7167",
+      "sizeLines": 116,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerWithSingleDomainMultitenancyIT.java": {
+      "sha1": "96fe16cd2a5a848c3b452c314ebd37cf73a1abe4",
+      "sizeLines": 145,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/exception/customheader/CustomHttpHeaderTest.java": {
+      "sha1": "e771949bf14ba133a8ba0a5c3042067b68e1729c",
+      "sizeLines": 30,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/manager/consultingtype/ConsultingTypeManagerIT.java": {
+      "sha1": "6f389019866fd1a31448b5b379499e5a85dfaae3",
+      "sizeLines": 58,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/manager/consultingtype/ConsultingTypeManagerTest.java": {
+      "sha1": "bd6490d52f5e5db538b07a6467d13dcfe9fc6008",
+      "sizeLines": 51,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepositoryIT.java": {
+      "sha1": "8634d83378d80b15540d0f0a48a96ec756cfeebb",
+      "sizeLines": 218,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepositoryTenantAwareIT.java": {
+      "sha1": "d6728a4e79c0d58a8fd9710d2315b255e8dff4cb",
+      "sizeLines": 154,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/AgencyServiceIT.java": {
+      "sha1": "1b1f5ee58d55502e9b3ab89bcdb7892056740fca",
+      "sizeLines": 49,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/AgencyServiceITBase.java": {
+      "sha1": "200ceb5e1771dd96a5aa6ca6977de3dd67fa7ea8",
+      "sizeLines": 88,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/AgencyServiceTenantAwareIT.java": {
+      "sha1": "969398e4d5307f7ca3758b806b067f7099a84dce",
+      "sizeLines": 72,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/AgencyServiceTenantAwareTest.java": {
+      "sha1": "2663ad9e87b5eb60b8e73c0e46ec1e10c4a7ef06",
+      "sizeLines": 110,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/AgencyServiceTest.java": {
+      "sha1": "10c91a9344ca0e4db1d1dbde10e0b369f241739a",
+      "sizeLines": 382,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/AppointmentServiceTest.java": {
+      "sha1": "7d6712c69ad9fc7549deb9647bc64d7b5d90376a",
+      "sizeLines": 91,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/CentralDataProtectionTemplateServiceTest.java": {
+      "sha1": "5cbbdfb10290b824bd6d627bd99f04a7741dc820",
+      "sizeLines": 320,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/ConsultingTypeServiceTest.java": {
+      "sha1": "a0a567cf3ca94f56011d16c4c6b8beb6e027d59c",
+      "sizeLines": 72,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/LogServiceTest.java": {
+      "sha1": "4d7eff38c9388f0c2d05a5c27250a888bce616c2",
+      "sizeLines": 76,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/service/TopicEnrichmentServiceTest.java": {
+      "sha1": "653a3365f44df0ce5b343c71a5ffda3a066cb7a2",
+      "sizeLines": 88,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/tenant/AccessTokenTenantResolverTest.java": {
+      "sha1": "370bae929cbf26645c60ebbda4732729560df14f",
+      "sizeLines": 76,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/tenant/CustomHeaderTenantResolverTest.java": {
+      "sha1": "f68f4f1e29d6fc9b1750230d5193c83aa0d92daa",
+      "sizeLines": 42,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/tenant/MultitenancyWithSingleDomainTenantResolverTest.java": {
+      "sha1": "95c09b4178d3600775bc8763e3ba4a12889a2dc4",
+      "sizeLines": 99,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/tenant/SubdomainTenantResolverTest.java": {
+      "sha1": "faa666eae733efc729c59704b7488554c10635ba",
+      "sizeLines": 59,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/tenant/TechnicalUserTenantResolverTest.java": {
+      "sha1": "a5b0c51b43b8135fa1bb41389c0320f4eaf29a97",
+      "sizeLines": 98,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/tenant/TenantResolverServiceTest.java": {
+      "sha1": "f5c027419bca2517ebdadf964aabe7cbb8d419fe",
+      "sizeLines": 161,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/util/AuthenticatedUserTest.java": {
+      "sha1": "20b9c8fab00ffbe86787e10907448d4c3910239e",
+      "sizeLines": 27,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/util/HttpUrlUtilsTest.java": {
+      "sha1": "fc5d3624a6336a3cd09b45ffd7ac8660f8246a44",
+      "sizeLines": 29,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/api/workflow/DeleteAgencyServiceTest.java": {
+      "sha1": "d95c0025ab6f6f0a97dfb47c42ce0bb5e0a08129",
+      "sizeLines": 44,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/config/resttemplate/CustomResponseErrorHandlerTest.java": {
+      "sha1": "784ef1e2ff6009b4a5e685724480c35e4c2f09b2",
+      "sizeLines": 40,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/filter/HttpTenantFilterTest.java": {
+      "sha1": "599265116674b386f40f755202d18c3a406e1534",
+      "sizeLines": 58,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/filter/SubdomainExtractorTest.java": {
+      "sha1": "770e07156996809a05b868ce092351237fe53949",
+      "sizeLines": 43,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/testHelper/ExtendedConsultingTypeResponseDTOHelper.java": {
+      "sha1": "686409e28575ad729eee3eaa4589a204fa6209a3",
+      "sizeLines": 39,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/testHelper/FieldConstants.java": {
+      "sha1": "c42cc07bccfbe1460269162307400e95984586e9",
+      "sizeLines": 15,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/testHelper/PathConstants.java": {
+      "sha1": "2bc1e449bde3e43959ba498d43a3d6b4c6ea5511",
+      "sizeLines": 21,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/java/de/caritas/cob/agencyservice/testHelper/TestConstants.java": {
+      "sha1": "1a1de3c45fe822df44642eb11fc3b7270da89867",
+      "sizeLines": 292,
+      "language": "java",
+      "category": "code"
+    },
+    "src/test/resources/database/AgencyDatabase.sql": {
+      "sha1": "46634b7e583a891f885fadce9163c15203c3687e",
+      "sizeLines": 14840,
+      "language": "sql",
+      "category": "data"
+    },
+    "src/test/resources/setTenants.sql": {
+      "sha1": "2343334b7a39c5f8152d2f293b05b6668d38aee1",
+      "sizeLines": 6,
+      "language": "sql",
+      "category": "data"
+    }
+  }
+}

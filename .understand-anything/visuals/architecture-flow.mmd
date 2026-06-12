@@ -1,0 +1,7 @@
+flowchart TD
+  API[API and Routing] --> Services[Domain Services]
+  Services --> Persistence[Data and Persistence]
+  Config[Configuration] --> API
+  Config --> Services
+  Deployment[Deployment and Operations] --> Config
+  Docs[Documentation] --> API
