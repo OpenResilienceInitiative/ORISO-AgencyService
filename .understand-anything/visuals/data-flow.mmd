@@ -1,0 +1,8 @@
+flowchart TD
+  AdminAPI[Agency Admin API] --> Service[Agency Admin Service]
+  Service --> Settings[Agency Settings Service]
+  Service --> Controls[Agency Admin Controls Service]
+  Settings --> Agency[(Agency Entity)]
+  Controls --> ControlEntity[(Agency Admin Control Entity)]
+  Migrations[Liquibase Changesets] --> Agency
+  Migrations --> ControlEntity

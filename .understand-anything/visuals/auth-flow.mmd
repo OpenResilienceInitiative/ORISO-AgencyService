@@ -1,0 +1,6 @@
+flowchart TD
+  Client[Client Request] --> Security[Spring Security Resource Server]
+  Security --> Authority[Authority Mapping]
+  Authority --> Tenant[Tenant Resolver]
+  Tenant --> AdminAPI[Agency Admin API]
+  AdminAPI --> Services[Agency Services]
