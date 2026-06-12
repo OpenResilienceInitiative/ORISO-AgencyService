@@ -32,7 +32,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
@@ -93,9 +95,24 @@ public class AgencyServiceTest {
   CentralDataProtectionTemplateService centralDataProtectionTemplateService;
 
   @Mock
+  AgencySettingsService agencySettingsService;
+
+  @Mock
+  AgencyAdminControlsService agencyAdminControlsService;
+
+  @Mock
   ApplicationSettingsService applicationSettingsService;
 
   private static final Long TENANT_ID = null;
+
+  @org.junit.Before
+  public void setUp() {
+    when(agencySettingsService.toSettings(any())).thenReturn(new de.caritas.cob.agencyservice.api.model.Settings());
+    when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0) != null
+            ? invocation.getArgument(0)
+            : new de.caritas.cob.agencyservice.api.model.Settings());
+  }
 
   @After
   public void tearDown() {
