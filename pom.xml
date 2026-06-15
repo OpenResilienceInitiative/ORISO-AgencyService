@@ -50,6 +50,7 @@
     <maven.compiler.target>17</maven.compiler.target>
     <hibernate.search.version>6.1.1.Final</hibernate.search.version>
     <springfox.boot.starter.version>3.0.0</springfox.boot.starter.version>
+    <sentry.version>8.43.2</sentry.version>
   </properties>
 
   <dependencies>
@@ -89,6 +90,16 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-freemarker</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.sentry</groupId>
+      <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+      <version>${sentry.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.sentry</groupId>
+      <artifactId>sentry-logback</artifactId>
+      <version>${sentry.version}</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.security</groupId>
