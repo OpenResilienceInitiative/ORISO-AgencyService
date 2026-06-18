@@ -1,7 +1,7 @@
 FROM eclipse-temurin:21-jre
 VOLUME ["/tmp","/log"]
-EXPOSE 8080
+EXPOSE 8084
 ARG JAR_FILE
 ENV JAVA_UPPER_VERSION=eclipse-temurin:21-jre
 COPY ./target/AgencyService.jar app.jar
-ENTRYPOINT ["java","-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005","-Djava.security.egd=file:/dev/./urandom -Dtomcat.util.http.parser.HttpParser.requestTargetAllow=|{}","-jar","/app.jar"]
+ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom","-Dtomcat.util.http.parser.HttpParser.requestTargetAllow=|{}","-XX:MaxRAMPercentage=75","-jar","/app.jar"]

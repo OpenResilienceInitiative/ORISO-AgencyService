@@ -1,0 +1,5 @@
+flowchart TD
+  PR[Pull Request] --> CI[GitHub Actions]
+  CI --> Maven[Maven Build]
+  Maven --> Docker[Docker Image]
+  Docker --> Runtime[AgencyService Runtime]

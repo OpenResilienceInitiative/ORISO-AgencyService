@@ -99,7 +99,7 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Get an agency [Authorization: Role: agency-admin]'
+      summary: 'Get an agency including platform agency admin controls in settings.agencyAdminControls [Authorization: Role: agency-admin]'
       operationId: getAgency
       parameters:
         - name: agencyId
@@ -157,7 +157,7 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Updates an agency [Authorization: Role: agency-admin]'
+      summary: 'Updates an agency including settings.agencyAdminControls [Authorization: Role: agency-admin]'
       operationId: updateAgency
       requestBody:
         content:
@@ -253,6 +253,53 @@ paths:
           description: BAD REQUEST - invalid/incomplete request or body object
         401:
           description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/controls:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: 'Gets platform-level agency admin controls [Authorization: Super admin]'
+      operationId: getAgencyAdminControls
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyAdminControls'
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - only super admin can access platform controls
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: 'Updates platform-level agency admin controls [Authorization: Super admin]'
+      operationId: updateAgencyAdminControls
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/AgencyAdminControls'
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyAdminControls'
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - only super admin can update platform controls
         500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
       security:
@@ -527,6 +574,9 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        settings:
+          $ref: '#/components/schemas/Settings'
+          description: Agency settings including platform-level agencyAdminControls
 
     DataProtectionDTO:
         type: object
@@ -705,6 +755,9 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        settings:
+          $ref: '#/components/schemas/Settings'
+          description: Agency settings including platform-level agencyAdminControls
 
     DemographicsDTO:
       type: object
@@ -825,6 +878,13 @@ components:
           enum:
             - 'ASC'
             - 'DESC'
+
+    AgencyAdminAllowedPermissionToggles:
+      $ref: './components/agency-settings.yaml#/components/schemas/AgencyAdminAllowedPermissionToggles'
+    AgencyAdminControls:
+      $ref: './components/agency-settings.yaml#/components/schemas/AgencyAdminControls'
+    Settings:
+      $ref: './components/agency-settings.yaml#/components/schemas/Settings'
 
   securitySchemes:
     Bearer:

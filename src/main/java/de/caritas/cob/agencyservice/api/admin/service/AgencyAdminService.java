@@ -8,6 +8,8 @@ import static org.apache.commons.lang3.Validate.notNull;
 
 import com.google.common.base.Joiner;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
@@ -57,6 +59,8 @@ public class AgencyAdminService {
   private final @NonNull AgencyService agencyService;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull DataProtectionConverter dataProtectionConverter;
+  private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
+  private final @NonNull AgencySettingsService agencySettingsService;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -80,8 +84,21 @@ public class AgencyAdminService {
   public AgencyAdminFullResponseDTO findAgency(Long agencyId) {
     var agency = findAgencyById(agencyId);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(agency);
-    return new AgencyAdminFullResponseDTOBuilder(agency)
-        .fromAgency();
+    return buildAgencyAdminFullResponse(agency);
+  }
+
+  private AgencyAdminFullResponseDTO buildAgencyAdminFullResponse(Agency agency) {
+    var response = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency();
+    enrichWithSettings(response, agency);
+    return response;
+  }
+
+  private void enrichWithSettings(AgencyAdminFullResponseDTO response, Agency agency) {
+    if (response.getEmbedded() != null) {
+      var settings = agencySettingsService.toSettings(agency.getSettings());
+      response.getEmbedded().setSettings(
+          agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(settings));
+    }
   }
 
   private void enrichWithAgencyTopicsIfTopicFeatureEnabled(Agency agency) {
@@ -209,21 +226,28 @@ public class AgencyAdminService {
    * @return an {@link AgencyAdminFullResponseDTO} instance
    */
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
-    System.out.println("=== UPDATE AGENCY DEBUG ===");
-    System.out.println("Received offline value: " + updateAgencyDTO.getOffline());
-    System.out.println("Agency ID: " + agencyId);
-    
     var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
-    System.out.println("Current DB offline value: " + agency.isOffline());
-    
+    applySettingsUpdate(updateAgencyDTO);
     var updatedAgency = agencyRepository.save(mergeAgencies(agency, updateAgencyDTO));
-    System.out.println("After merge offline value: " + updatedAgency.isOffline());
-    
     enrichWithAgencyTopicsIfTopicFeatureEnabled(updatedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(updatedAgency);
     agencyRepository.flush();
-    return new AgencyAdminFullResponseDTOBuilder(updatedAgency)
-        .fromAgency();
+    return buildAgencyAdminFullResponse(updatedAgency);
+  }
+
+  private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {
+    if (updateAgencyDTO.getSettings() != null
+        && updateAgencyDTO.getSettings().getAgencyAdminControls() != null) {
+      agencyAdminControlsService.updateControls(
+          updateAgencyDTO.getSettings().getAgencyAdminControls());
+    }
+  }
+
+  private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    if (updateAgencyDTO.getSettings() != null) {
+      return agencySettingsService.toSettingsJson(updateAgencyDTO.getSettings());
+    }
+    return agency.getSettings();
   }
 
   private Agency mergeAgencies(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
@@ -244,7 +268,8 @@ public class AgencyAdminService {
         .deleteDate(agency.getDeleteDate())
         .agencyLogo(updateAgencyDTO.getAgencyLogo())
         .matrixUserId(agency.getMatrixUserId())
-        .matrixPassword(agency.getMatrixPassword());
+        .matrixPassword(agency.getMatrixPassword())
+        .settings(resolveSettingsForUpdate(agency, updateAgencyDTO));
 
     dataProtectionConverter.convertToEntity(updateAgencyDTO.getDataProtection(), agencyBuilder);
 

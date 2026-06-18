@@ -1,11 +1,12 @@
 package de.caritas.cob.agencyservice.api.service;
 
-
 import static java.util.Objects.nonNull;
 import static org.apache.commons.lang3.BooleanUtils.isTrue;
 
 import com.google.common.collect.Lists;
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
@@ -15,13 +16,13 @@ import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
+import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
-import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -61,6 +62,10 @@ public class AgencyService {
 
   private final @NonNull ApplicationSettingsService applicationSettingsService;
 
+  private final @NonNull AgencySettingsService agencySettingsService;
+
+  private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
+
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
 
@@ -76,7 +81,8 @@ public class AgencyService {
   private static final String DB_POSTCODES_ERROR = "Database error while getting postcodes";
 
   /**
-   * Returns a list of {@link AgencyResponseDTO} which match the provided agencyIds.
+   * Returns a list of {@link AgencyResponseDTO} which match the provided
+   * agencyIds.
    *
    * @param agencyIds the ids of requested agencies
    * @return a list containing regarding agencies
@@ -88,7 +94,8 @@ public class AgencyService {
   }
 
   /**
-   * Returns a list of {@link AgencyResponseDTO} which match the provided consulting type.
+   * Returns a list of {@link AgencyResponseDTO} which match the provided
+   * consulting type.
    *
    * @param consultingTypeId the id of the request
    * @return a list containing regarding agencies
@@ -113,8 +120,10 @@ public class AgencyService {
   }
 
   /**
-   * Returns a randomly sorted list of {@link AgencyResponseDTO} which match to the provided
-   * postCode. If no agency is found, returns the atm hard coded white spot agency id.
+   * Returns a randomly sorted list of {@link AgencyResponseDTO} which match to
+   * the provided
+   * postCode. If no agency is found, returns the atm hard coded white spot agency
+   * id.
    *
    * @param postCode         the postcode for regarding agencies
    * @param consultingTypeId the consulting type used for filtering agencies
@@ -173,18 +182,17 @@ public class AgencyService {
 
   private Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Agency agency, boolean saveEntity) {
     log.info("Attempting to provision Matrix credentials for agency {} (id={})", agency.getName(), agency.getId());
-    
+
     if (nonNull(agency.getMatrixUserId()) && nonNull(agency.getMatrixPassword())) {
       log.info("Agency {} already has Matrix credentials: {}", agency.getName(), agency.getMatrixUserId());
       return Optional.of(new AgencyMatrixCredentialsDTO(agency.getMatrixUserId(), agency.getMatrixPassword()));
     }
 
     log.info("No existing Matrix credentials found. Provisioning new account for agency {}", agency.getName());
-    
+
     try {
-      var optionalCredentials =
-          matrixProvisioningService.ensureAgencyAccount(
-              "agency-" + agency.getId(), agency.getName());
+      var optionalCredentials = matrixProvisioningService.ensureAgencyAccount(
+          "agency-" + agency.getId(), agency.getName());
 
       if (optionalCredentials.isEmpty()) {
         log.warn("Matrix provisioning returned empty result for agency {} (id={})", agency.getName(), agency.getId());
@@ -197,8 +205,8 @@ public class AgencyService {
       if (saveEntity) {
         agencyRepository.updateMatrixCredentials(
             agency.getId(), creds.getUserId(), creds.getPassword());
-        log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}", 
-                 agency.getName(), agency.getId(), creds.getUserId());
+        log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}",
+            agency.getName(), agency.getId(), creds.getUserId());
       }
 
       return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId(), creds.getPassword()));
@@ -216,9 +224,8 @@ public class AgencyService {
     return agencyRepository
         .findById(agencyId)
         .map(
-            agency ->
-                new AgencyMatrixCredentialsDTO(
-                    agency.getMatrixUserId(), agency.getMatrixPassword()));
+            agency -> new AgencyMatrixCredentialsDTO(
+                agency.getMatrixUserId(), agency.getMatrixPassword()));
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
@@ -305,7 +312,8 @@ public class AgencyService {
       Long tenantId = TenantContext.getCurrentTenant();
       return tenantService.getRestrictedTenantDataByTenantId(tenantId);
     } else if (multitenancyWithSingleDomain) {
-      // In single-domain mode with multiple tenants configured, "/tenant/public/single"
+      // In single-domain mode with multiple tenants configured,
+      // "/tenant/public/single"
       // is no longer stable. Resolve using configured main tenant instead.
       return tenantService.getMainTenant();
     } else {
@@ -389,7 +397,7 @@ public class AgencyService {
         whiteSpot.getWhiteSpotAgencyAssigned())) {
       try {
         getAgencyRepositoryForSearch().findByIdAndDeleteDateNull(
-                Long.valueOf(whiteSpot.getWhiteSpotAgencyId()))
+            Long.valueOf(whiteSpot.getWhiteSpotAgencyId()))
             .ifPresent(agency -> agencyResponseDTOs.add(convertToFullAgencyResponseDTO(agency)));
       } catch (NumberFormatException nfEx) {
         throw new InternalServerErrorException(LogService::logNumberFormatException,
@@ -401,7 +409,8 @@ public class AgencyService {
   private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
     if (multitenancyWithSingleDomain) {
       // In single-domain mode, use the agency's own tenant when available.
-      // This avoids failing the whole agencies response when consulting type settings are temporarily unavailable.
+      // This avoids failing the whole agencies response when consulting type settings
+      // are temporarily unavailable.
       if (agency.getTenantId() != null) {
         return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
       }
@@ -427,21 +436,28 @@ public class AgencyService {
         .consultingType(agency.getConsultingTypeId())
         .agencySpecificPrivacy(renderedAgencySpecificPrivacy)
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
-        .agencyLogo(agency.getAgencyLogo());
+        .agencyLogo(agency.getAgencyLogo())
+        .settings(buildAgencySettings(agency));
+  }
+
+  private Settings buildAgencySettings(Agency agency) {
+    var settings = agencySettingsService.toSettings(agency.getSettings());
+    return agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(settings);
   }
 
   protected String getRenderedAgencySpecificPrivacy(Agency agency) {
     RestrictedTenantDTO tenantDataHoldingFeatureToggles = getTenantDataRelevantForFeatureToggles(
         agency);
-    Settings settings = tenantDataHoldingFeatureToggles != null ? tenantDataHoldingFeatureToggles.getSettings() : null;
-    if (settings != null && settings.getFeatureCentralDataProtectionTemplateEnabled() != null && Boolean.TRUE.equals(settings.getFeatureCentralDataProtectionTemplateEnabled())) {
+    de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings settings =
+        tenantDataHoldingFeatureToggles != null ? tenantDataHoldingFeatureToggles.getSettings() : null;
+    if (settings != null && settings.getFeatureCentralDataProtectionTemplateEnabled() != null
+        && Boolean.TRUE.equals(settings.getFeatureCentralDataProtectionTemplateEnabled())) {
       return centralDataProtectionTemplateService.renderPrivacyTemplateWithRenderedPlaceholderValues(
           agency);
     } else {
       return null;
     }
   }
-
 
   private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency) {
     return new FullAgencyResponseDTO()
