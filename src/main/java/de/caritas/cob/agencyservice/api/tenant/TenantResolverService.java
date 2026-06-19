@@ -105,8 +105,9 @@ public class TenantResolverService {
   private Optional<Long> getFirstResolvedTenant(HttpServletRequest request,
       List<TenantResolver> tenantResolvers) {
     for (TenantResolver tenantResolver : tenantResolvers) {
-      if (tenantResolver.canResolve(request)) {
-        return tenantResolver.resolve(request);
+      Optional<Long> tenantId = tenantResolver.resolve(request);
+      if (tenantId.isPresent()) {
+        return tenantId;
       }
     }
     return Optional.empty();

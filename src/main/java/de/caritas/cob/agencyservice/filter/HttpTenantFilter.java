@@ -62,7 +62,7 @@ public class HttpTenantFilter extends OncePerRequestFilter {
     }
 
     private boolean belongsToWhitelist(HttpServletRequest request, List<String> tenantWhitelist) {
-      return tenantWhitelist.parallelStream()
+      return tenantWhitelist.stream()
           .anyMatch(request.getRequestURI().toLowerCase()::contains);
     }
   }

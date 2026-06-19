@@ -86,11 +86,4 @@ public class AccessTokenTenantResolver implements TenantResolver {
       return Map.of();
     }
   }
-
-  @Override
-  public boolean canResolve(HttpServletRequest request) {
-    return resolve(request).isPresent();
-  }
-
-
 }
