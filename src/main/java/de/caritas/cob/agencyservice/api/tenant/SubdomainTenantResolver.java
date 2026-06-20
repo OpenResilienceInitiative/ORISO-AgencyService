@@ -37,9 +37,4 @@ public class SubdomainTenantResolver implements TenantResolver {
   private Long getTenantIdBySubdomain(String currentSubdomain) {
     return tenantService.getRestrictedTenantDataBySubdomain(currentSubdomain).getId();
   }
-
-  @Override
-  public boolean canResolve(HttpServletRequest request) {
-    return resolve(request).isPresent();
-  }
 }
