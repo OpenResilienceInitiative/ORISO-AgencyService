@@ -34,9 +34,6 @@ public class ConfigurationValidator {
   @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:}")
   private String jwtJwkSetUri;
 
-  @Value("${spring.data.mongodb.uri:}")
-  private String mongodbUri;
-
   @Value("${matrix.api-url:}")
   private String matrixApiUrl;
 
@@ -85,9 +82,6 @@ public class ConfigurationValidator {
     }
     if (isEmpty(jwtJwkSetUri)) {
       missingConfigs.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri (SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI)");
-    }
-    if (isEmpty(mongodbUri)) {
-      missingConfigs.add("spring.data.mongodb.uri (SPRING_DATA_MONGODB_URI)");
     }
     if (isEmpty(matrixApiUrl)) {
       missingConfigs.add("matrix.api-url (MATRIX_API_URL)");
