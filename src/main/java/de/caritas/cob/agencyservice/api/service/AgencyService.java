@@ -29,6 +29,7 @@ import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -252,18 +253,7 @@ public class AgencyService {
   }
 
   private List<Agency> findAgencies(AgencySearch agencySearch) {
-    try {
-      return getAgencyRepositoryForSearch()
-          .searchWithoutTopic(agencySearch.getPostCode().orElse(null),
-              agencySearch.getPostCode().orElse("").length(), agencySearch.getConsultingTypeId().orElse(null),
-              agencySearch.getAge().orElse(null),
-              agencySearch.getGender().orElse(null),
-              agencySearch.getCounsellingRelation().orElse(null),
-              TenantContext.getCurrentTenant());
-    } catch (DataAccessException ex) {
-      throw new InternalServerErrorException(LogService::logDatabaseError,
-          DB_POSTCODES_ERROR);
-    }
+    return searchWithoutTopic(getAgencyRepositoryForSearch(), agencySearch);
   }
 
   private List<Agency> findAgenciesForCurrentTenant(String postCode, Integer topicId) {
@@ -342,31 +332,39 @@ public class AgencyService {
   }
 
   private List<Agency> findAgenciesWithTopic(AgencySearch agencySearch) {
-    try {
-      return getAgencyRepositoryForSearch()
-          .searchWithTopic(agencySearch.getPostCode().orElse(null), agencySearch.getPostCode().orElse("").length(),
-              agencySearch.getConsultingTypeId().orElse(null),
-              agencySearch.getTopicId().orElseThrow(),
-              agencySearch.getAge().orElse(null), agencySearch.getGender().orElse(null),
-              agencySearch.getCounsellingRelation().orElse(null),
-              TenantContext.getCurrentTenant());
-
-    } catch (DataAccessException ex) {
-      throw new InternalServerErrorException(LogService::logDatabaseError,
-          DB_POSTCODES_ERROR);
-    }
+    return searchWithTopic(getAgencyRepositoryForSearch(), agencySearch);
   }
 
   private List<Agency> findAgenciesWithTopicForCurrentTenant(AgencySearch agencySearch) {
-    try {
-      return agencyRepository
-          .searchWithTopic(agencySearch.getPostCode().orElse(null), agencySearch.getPostCode().orElse("").length(),
-              agencySearch.getConsultingTypeId().orElse(null),
-              agencySearch.getTopicId().orElseThrow(),
-              agencySearch.getAge().orElse(null), agencySearch.getGender().orElse(null),
-              agencySearch.getCounsellingRelation().orElse(null),
-              TenantContext.getCurrentTenant());
+    return searchWithTopic(agencyRepository, agencySearch);
+  }
 
+  private List<Agency> searchWithoutTopic(AgencyRepository repository, AgencySearch agencySearch) {
+    return executeAgencySearch(() -> repository.searchWithoutTopic(
+        agencySearch.getPostCode().orElse(null),
+        agencySearch.getPostCode().orElse("").length(),
+        agencySearch.getConsultingTypeId().orElse(null),
+        agencySearch.getAge().orElse(null),
+        agencySearch.getGender().orElse(null),
+        agencySearch.getCounsellingRelation().orElse(null),
+        TenantContext.getCurrentTenant()));
+  }
+
+  private List<Agency> searchWithTopic(AgencyRepository repository, AgencySearch agencySearch) {
+    return executeAgencySearch(() -> repository.searchWithTopic(
+        agencySearch.getPostCode().orElse(null),
+        agencySearch.getPostCode().orElse("").length(),
+        agencySearch.getConsultingTypeId().orElse(null),
+        agencySearch.getTopicId().orElseThrow(),
+        agencySearch.getAge().orElse(null),
+        agencySearch.getGender().orElse(null),
+        agencySearch.getCounsellingRelation().orElse(null),
+        TenantContext.getCurrentTenant()));
+  }
+
+  private List<Agency> executeAgencySearch(Supplier<List<Agency>> search) {
+    try {
+      return search.get();
     } catch (DataAccessException ex) {
       throw new InternalServerErrorException(LogService::logDatabaseError,
           DB_POSTCODES_ERROR);
