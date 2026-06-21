@@ -6,6 +6,4 @@ import jakarta.servlet.http.HttpServletRequest;
 public interface TenantResolver {
 
   Optional<Long> resolve(HttpServletRequest request);
-
-  boolean canResolve(HttpServletRequest request);
 }

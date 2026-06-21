@@ -107,9 +107,4 @@ public class MultitenancyWithSingleDomainTenantResolver implements TenantResolve
     String subdomain = mainTenantSubdomainForSingleDomainMultitenancy.getValue();
     return Optional.ofNullable(subdomain);
   }
-
-  @Override
-  public boolean canResolve(HttpServletRequest request) {
-    return resolve(request).isPresent();
-  }
 }

@@ -16,9 +16,4 @@ public class CustomHeaderTenantResolver implements TenantResolver {
   public Optional<Long> resolve(HttpServletRequest request) {
     return tenantHeaderSupplier.getTenantFromHeader();
   }
-
-  @Override
-  public boolean canResolve(HttpServletRequest request) {
-    return resolve(request).isPresent();
-  }
 }
