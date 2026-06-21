@@ -32,6 +32,7 @@ import de.caritas.cob.agencyservice.api.model.DataProtectionDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
+import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
@@ -95,7 +96,8 @@ class AgencyAdminServiceTest {
   @Mock
   AgencySettingsService agencySettingsService;
 
-  @Captor private ArgumentCaptor<Agency> agencyArgumentCaptor;
+  @Captor
+  private ArgumentCaptor<Agency> agencyArgumentCaptor;
 
   private EasyRandom easyRandom;
 
@@ -141,8 +143,10 @@ class AgencyAdminServiceTest {
     agencyAdminService.createAgency(agencyDTO);
     // then
     verify(agencyRepository).save(agencyArgumentCaptor.capture());
-    assertThat(agencyArgumentCaptor.getValue().getCounsellingRelations(), is("RELATIVE_COUNSELLING,SELF_COUNSELLING,PARENTAL_COUNSELLING"));
-    verify(dataProtectionConverter).convertToEntity(Mockito.any(DataProtectionDTO.class), Mockito.any(Agency.AgencyBuilder.class));
+    assertThat(agencyArgumentCaptor.getValue().getCounsellingRelations(),
+        is("RELATIVE_COUNSELLING,SELF_COUNSELLING,PARENTAL_COUNSELLING"));
+    verify(dataProtectionConverter).convertToEntity(Mockito.any(DataProtectionDTO.class),
+        Mockito.any(Agency.AgencyBuilder.class));
   }
 
   @Test
@@ -186,7 +190,8 @@ class AgencyAdminServiceTest {
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = easyRandom.nextObject(UpdateAgencyDTO.class);
-    updateAgencyDTO.setCounsellingRelations(Lists.newArrayList(UpdateAgencyDTO.CounsellingRelationsEnum.PARENTAL_COUNSELLING));
+    updateAgencyDTO
+        .setCounsellingRelations(Lists.newArrayList(UpdateAgencyDTO.CounsellingRelationsEnum.PARENTAL_COUNSELLING));
 
     agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
 
@@ -235,7 +240,8 @@ class AgencyAdminServiceTest {
 
     // then
     verify(this.agencyRepository).save(any());
-    verify(this.demographicsConverter).convertToEntity(Mockito.any(DemographicsDTO.class), Mockito.any(Agency.AgencyBuilder.class));
+    verify(this.demographicsConverter).convertToEntity(Mockito.any(DemographicsDTO.class),
+        Mockito.any(Agency.AgencyBuilder.class));
     ReflectionTestUtils.setField(agencyAdminService, "featureDemographicsEnabled", false);
   }
 
