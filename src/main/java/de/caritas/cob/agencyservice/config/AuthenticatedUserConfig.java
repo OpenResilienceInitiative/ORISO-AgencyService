@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.config;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.exception.KeycloakException;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
+import org.apache.commons.codec.binary.Base32;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +44,7 @@ public class AuthenticatedUserConfig {
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
     authenticatedUser.setUserId(getUserAttribute(claimMap, CLAIM_NAME_USER_ID));
-    authenticatedUser.setUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME));
+    authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
     authenticatedUser.setTenantId(getTenantId(claimMap));
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
         Collectors.toSet()));
@@ -60,6 +61,14 @@ public class AuthenticatedUserConfig {
       }
     }
     return Lists.newArrayList();
+  }
+
+  private String decodeUsername(String username) {
+    if (!username.startsWith("enc.")) {
+      return username;
+    }
+    return new String(new Base32().decode(
+        username.substring(4).toUpperCase().replace(".", "=")));
   }
 
   private String getUserAttribute(Map<String, Object> claimMap, String claimValue) {
