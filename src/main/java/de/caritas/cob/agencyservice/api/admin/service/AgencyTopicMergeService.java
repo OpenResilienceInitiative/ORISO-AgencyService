@@ -20,6 +20,31 @@ public class AgencyTopicMergeService {
     }
   }
 
+  /**
+   * Resolves the agency topics to persist on an <b>update</b>, distinguishing a topic field that
+   * was omitted from the request from one that was explicitly cleared. This prevents an update that
+   * does not carry topic information (e.g. toggling the agency online, changing the postcode) from
+   * silently wiping all existing agency&#8211;topic links.
+   *
+   * <ul>
+   *   <li>{@code requestTopicIds == null} (field omitted) &rarr; keep the existing links.</li>
+   *   <li>{@code requestTopicIds} empty (field explicitly cleared) &rarr; remove all links.</li>
+   *   <li>{@code requestTopicIds} non-empty &rarr; set exactly to the requested topics.</li>
+   * </ul>
+   *
+   * @param targetAgency    the agency the resulting {@link AgencyTopic}s are attached to
+   * @param existingTopics  the agency's current topics, loaded from the database
+   * @param requestTopicIds the topic ids from the update request ({@code null} if not provided)
+   * @return the list of {@link AgencyTopic}s to persist
+   */
+  public List<AgencyTopic> getMergedTopicsForUpdate(Agency targetAgency,
+      List<AgencyTopic> existingTopics, List<Long> requestTopicIds) {
+    if (requestTopicIds == null) {
+      return createAgencyTopicList(targetAgency, extractTopicIds(existingTopics));
+    }
+    return getMergedTopics(targetAgency, requestTopicIds);
+  }
+
   private List<AgencyTopic> getMergedTopicsForNonEmptyTopicList(Agency agency, List<Long> requestTopicIds) {
     List<AgencyTopic> agencyTopics = agency.getAgencyTopics();
     if (agencyTopics != null) {
@@ -49,6 +74,9 @@ public class AgencyTopicMergeService {
   }
 
   private List<Long> extractTopicIds(List<AgencyTopic> agencyTopics) {
+    if (agencyTopics == null) {
+      return Lists.newArrayList();
+    }
     return agencyTopics.stream().map(AgencyTopic::getTopicId).collect(Collectors.toList());
   }
 
