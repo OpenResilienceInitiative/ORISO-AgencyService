@@ -4,8 +4,10 @@ import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.exception.KeycloakException;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import org.apache.commons.codec.binary.Base32;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.stream.Collectors;
@@ -68,7 +70,8 @@ public class AuthenticatedUserConfig {
       return username;
     }
     return new String(new Base32().decode(
-        username.substring(4).toUpperCase().replace(".", "=")));
+        username.substring(4).toUpperCase(Locale.ROOT).replace(".", "=")),
+        StandardCharsets.UTF_8);
   }
 
   private String getUserAttribute(Map<String, Object> claimMap, String claimValue) {
