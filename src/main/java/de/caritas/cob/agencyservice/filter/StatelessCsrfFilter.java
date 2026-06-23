@@ -3,9 +3,8 @@ package de.caritas.cob.agencyservice.filter;
 import static de.caritas.cob.agencyservice.config.SecurityConfig.WHITE_LIST;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -16,6 +15,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -62,19 +62,30 @@ public class StatelessCsrfFilter extends OncePerRequestFilter {
 
   public static final class DefaultRequiresCsrfMatcher implements RequestMatcher {
     private final Pattern allowedMethods = Pattern.compile("^(HEAD|TRACE|OPTIONS|GET)$");
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     @Override
     public boolean matches(HttpServletRequest request) {
 
       // Allow specific whitelist items to disable CSRF protection for Swagger UI documentation
-      List<String> csrfWhitelist = new ArrayList<>(Arrays.asList(WHITE_LIST));
-      csrfWhitelist.add("/agencyadmin");
-      if (csrfWhitelist.parallelStream()
-          .anyMatch(request.getRequestURI().toLowerCase()::contains)) {
+      String requestPath = getPathWithinApplication(request).toLowerCase(Locale.ROOT);
+      if (Arrays.stream(WHITE_LIST)
+          .map(whitelistPattern -> whitelistPattern.toLowerCase(Locale.ROOT))
+          .anyMatch(whitelistPattern -> pathMatcher.match(whitelistPattern, requestPath))) {
         return false;
       }
 
       return !allowedMethods.matcher(request.getMethod()).matches();
+    }
+
+    private String getPathWithinApplication(HttpServletRequest request) {
+      String requestUri = request.getRequestURI();
+      String contextPath = request.getContextPath();
+      if (contextPath == null || contextPath.isBlank() || !requestUri.startsWith(contextPath)) {
+        return requestUri;
+      }
+      String path = requestUri.substring(contextPath.length());
+      return path.isBlank() ? "/" : path;
     }
   }
 }
