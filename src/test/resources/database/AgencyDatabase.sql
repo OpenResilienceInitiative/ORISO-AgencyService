@@ -33,6 +33,9 @@ create table AGENCY
     DATA_PROTECTION_OFFICER_CONTACT longtext null default null,
     DATA_PROTECTION_ALTERNATIVE_CONTACT longtext null default null,
     AGENCY_LOGO longtext null default null,
+    MATRIX_USER_ID varchar(255) null default null,
+    MATRIX_PASSWORD varchar(255) null default null,
+    SETTINGS longtext null default null,
     primary key (ID)
 );
 CREATE SEQUENCE SEQUENCE_AGENCY
