@@ -38,7 +38,7 @@ public class StatelessCsrfFilter extends OncePerRequestFilter {
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
       FilterChain filterChain) throws ServletException, IOException {
 
-    if (requireCsrfProtectionMatcher.matches(request)) {
+    if (requireCsrfProtectionMatcher.matches(request) && !isBearerAuthenticatedRequest(request)) {
       final String csrfTokenValue = request.getHeader(csrfHeaderProperty);
       final Cookie[] cookies = request.getCookies();
 
@@ -58,6 +58,13 @@ public class StatelessCsrfFilter extends OncePerRequestFilter {
       }
     }
     filterChain.doFilter(request, response);
+  }
+
+  private boolean isBearerAuthenticatedRequest(HttpServletRequest request) {
+    String authorizationHeader = request.getHeader("Authorization");
+    return authorizationHeader != null
+        && authorizationHeader.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())
+        && authorizationHeader.length() > "Bearer ".length();
   }
 
   public static final class DefaultRequiresCsrfMatcher implements RequestMatcher {

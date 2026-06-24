@@ -70,6 +70,21 @@ class StatelessCsrfFilterTest {
   }
 
   @Test
+  void doFilter_ShouldAllowAgencyAdminMutation_WhenBearerAuthorizationIsPresentWithoutCsrf()
+      throws ServletException, IOException {
+    StatelessCsrfFilter filter = new StatelessCsrfFilter(CSRF_COOKIE, CSRF_HEADER);
+    MockHttpServletRequest request = request("POST", "/agencyadmin/agencies");
+    request.addHeader("Authorization", "Bearer access-token");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    MockFilterChain filterChain = new MockFilterChain();
+
+    filter.doFilter(request, response, filterChain);
+
+    assertThat(response.getStatus()).isEqualTo(200);
+    assertThat(filterChain.getRequest()).isSameAs(request);
+  }
+
+  @Test
   void doFilter_ShouldAllowAgencyAdminMutation_WhenCsrfCookieAndHeaderMatch()
       throws ServletException, IOException {
     StatelessCsrfFilter filter = new StatelessCsrfFilter(CSRF_COOKIE, CSRF_HEADER);
