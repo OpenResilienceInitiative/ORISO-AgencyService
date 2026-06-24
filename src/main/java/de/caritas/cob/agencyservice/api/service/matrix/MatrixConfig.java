@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class MatrixConfig {
 
   private String apiUrl = "http://matrix-synapse:8008";
-  private String registrationSharedSecret = "caritas-registration-secret-2025";
+  private String registrationSharedSecret;
   private String serverName = "caritas.local";
   private String adminUsername;
   private String adminPassword;
