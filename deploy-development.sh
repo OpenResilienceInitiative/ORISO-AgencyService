@@ -4,8 +4,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-K8S_NAMESPACE="${K8S_NAMESPACE:-caritas}"
-DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-oriso-platform-agencyservice}"
+K8S_NAMESPACE="${K8S_NAMESPACE:-${NAMESPACE:-caritas}}"
+DEPLOYMENT_NAME="${DEPLOYMENT_NAME:-${DEPLOYMENT:-oriso-platform-agencyservice}}"
 IMAGE_NAME="${IMAGE_NAME:-oriso-agencyservice}"
 
 ./mvnw clean package -DskipTests -Dmaven.test.skip=true -Dspotless.check.skip=true -Dcheckstyle.skip=true
