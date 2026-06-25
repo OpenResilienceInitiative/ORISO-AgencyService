@@ -14,6 +14,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -37,7 +38,7 @@ public class MatrixProvisioningService {
   private static final String ENDPOINT_RESET_PASSWORD = "/_synapse/admin/v1/reset_password/";
 
   private final @NonNull MatrixConfig matrixConfig;
-  private final @NonNull RestTemplate restTemplate;
+  private final @NonNull @Qualifier("matrixRestTemplate") RestTemplate restTemplate;
 
   private final SecureRandom secureRandom = new SecureRandom();
 
