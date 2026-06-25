@@ -11,9 +11,9 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "matrix")
 public class MatrixConfig {
 
-  private String apiUrl = "http://matrix-synapse:8008";
-  private String registrationSharedSecret = "caritas-registration-secret-2025";
-  private String serverName = "caritas.local";
+  private String apiUrl;
+  private String registrationSharedSecret;
+  private String serverName;
   private String adminUsername;
   private String adminPassword;
 
