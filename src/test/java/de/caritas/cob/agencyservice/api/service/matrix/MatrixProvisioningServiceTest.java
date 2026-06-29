@@ -571,4 +571,18 @@ class MatrixProvisioningServiceTest {
         .postForEntity(eq(REGISTER_URL), registerRequestCaptor.capture(), eq(Map.class));
     assertThat(registerRequestCaptor.getValue().getBody()).containsEntry("nonce", NONCE);
   }
+
+  @Test
+  void ensureAgencyAccount_Should_ReturnEmpty_When_ResponseStatusException400WithNullBody() {
+    // given — ResponseStatusException path passes null body to isUserAlreadyExisting
+    stubSuccessfulNonce(NONCE_JSON);
+    stubRegistrationResponseStatusError(HttpStatus.BAD_REQUEST);
+
+    // when
+    var result = matrixProvisioningService.ensureAgencyAccount("agency-1", "Display Name");
+
+    // then
+    assertThat(result).isEmpty();
+    verify(restTemplate, never()).postForEntity(eq(LOGIN_URL), any(), eq(Map.class));
+  }
 }
