@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.RuntimeJsonMappingException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.Settings;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -123,13 +124,16 @@ class AgencySettingsServiceTest {
     JsonNode parsed = parseJson(agencySettingsService.toSettingsJson(settings));
 
     assertThat(parsed.get("featureStatisticsEnabled").booleanValue()).isTrue();
+    assertThat(parsed.get("activeLanguages")).isNotNull();
+    assertThat(parsed.get("activeLanguages").get(0).asText()).isEqualTo("de");
+    assertThat(parsed.get("activeLanguages").get(1).asText()).isEqualTo("en");
     assertThat(agencyAdminControlsAbsent(parsed)).isTrue();
-    assertThat(activeLanguagesAbsent(parsed)).isTrue();
   }
 
   private Settings buildSettingsWithControls() {
     return new Settings()
         .featureStatisticsEnabled(true)
+        .activeLanguages(List.of("de", "en"))
         .agencyAdminControls(new AgencyAdminControls().permissionsPageEnabled(true));
   }
 
@@ -140,11 +144,6 @@ class AgencySettingsServiceTest {
   private boolean agencyAdminControlsAbsent(JsonNode parsed) {
     JsonNode controls = parsed.path("agencyAdminControls");
     return controls.isMissingNode() || controls.isNull();
-  }
-
-  private boolean activeLanguagesAbsent(JsonNode parsed) {
-    JsonNode activeLanguages = parsed.path("activeLanguages");
-    return activeLanguages.isMissingNode() || activeLanguages.isNull();
   }
 
   private JsonNode parseJson(String json) {
