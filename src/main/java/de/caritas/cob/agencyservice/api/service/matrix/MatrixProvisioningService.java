@@ -120,7 +120,7 @@ public class MatrixProvisioningService {
             ex.getResponseBodyAsString());
       }
     } catch (ResponseStatusException ex) {
-      if (isUserAlreadyExisting(ex.getStatusCode(), null)) {
+      if (isUserAlreadyExisting(ex.getStatusCode(), ex.getReason())) {
         String userId = String.format("@%s:%s", username, matrixConfig.getServerName());
         if (resetExistingUserPassword(userId, password)) {
           log.info("Matrix user {} already existed. Password rotated.", username);

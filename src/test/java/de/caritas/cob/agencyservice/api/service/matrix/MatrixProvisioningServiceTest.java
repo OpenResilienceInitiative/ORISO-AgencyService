@@ -574,7 +574,7 @@ class MatrixProvisioningServiceTest {
 
   @Test
   void ensureAgencyAccount_Should_ReturnEmpty_When_ResponseStatusException400WithNullBody() {
-    // given — ResponseStatusException path passes null body to isUserAlreadyExisting
+    // given — reason without M_USER_IN_USE; isUserAlreadyExisting(400, reason) → false
     stubSuccessfulNonce(NONCE_JSON);
     stubRegistrationResponseStatusError(HttpStatus.BAD_REQUEST);
 
@@ -584,5 +584,31 @@ class MatrixProvisioningServiceTest {
     // then
     assertThat(result).isEmpty();
     verify(restTemplate, never()).postForEntity(eq(LOGIN_URL), any(), eq(Map.class));
+  }
+
+  @Test
+  void ensureAgencyAccount_Should_RotatePasswordAndReturnCredentials_When_ResponseStatusException400WithUserInUse() {
+    // given — production path: body appended to reason by CustomResponseErrorHandler
+    stubSuccessfulNonce(NONCE_JSON);
+    when(restTemplate.postForEntity(eq(REGISTER_URL), any(), eq(Map.class)))
+        .thenThrow(
+            new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "POST "
+                    + REGISTER_URL
+                    + " {\"errcode\":\"M_USER_IN_USE\"}"));
+    stubAdminCredentialsPresent();
+    stubSuccessfulAdminLogin();
+    stubSuccessfulPasswordReset();
+
+    // when
+    var result = matrixProvisioningService.ensureAgencyAccount("agency-1", "Display Name");
+
+    // then
+    assertThat(result).isPresent();
+    assertThat(result.get().getUserId()).isEqualTo("@agency-1-service:caritas.local");
+    assertThat(result.get().getPassword()).isNotBlank();
+    verify(restTemplate).postForEntity(eq(LOGIN_URL), any(), eq(Map.class));
+    verify(restTemplate).exchange(anyString(), eq(HttpMethod.POST), any(), eq(Void.class));
   }
 }
