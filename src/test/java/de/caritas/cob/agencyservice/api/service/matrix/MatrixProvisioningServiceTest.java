@@ -495,4 +495,80 @@ class MatrixProvisioningServiceTest {
     verify(restTemplate, never()).postForEntity(eq(LOGIN_URL), any(), eq(Map.class));
     verify(restTemplate, never()).exchange(anyString(), eq(HttpMethod.POST), any(), eq(Void.class));
   }
+
+  @Test
+  void ensureAgencyAccount_Should_RegisterWithDashServiceUsername_When_BaseUsernameIsBlank() {
+    // given
+    stubSuccessfulNonce(NONCE_JSON);
+    stubSuccessfulRegistration("@-service:caritas.local");
+
+    // when
+    var result = matrixProvisioningService.ensureAgencyAccount("", "Display Name");
+
+    // then
+    assertThat(result).isPresent();
+    assertThat(result.get().getUserId()).isEqualTo("@-service:caritas.local");
+    verify(restTemplate)
+        .postForEntity(eq(REGISTER_URL), registerRequestCaptor.capture(), eq(Map.class));
+    assertThat(registerRequestCaptor.getValue().getBody())
+        .containsEntry("username", "-service")
+        .extracting(body -> body.get("username"))
+        .asString()
+        .hasSize(8);
+  }
+
+  @Test
+  void ensureAgencyAccount_Should_NotTruncateUsername_When_SanitizedResultIsExactly30Chars() {
+    // given — 22-char base + "-service" = exactly 30 chars; no truncation
+    final String baseUsername = "abcdefghijklmnopqrstuv";
+    final String expectedUsername = "abcdefghijklmnopqrstuv-service";
+    final String truncatedFromTest3 = "abcdefghijklmnopqrstuvw-servic";
+    assertThat(baseUsername + "-service").hasSize(30);
+    assertThat(expectedUsername).hasSize(30);
+
+    stubSuccessfulNonce(NONCE_JSON);
+    stubSuccessfulRegistration("@abcdefghijklmnopqrstuv-service:caritas.local");
+
+    // when
+    matrixProvisioningService.ensureAgencyAccount(baseUsername, "Display Name");
+
+    // then
+    verify(restTemplate)
+        .postForEntity(eq(REGISTER_URL), registerRequestCaptor.capture(), eq(Map.class));
+    assertThat(registerRequestCaptor.getValue().getBody())
+        .containsEntry("username", expectedUsername)
+        .extracting(body -> body.get("username"))
+        .asString()
+        .hasSize(30)
+        .isNotEqualTo(truncatedFromTest3);
+  }
+
+  @Test
+  void ensureAgencyAccount_Should_ReturnEmpty_When_NonceJsonHasExtraWhitespace() {
+    // given — string-based extractNonce requires exact "nonce":" (no spaces); pretty JSON fails
+    stubSuccessfulNonce("{ \"nonce\" : \"test-nonce-abc\" }");
+
+    // when
+    var result = matrixProvisioningService.ensureAgencyAccount("agency-1", "Display Name");
+
+    // then
+    assertThat(result).isEmpty();
+    verify(restTemplate, never()).postForEntity(eq(REGISTER_URL), any(), eq(Map.class));
+  }
+
+  @Test
+  void ensureAgencyAccount_Should_ExtractNonce_When_ResponseBodyHasMultipleFields() {
+    // given
+    stubSuccessfulNonce("{\"other\":\"value\",\"nonce\":\"test-nonce-abc\"}");
+    stubSuccessfulRegistration("@agency-1-service:caritas.local");
+
+    // when
+    var result = matrixProvisioningService.ensureAgencyAccount("agency-1", "Display Name");
+
+    // then
+    assertThat(result).isPresent();
+    verify(restTemplate)
+        .postForEntity(eq(REGISTER_URL), registerRequestCaptor.capture(), eq(Map.class));
+    assertThat(registerRequestCaptor.getValue().getBody()).containsEntry("nonce", NONCE);
+  }
 }
