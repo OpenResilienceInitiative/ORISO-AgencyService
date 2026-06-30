@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -60,4 +61,15 @@ public class AgencyTopic {
   private PublicationStatus publicationStatus = PublicationStatus.DRAFT;
 
   @Transient TopicDTO topicData = new TopicDTO();
+
+  /**
+   * Guarantees the NOT NULL publication_status is never null on the no-arg / all-args construction
+   * paths (Lombok's @Builder.Default only applies to the builder).
+   */
+  @PrePersist
+  void applyDefaults() {
+    if (publicationStatus == null) {
+      publicationStatus = PublicationStatus.DRAFT;
+    }
+  }
 }
