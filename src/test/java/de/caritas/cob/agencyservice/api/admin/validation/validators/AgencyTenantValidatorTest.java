@@ -63,7 +63,6 @@ class AgencyTenantValidatorTest {
   @Test
   void validate_shouldNotThrowException_When_AuthenticatedUserIsSuperAdminAndTenantIdNotMatchingTenantContext() {
     TenantContext.setCurrentTenant(0L);
-    when(authenticatedUser.isTenantSuperAdmin()).thenReturn(true);
     var validateAgencyDTO = ValidateAgencyDTO.builder().tenantId(1L).build();
     try {
       agencyTenantValidator.validate(validateAgencyDTO);

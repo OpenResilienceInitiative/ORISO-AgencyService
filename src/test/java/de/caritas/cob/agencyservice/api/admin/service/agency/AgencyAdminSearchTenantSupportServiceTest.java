@@ -11,25 +11,23 @@ import de.caritas.cob.agencyservice.config.apiclient.UserAdminApiClient;
 import de.caritas.cob.agencyservice.config.apiclient.UserAdminServiceApiControllerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.jdbc.Sql;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AdminAgencyResponseDTO;
 
+import de.caritas.cob.agencyservice.api.service.TopicService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-@RunWith(SpringRunner.class)
 @SpringBootTest(classes = AgencyServiceApplication.class)
-@TestPropertySource(properties = "spring.profiles.active=testing")
-@TestPropertySource(properties = "multitenancy.enabled=true")
+@TestPropertySource(properties = {"spring.profiles.active=testing", "multitenancy.enabled=true", "spring.jpa.hibernate.ddl-auto=none"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyAdminSearchTenantSupportServiceTest {
   private static final long FIRST_AGENCY_ID = 2L;
   @Autowired
@@ -50,8 +48,11 @@ class AgencyAdminSearchTenantSupportServiceTest {
   @MockitoBean
   private SecurityHeaderSupplier securityHeaderSupplier;
 
-  @Mock
+  @MockitoBean
   private UserAdminApiClient userAdminApiClient;
+
+  @MockitoBean
+  private TopicService topicService;
 
   @BeforeEach
   public void setUp() {
@@ -83,11 +84,11 @@ class AgencyAdminSearchTenantSupportServiceTest {
     var agencySearchResult = agencyAdminSearchTenantSupportService.searchAgencies("", 1, 10, new Sort());
 
     // then
-    assertThat(agencySearchResult.getTotal()).isEqualTo(3);
+    assertThat(agencySearchResult.getTotal()).isEqualTo(2);
     assertThat(agencySearchResult.getEmbedded())
             .isNotEmpty()
-            .hasSize(3)
-            .extracting("embedded.id").contains(1735L, 1737L, 1738L);
+            .hasSize(2)
+            .extracting("embedded.id").contains(1735L, 1737L);
   }
 
   @Test

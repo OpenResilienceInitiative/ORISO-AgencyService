@@ -30,6 +30,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -40,10 +41,11 @@ import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantController
 
 @SpringBootTest
 @TestPropertySource(properties = {"feature.multitenancy.with.single.domain.enabled=true",
-    "multitenancy.enabled=true"})
+    "multitenancy.enabled=true", "feature.topics.enabled=false"})
 @AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("testing")
 @Transactional
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyControllerWithSingleDomainMultitenancyIT {
 
   private static final String VALID_COUNSELLING_RELATION_QUERY = "counsellingRelation=PARENTAL_COUNSELLING";
@@ -124,7 +126,8 @@ class AgencyControllerWithSingleDomainMultitenancyIT {
             get(PATH_GET_LIST_OF_AGENCIES + "?" + "postcode=53001" + "&"
                 + "consultingType=20" + "&" + "counsellingRelation=RELATIVE_COUNSELLING")
                 .accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(0)));
   }
 
   @Test

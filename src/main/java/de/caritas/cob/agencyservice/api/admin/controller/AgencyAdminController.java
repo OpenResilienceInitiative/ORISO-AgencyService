@@ -63,7 +63,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return {@link AgencyAdminFullResponseDTO}
    */
   @Override
-  public ResponseEntity<AgencyAdminFullResponseDTO> getAgency(@PathVariable Long agencyId) {
+  public ResponseEntity<AgencyAdminFullResponseDTO> getAgency(@NotNull @PathVariable Long agencyId) {
     return ResponseEntity.ok(this.agencyAdminService.findAgency(agencyId));
   }
 
@@ -112,7 +112,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link AgencyAdminFullResponseDTO} entity
    */
   @Override
-  public ResponseEntity<AgencyAdminFullResponseDTO> updateAgency(@PathVariable Long agencyId,
+  public ResponseEntity<AgencyAdminFullResponseDTO> updateAgency(@NotNull @PathVariable Long agencyId,
       @Valid UpdateAgencyDTO updateAgencyDTO) {
 
     agencyValidator.validate(agencyId, updateAgencyDTO);
@@ -129,7 +129,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link ResponseEntity} with the status code.
    */
   @Override
-  public ResponseEntity<Void> deleteAgency(@PathVariable Long agencyId) {
+  public ResponseEntity<Void> deleteAgency(@NotNull @PathVariable Long agencyId) {
     this.agencyAdminService.deleteAgency(agencyId);
     return new ResponseEntity<>(HttpStatus.OK);
   }
@@ -142,7 +142,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> getAgencyPostcodeRanges(
-      @PathVariable Long agencyId) {
+      @NotNull @PathVariable Long agencyId) {
     var postcodeRangesForAgency = this.agencyPostcodeRangeAdminService
         .findPostcodeRangesForAgency(agencyId);
     return ResponseEntity.ok(postcodeRangesForAgency);
@@ -157,7 +157,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> createAgencyPostcodeRange(
-      @PathVariable Long agencyId, @Valid PostcodeRangeDTO postcodeRangeDTO) {
+      @NotNull @PathVariable Long agencyId, @Valid PostcodeRangeDTO postcodeRangeDTO) {
 
     return new ResponseEntity<>(
         agencyPostcodeRangeAdminService.createPostcodeRanges(agencyId, postcodeRangeDTO),
@@ -173,7 +173,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> updateAgencyPostcodeRange(
-      @PathVariable Long agencyId, @Valid PostcodeRangeDTO postcodeRangeDTO) {
+      @NotNull @PathVariable Long agencyId, @Valid PostcodeRangeDTO postcodeRangeDTO) {
     var rangeResponseDTO = agencyPostcodeRangeAdminService
         .updatePostcodeRange(agencyId, postcodeRangeDTO);
 
@@ -187,7 +187,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link ResponseEntity} with the status code.
    */
   @Override
-  public ResponseEntity<Void> deleteAgencyPostcodeRange(Long agencyId) {
+  public ResponseEntity<Void> deleteAgencyPostcodeRange(@NotNull Long agencyId) {
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(agencyId);
     return new ResponseEntity<>(HttpStatus.OK);
   }
@@ -200,7 +200,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link ResponseEntity} with the status code.
    */
   @Override
-  public ResponseEntity<Void> changeAgencyType(Long agencyId,
+  public ResponseEntity<Void> changeAgencyType(@NotNull Long agencyId,
       @Valid AgencyTypeRequestDTO agencyTypeRequestDTO) {
     this.agencyAdminService.changeAgencyType(agencyId, agencyTypeRequestDTO);
     return new ResponseEntity<>(HttpStatus.OK);
@@ -208,7 +208,7 @@ public class AgencyAdminController implements AgencyadminApi {
 
   @Override
   public ResponseEntity<List<AgencyAdminFullResponseDTO>> getAgenciesByTenantId(
-      Long tenantId) {
+      @NotNull Long tenantId) {
 
     var agencies = this.agencyAdminService.getAgenciesByTenantId(tenantId);
     var agenciesResponse = agencies.stream()

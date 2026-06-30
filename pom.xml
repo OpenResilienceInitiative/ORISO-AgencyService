@@ -46,6 +46,7 @@
     <springfox.version>2.9.2</springfox.version>
     <springfox-swagger-ui.version>2.10.0</springfox-swagger-ui.version>
     <spring-security-oauth2-test-webmvc-addons.version>3.0.1</spring-security-oauth2-test-webmvc-addons.version>
+    <mockito.version>5.20.0</mockito.version>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <hibernate.search.version>6.1.1.Final</hibernate.search.version>
@@ -158,6 +159,16 @@
       <groupId>io.springfox</groupId>
       <artifactId>springfox-boot-starter</artifactId>
       <version>${springfox.boot.starter.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.plugin</groupId>
+          <artifactId>spring-plugin-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.springframework.plugin</groupId>
+          <artifactId>spring-plugin-metadata</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.swagger.parser.v3</groupId>
@@ -657,6 +668,7 @@
         </artifactId> <!-- surefire plugin version managed by Spring Boot -->
         <configuration>
           <skipTests>true</skipTests>
+          <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
         </configuration>
         <executions>
           <execution>
@@ -679,7 +691,7 @@
               <goal>test</goal>
             </goals>
             <configuration>
-              <skipTests>false</skipTests>
+              <skipTests>${skipITs}</skipTests>
               <includes>
                 <include>**/*IT.*</include>
               </includes>

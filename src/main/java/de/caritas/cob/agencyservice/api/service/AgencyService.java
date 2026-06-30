@@ -230,6 +230,9 @@ public class AgencyService {
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
+    if (multitenancyWithSingleDomain) {
+      return Optional.empty();
+    }
     return Optional.of(consultingTypeId);
   }
 

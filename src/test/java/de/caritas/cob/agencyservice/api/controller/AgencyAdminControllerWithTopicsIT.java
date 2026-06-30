@@ -21,6 +21,7 @@ import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.testHelper.PathConstants;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,8 +33,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
@@ -43,7 +46,10 @@ import org.springframework.web.context.WebApplicationContext;
 @TestPropertySource(properties = "feature.topics.enabled=true")
 @AutoConfigureMockMvc(addFilters = false)
 @Transactional
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyAdminControllerWithTopicsIT {
+
+  private static final String CSRF_TOKEN = "test";
 
   static final String PATH_GET_AGENCY_BY_ID = "/agencyadmin/agencies/1";
 
@@ -73,6 +79,14 @@ class AgencyAdminControllerWithTopicsIT {
         .build();
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO().settings(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings().featureCentralDataProtectionTemplateEnabled(false)));
+    when(authenticatedUser.getTenantId()).thenReturn(1L);
+  }
+
+  private MockHttpServletRequestBuilder withCsrf(
+      MockHttpServletRequestBuilder requestBuilder) {
+    return requestBuilder
+        .header("X-CSRF-Token", CSRF_TOKEN)
+        .cookie(new Cookie("CSRF-TOKEN", CSRF_TOKEN));
   }
 
   @Test
@@ -131,9 +145,9 @@ class AgencyAdminControllerWithTopicsIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(post(PathConstants.CREATE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(post(PathConstants.CREATE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("_embedded.id").exists())
         .andExpect(jsonPath("_embedded.name").value("Test name"))
@@ -175,9 +189,9 @@ class AgencyAdminControllerWithTopicsIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
         .andExpect(jsonPath("_embedded.name").value("Test update name"))

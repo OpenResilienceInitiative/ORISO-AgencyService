@@ -6,9 +6,11 @@ import static de.caritas.cob.agencyservice.testHelper.TestConstants.FULL_AGENCY_
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.INVALID_POSTCODE_QUERY;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.VALID_POSTCODE_QUERY;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.VALID_TOPIC_ID_QUERY;
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,6 +21,7 @@ import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,15 +31,21 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest(properties = "spring.liquibase.enabled=false")
+@ActiveProfiles("testing")
 @AutoConfigureMockMvc
 @AutoConfigureTestDatabase
 class AgencyControllerIT {
 
-  @Autowired
   private MockMvc mvc;
+
+  @Autowired
+  private WebApplicationContext context;
 
   @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
@@ -44,18 +53,27 @@ class AgencyControllerIT {
   @MockitoBean
   private AgencyService agencyService;
 
+  @BeforeEach
+  public void setup() {
+    mvc = MockMvcBuilders
+        .webAppContextSetup(context)
+        .apply(springSecurity())
+        .build();
+  }
+
   @Test
   @WithMockUser(authorities = {AuthorityValue.SEARCH_AGENCIES_WITHIN_TENANT})
   void getTenantAgencies_Should_ReturnNoContent_When_ServiceReturnsEmptyList() throws Exception {
 
     when(agencyService.getAgencies(Mockito.anyString(), Mockito.anyInt()))
-        .thenReturn(null);
+        .thenReturn(List.of());
 
     mvc.perform(
             get(PATH_GET_LIST_OF_AGENCIES_BY_TENANT + "?" + VALID_POSTCODE_QUERY + "&"
                 + VALID_TOPIC_ID_QUERY)
                 .accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(0)));
   }
 
   @Test

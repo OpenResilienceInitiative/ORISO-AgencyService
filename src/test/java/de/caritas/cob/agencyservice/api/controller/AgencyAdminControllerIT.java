@@ -28,6 +28,7 @@ import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.Ex
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings;
 import de.caritas.cob.agencyservice.testHelper.PathConstants;
+import jakarta.servlet.http.Cookie;
 import org.jeasy.random.EasyRandom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,16 +40,23 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest
 @ActiveProfiles("testing")
+@TestPropertySource(properties = "feature.topics.enabled=false")
 @AutoConfigureMockMvc(addFilters = false)
 @Transactional
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyAdminControllerIT {
+
+  private static final String CSRF_TOKEN = "test";
 
   static final String PATH_GET_AGENCY_BY_ID = "/agencyadmin/agencies/1";
 
@@ -86,6 +94,14 @@ class AgencyAdminControllerIT {
         .build();
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO().settings(new Settings().featureCentralDataProtectionTemplateEnabled(false)));
+    when(authenticatedUser.getTenantId()).thenReturn(1L);
+  }
+
+  private MockHttpServletRequestBuilder withCsrf(
+      MockHttpServletRequestBuilder requestBuilder) {
+    return requestBuilder
+        .header("X-CSRF-Token", CSRF_TOKEN)
+        .cookie(new Cookie("CSRF-TOKEN", CSRF_TOKEN));
   }
 
   @Test
@@ -132,9 +148,9 @@ class AgencyAdminControllerIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(post(PathConstants.CREATE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(post(PathConstants.CREATE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("_embedded.id").exists())
         .andExpect(jsonPath("_embedded.name").value("Test name"))
@@ -159,6 +175,7 @@ class AgencyAdminControllerIT {
           throws Exception {
     // given
     when(authenticatedUser.isTenantSuperAdmin()).thenReturn(true);
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
     when(consultingTypeManager.getConsultingTypeSettings(anyInt()))
             .thenReturn(new ExtendedConsultingTypeResponseDTO());
 
@@ -175,9 +192,9 @@ class AgencyAdminControllerIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(post(PathConstants.CREATE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(post(PathConstants.CREATE_AGENCY_PATH)
                     .contentType(APPLICATION_JSON)
-                    .content(payload))
+                    .content(payload)))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("_embedded.id").exists())
             .andExpect(jsonPath("_embedded.tenantId").value("100"))
@@ -219,9 +236,9 @@ class AgencyAdminControllerIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(post(PathConstants.CREATE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(post(PathConstants.CREATE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isForbidden());
   }
 
@@ -247,9 +264,9 @@ class AgencyAdminControllerIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
         .andExpect(jsonPath("_embedded.name").value("Test update name"))
@@ -283,9 +300,9 @@ class AgencyAdminControllerIT {
         .offline(true)
         .external(false);
 
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(JsonConverter.convertToJson(agencyDTO)))
+            .content(JsonConverter.convertToJson(agencyDTO))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
         .andExpect(jsonPath("_embedded.name").value("Test update name"))
@@ -324,9 +341,9 @@ class AgencyAdminControllerIT {
                     .postcode("00001").phoneNumber("321-321-321").email("dataprotection@onlineberatung.net")));
 
 
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(JsonConverter.convertToJson(agencyDTO)))
+            .content(JsonConverter.convertToJson(agencyDTO))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
         .andExpect(jsonPath("_embedded.name").value("Test update name"))
@@ -364,9 +381,9 @@ class AgencyAdminControllerIT {
             .dataProtectionOfficerContact(new DataProtectionContactDTO()));
 
 
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(JsonConverter.convertToJson(agencyDTO)))
+            .content(JsonConverter.convertToJson(agencyDTO))))
         .andExpect(status().isBadRequest());
   }
 
@@ -391,9 +408,9 @@ class AgencyAdminControllerIT {
                     .postcode("00001").phoneNumber("321-321-321").email("dataprotection@onlineberatung.net")
                 ));
 
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(JsonConverter.convertToJson(agencyDTO)))
+            .content(JsonConverter.convertToJson(agencyDTO))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
         .andExpect(jsonPath("_embedded.name").value("Test update name"))
@@ -443,9 +460,9 @@ class AgencyAdminControllerIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
         .andExpect(jsonPath("_embedded.name").value("Test update name"))
@@ -486,9 +503,9 @@ class AgencyAdminControllerIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isForbidden());
   }
 
@@ -506,9 +523,9 @@ class AgencyAdminControllerIT {
     EasyRandom easyRandom = new EasyRandom();
     AgencyDTO agencyDTO = easyRandom.nextObject(AgencyDTO.class);
     String payload = JsonConverter.convertToJson(agencyDTO);
-    mockMvc.perform(post(PathConstants.CREATE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(post(PathConstants.CREATE_AGENCY_PATH)
             .content(payload)
-            .contentType(APPLICATION_JSON))
+            .contentType(APPLICATION_JSON)))
         .andExpect(status().isUnauthorized());
   }
 
@@ -518,9 +535,9 @@ class AgencyAdminControllerIT {
     EasyRandom easyRandom = new EasyRandom();
     UpdateAgencyDTO agencyDTO = easyRandom.nextObject(UpdateAgencyDTO.class);
     String payload = JsonConverter.convertToJson(agencyDTO);
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .content(payload)
-            .contentType(APPLICATION_JSON))
+            .contentType(APPLICATION_JSON)))
         .andExpect(status().isUnauthorized());
   }
 
@@ -540,9 +557,9 @@ class AgencyAdminControllerIT {
     EasyRandom easyRandom = new EasyRandom();
     AgencyDTO agencyDTO = easyRandom.nextObject(AgencyDTO.class);
     String payload = JsonConverter.convertToJson(agencyDTO);
-    mockMvc.perform(post(PathConstants.CREATE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(post(PathConstants.CREATE_AGENCY_PATH)
             .content(payload)
-            .contentType(APPLICATION_JSON))
+            .contentType(APPLICATION_JSON)))
         .andExpect(status().isForbidden());
   }
 
@@ -553,9 +570,9 @@ class AgencyAdminControllerIT {
     EasyRandom easyRandom = new EasyRandom();
     UpdateAgencyDTO agencyDTO = easyRandom.nextObject(UpdateAgencyDTO.class);
     String payload = JsonConverter.convertToJson(agencyDTO);
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .content(payload)
-            .contentType(APPLICATION_JSON))
+            .contentType(APPLICATION_JSON)))
         .andExpect(status().isForbidden());
   }
 

@@ -23,6 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.util.Comparator;
@@ -31,8 +32,9 @@ import java.util.stream.Collectors;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(classes = AgencyServiceApplication.class)
-@TestPropertySource(properties = "spring.profiles.active=testing")
+@TestPropertySource(properties = {"spring.profiles.active=testing", "feature.topics.enabled=false"})
 @AutoConfigureTestDatabase(replace = Replace.ANY)
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyAdminSearchServiceIT {
 
   private static final long FIRST_AGENCY_ID = 2L;

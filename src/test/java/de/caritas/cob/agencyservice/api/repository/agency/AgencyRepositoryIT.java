@@ -12,11 +12,13 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.context.jdbc.Sql;
 
 @TestPropertySource(properties = {"spring.profiles.active=testing"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
 @ExtendWith(SpringExtension.class)
 @DataJpaTest
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyRepositoryIT {
 
   @Autowired
