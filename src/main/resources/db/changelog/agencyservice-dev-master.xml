@@ -28,4 +28,5 @@
 	<include file="db/changelog/changeset/0019_agency_admin_control/0019_changeSet.xml"/>
 	<include file="db/changelog/changeset/0020_agency_settings/0020_changeSet.xml"/>
 	<include file="db/changelog/changeset/0021_agency_topic_legal/0021_changeSet.xml"/>
+	<include file="db/changelog/changeset/0022_agency_address_contact/0022_changeSet.xml"/>
 </databaseChangeLog>

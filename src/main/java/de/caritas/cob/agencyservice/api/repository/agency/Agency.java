@@ -78,6 +78,34 @@ public class Agency implements TenantAware {
   @Column(name = "city")
   private String city;
 
+  @Size(max = 255)
+  @Column(name = "street")
+  private String street;
+
+  @Size(max = 20)
+  @Column(name = "house_number")
+  private String houseNumber;
+
+  @Size(max = 100)
+  @Column(name = "floor_building")
+  private String floorBuilding;
+
+  @Size(max = 100)
+  @Column(name = "country")
+  private String country;
+
+  @Size(max = 30)
+  @Column(name = "phone")
+  private String phone;
+
+  @Size(max = 30)
+  @Column(name = "phone_secondary")
+  private String phoneSecondary;
+
+  @Size(max = 255)
+  @Column(name = "email")
+  private String email;
+
   @Column(name = "is_team_agency", nullable = false)
   @Convert(converter = NumericBooleanConverter.class)
   private boolean teamAgency;
