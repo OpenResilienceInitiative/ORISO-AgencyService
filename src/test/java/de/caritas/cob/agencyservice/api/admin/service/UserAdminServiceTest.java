@@ -107,7 +107,7 @@ public class UserAdminServiceTest {
 
   private Sort getSort() {
     Sort sortBy = new Sort();
-    sortBy.setField(FieldEnum.LASTNAME);
+    sortBy.setField(FieldEnum.LAST_NAME);
     sortBy.setOrder(OrderEnum.ASC);
     return sortBy;
   }

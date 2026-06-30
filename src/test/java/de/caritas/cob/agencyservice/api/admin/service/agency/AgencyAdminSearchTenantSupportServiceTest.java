@@ -14,9 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -35,19 +35,19 @@ class AgencyAdminSearchTenantSupportServiceTest {
   @Autowired
   private AgencyAdminSearchTenantSupportService agencyAdminSearchTenantSupportService;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
-  @MockBean
+  @MockitoBean
   private AuthenticatedUser authenticatedUser;
 
-  @MockBean
+  @MockitoBean
   private de.caritas.cob.agencyservice.useradminservice.generated.web.AdminUserControllerApi adminUserControllerApi;
 
-  @MockBean
+  @MockitoBean
   private UserAdminServiceApiControllerFactory userAdminServiceApiControllerFactory;
 
-  @MockBean
+  @MockitoBean
   private SecurityHeaderSupplier securityHeaderSupplier;
 
   @Mock

@@ -14,7 +14,7 @@ public class CustomHttpHeaderTest {
 
     CustomHttpHeader customHttpHeader = new CustomHttpHeader(HttpStatusExceptionReason.INVALID_CONSULTING_TYPE);
     HttpHeaders result = customHttpHeader.buildHeader();
-    assertTrue(result.containsKey("X-Reason"));
+    assertTrue(result.containsHeader("X-Reason"));
 
   }
 

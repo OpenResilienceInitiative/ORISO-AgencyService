@@ -1,7 +1,7 @@
 package de.caritas.cob.agencyservice.api.controller;
 
 
-import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 import static org.hamcrest.Matchers.contains;
 import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.when;
@@ -29,9 +29,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -52,19 +52,19 @@ class AgencyAdminControllerWithDemographicsIT {
 
   private MockMvc mockMvc;
 
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
   @Autowired
   private WebApplicationContext context;
 
-  @MockBean
+  @MockitoBean
   AuthenticatedUser authenticatedUser;
 
-  @MockBean
+  @MockitoBean
   TenantService tenantService;
 
   @BeforeEach
@@ -177,5 +177,4 @@ class AgencyAdminControllerWithDemographicsIT {
         .andExpect(status().isBadRequest());
   }
 }
-
 

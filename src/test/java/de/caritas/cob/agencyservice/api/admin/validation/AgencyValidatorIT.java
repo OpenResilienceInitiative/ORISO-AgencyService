@@ -23,16 +23,16 @@ import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeMan
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
-import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTOAllOfWhiteSpot;
+import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.WhiteSpotDTO;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.model.ConsultantAdminResponseDTO;
 import org.jeasy.random.EasyRandom;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
@@ -48,13 +48,13 @@ public class AgencyValidatorIT {
   @Autowired
   private AgencyValidator agencyValidator;
 
-  @MockBean
+  @MockitoBean
   private UserAdminService userAdminService;
 
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
-  @MockBean
+  @MockitoBean
   private AuthenticatedUser authenticatedUser;
 
   @Test(expected = InvalidPostcodeException.class)
@@ -112,7 +112,7 @@ public class AgencyValidatorIT {
     UpdateAgencyDTO updateAgencyDTO = getValidUpdateAgencyDTO();
     updateAgencyDTO.setOffline(false);
     var extendedConsultingTypeResponseDTO = new ExtendedConsultingTypeResponseDTO();
-    extendedConsultingTypeResponseDTO.setWhiteSpot(easyRandom.nextObject(ExtendedConsultingTypeResponseDTOAllOfWhiteSpot.class));
+    extendedConsultingTypeResponseDTO.setWhiteSpot(easyRandom.nextObject(WhiteSpotDTO.class));
     when(consultingTypeManager.getConsultingTypeSettings(19)).thenReturn(extendedConsultingTypeResponseDTO);
     agencyValidator.validate(1734L, updateAgencyDTO);
   }

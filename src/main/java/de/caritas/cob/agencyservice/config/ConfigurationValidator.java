@@ -2,7 +2,7 @@ package de.caritas.cob.agencyservice.config;
 
 import java.util.ArrayList;
 import java.util.List;
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 

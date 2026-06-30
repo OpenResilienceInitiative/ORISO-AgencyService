@@ -5,7 +5,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
 import java.io.PrintWriter;
-import javax.ws.rs.BadRequestException;
+import jakarta.ws.rs.BadRequestException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;

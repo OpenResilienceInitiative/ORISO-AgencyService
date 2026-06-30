@@ -2,7 +2,7 @@ package de.caritas.cob.agencyservice.api.tenant;
 
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
-import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.SettingDTO;
 import de.caritas.cob.agencyservice.config.apiclient.ApplicationSettingsApiControllerFactory;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
@@ -100,7 +100,8 @@ public class MultitenancyWithSingleDomainTenantResolver implements TenantResolve
   private Optional<String> getMainTenantSubdomainFromApplicationSettings() {
     ApplicationSettingsDTO applicationSettings = applicationSettingsApiControllerFactory.createControllerApi()
         .getApplicationSettings();
-    ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy mainTenantSubdomainForSingleDomainMultitenancy = applicationSettings.getMainTenantSubdomainForSingleDomainMultitenancy();
+    SettingDTO mainTenantSubdomainForSingleDomainMultitenancy =
+        applicationSettings.getMainTenantSubdomainForSingleDomainMultitenancy();
     if (mainTenantSubdomainForSingleDomainMultitenancy == null) {
       return Optional.empty();
     }

@@ -17,10 +17,10 @@ import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AgencyA
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -39,19 +39,19 @@ class AgencyAdminSearchServiceIT {
   @Autowired
   private AgencyAdminSearchService agencyAdminSearchService;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
-  @MockBean
+  @MockitoBean
   private AuthenticatedUser authenticatedUser;
 
-  @MockBean
+  @MockitoBean
   private de.caritas.cob.agencyservice.useradminservice.generated.web.AdminUserControllerApi adminUserControllerApi;
 
-  @MockBean
+  @MockitoBean
   private UserAdminServiceApiControllerFactory userAdminServiceApiControllerFactory;
 
-  @MockBean
+  @MockitoBean
   private SecurityHeaderSupplier securityHeaderSupplier;
 
   @Test
@@ -90,7 +90,7 @@ class AgencyAdminSearchServiceIT {
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
 
     // when
-    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20, new Sort().field(Sort.FieldEnum.POSTCODE).order(Sort.OrderEnum.ASC));
+    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20, new Sort().field(Sort.FieldEnum.POST_CODE).order(Sort.OrderEnum.ASC));
 
     // then
     assertThat(agencySearchResult.getEmbedded()).hasSize(20);
@@ -129,7 +129,7 @@ class AgencyAdminSearchServiceIT {
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
 
     // when
-    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20, new Sort().field(Sort.FieldEnum.POSTCODE).order(Sort.OrderEnum.DESC));
+    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20, new Sort().field(Sort.FieldEnum.POST_CODE).order(Sort.OrderEnum.DESC));
 
     // then
     assertThat(agencySearchResult.getEmbedded()).hasSize(20);

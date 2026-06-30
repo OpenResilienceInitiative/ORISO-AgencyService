@@ -39,11 +39,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
@@ -68,16 +68,16 @@ public class AgencyAdminControllerAuthorizationIT {
   @Autowired
   private MockMvc mvc;
 
-  @MockBean
+  @MockitoBean
   private AgencyAdminSearchService agencyAdminFullResponseDTO;
 
-  @MockBean
+  @MockitoBean
   private AgencyPostcodeRangeAdminService agencyPostCodeRangeAdminService;
 
-  @MockBean
+  @MockitoBean
   private AgencyAdminService agencyAdminService;
 
-  @MockBean
+  @MockitoBean
   private AgencyValidator agencyValidator;
 
   @Test
