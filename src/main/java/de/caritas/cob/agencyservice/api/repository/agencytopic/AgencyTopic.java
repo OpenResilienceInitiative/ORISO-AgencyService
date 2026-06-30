@@ -5,6 +5,8 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import java.time.LocalDateTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -47,6 +49,15 @@ public class AgencyTopic {
 
   @Column(name = "update_date")
   private LocalDateTime updateDate;
+
+  /** This department's (Fachbereich) own data privacy policy (Datenschutzerklärung) text. */
+  @Column(name = "content_dpp")
+  private String contentDpp;
+
+  @Builder.Default
+  @Enumerated(EnumType.STRING)
+  @Column(name = "publication_status", nullable = false)
+  private PublicationStatus publicationStatus = PublicationStatus.DRAFT;
 
   @Transient TopicDTO topicData = new TopicDTO();
 }
