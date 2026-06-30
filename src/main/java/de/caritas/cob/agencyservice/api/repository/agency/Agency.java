@@ -80,6 +80,7 @@ public class Agency implements TenantAware {
 
   @Column(name = "is_team_agency", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
   private boolean teamAgency;
 
   @PositiveOrZero
@@ -89,6 +90,7 @@ public class Agency implements TenantAware {
 
   @Column(name = "is_offline", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
   private boolean offline;
 
   @Size(max = 500)
@@ -97,6 +99,7 @@ public class Agency implements TenantAware {
 
   @Column(name = "is_external", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
   private boolean isExternal;
 
   @PositiveOrZero
