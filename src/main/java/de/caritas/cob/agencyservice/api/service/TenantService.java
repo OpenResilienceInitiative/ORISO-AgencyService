@@ -36,6 +36,7 @@ public class TenantService {
     return controllerApi.getRestrictedTenantDataByTenantId(tenantId);
   }
 
+  @Cacheable(cacheNames = CacheManagerConfig.TENANT_CACHE, key = "'single-tenant'")
   public RestrictedTenantDTO getRestrictedTenantDataForSingleTenant() {
     TenantControllerApi controllerApi = tenantServiceApiControllerFactory.createControllerApi();
     return controllerApi.getRestrictedSingleTenancyTenantData();
