@@ -74,6 +74,26 @@ public class DepartmentDataProtectionService {
   }
 
   /**
+   * Reads the department's stored DPP (content + status) to prefill the admin editor. Same
+   * authorisation as the write path: restricted admins scoped to their own agencies plus the
+   * cross-tenant guard.
+   */
+  @Transactional(readOnly = true)
+  public DepartmentDataProtectionView getDepartmentDataPrivacy(Long agencyId, Long topicId) {
+    assertRestrictedAdminOwnsAgency(agencyId);
+
+    AgencyTopic department =
+        agencyTopicRepository
+            .findByAgency_IdAndTopicId(agencyId, topicId)
+            .orElseThrow(NotFoundException::new);
+
+    assertCallerTenantMatches(department.getAgency());
+
+    return new DepartmentDataProtectionView(
+        department.getContentDpp(), department.getPublicationStatus());
+  }
+
+  /**
    * Restricted agency admins may only touch agencies they administer (mirrors {@code
    * AgencyUpdatePermissionValidator}). Full agency admins are handled by the tenant guard below.
    */

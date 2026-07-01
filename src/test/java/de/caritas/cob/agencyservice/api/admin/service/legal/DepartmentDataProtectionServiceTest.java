@@ -156,6 +156,39 @@ class DepartmentDataProtectionServiceTest {
   }
 
   @Test
+  void getDepartmentDataPrivacy_Should_returnStoredContentAndStatus() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setContentDpp("{\"de\":\"<p>DSE</p>\"}");
+    department.setPublicationStatus(PublicationStatus.PUBLISHED);
+
+    var view = service.getDepartmentDataPrivacy(7L, 42L);
+
+    assertThat(view.content()).isEqualTo("{\"de\":\"<p>DSE</p>\"}");
+    assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+  }
+
+  @Test
+  void getDepartmentDataPrivacy_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
+    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(9L));
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.getDepartmentDataPrivacy(7L, 42L));
+    verify(agencyTopicRepository, never()).findByAgency_IdAndTopicId(any(), any());
+  }
+
+  @Test
+  void getDepartmentDataPrivacy_Should_throwNotFound_When_departmentMissing() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 99L)).thenReturn(Optional.empty());
+
+    assertThatExceptionOfType(NotFoundException.class)
+        .isThrownBy(() -> service.getDepartmentDataPrivacy(7L, 99L));
+  }
+
+  @Test
   void publish_Should_throwAccessDenied_When_fullAdminEditsAnotherTenantsAgency() {
     // full admin (not restricted) of tenant 1 tries to edit an agency belonging to tenant 2
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
