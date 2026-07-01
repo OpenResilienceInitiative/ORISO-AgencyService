@@ -15,45 +15,57 @@ import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Content;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtectionContactTemplateDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtectionOfficerDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import freemarker.cache.NullCacheStorage;
+import freemarker.cache.StringTemplateLoader;
+import freemarker.template.Configuration;
+import freemarker.template.TemplateException;
+import freemarker.template.TemplateExceptionHandler;
+import java.io.IOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.RunWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.ui.freemarker.FreeMarkerConfigurationFactoryBean;
 
-@RunWith(SpringRunner.class)
-@SpringBootTest
-@ActiveProfiles("testing")
-@AutoConfigureTestDatabase(replace = Replace.ANY)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class CentralDataProtectionTemplateServiceTest {
 
   public static final String DATA_PROTECTION_OFFICER_CONTACT_TEMPLATE = "Data protection officer contact name: <#if name?exists>${name},</#if><#if city?exists> city: ${city}, </#if><#if postCode?exists>postcode: ${postCode}, </#if><#if phoneNumber?exists>phoneNumber: ${phoneNumber}</#if>";
   public static final String RESPONSIBLE_CONTACT_TEMPLATE = "Data protection responsible contact name: <#if name?exists>${name},</#if><#if city?exists> city: ${city}, </#if><#if postCode?exists>postcode: ${postCode}, </#if><#if phoneNumber?exists>phoneNumber: ${phoneNumber}</#if>";
-  @Autowired
-  CentralDataProtectionTemplateService centralDataProtectionTemplateService;
 
-  @MockBean
-  private TopicEnrichmentService topicEnrichmentService;
+  private CentralDataProtectionTemplateService centralDataProtectionTemplateService;
+  private TemplateRenderer templateRenderer;
 
-  @MockBean
-  TenantService tenantService;
+  @Mock
+  private TenantService tenantService;
 
-  @MockBean
-  ApplicationSettingsService applicationSettingsService;
+  @Mock
+  private ApplicationSettingsService applicationSettingsService;
 
   @BeforeEach
-  void setup() {
+  void setup() throws Exception {
+    templateRenderer = new TemplateRenderer(createFreemarkerConfiguration());
+    centralDataProtectionTemplateService = new CentralDataProtectionTemplateService(
+        tenantService, templateRenderer, applicationSettingsService);
     ReflectionTestUtils.setField(centralDataProtectionTemplateService,
         "multitenancyWithSingleDomain", false);
     when(applicationSettingsService.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().legalContentChangesBySingleTenantAdminsAllowed(
             new ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled().value(true)));
+  }
+
+  private static Configuration createFreemarkerConfiguration()
+      throws TemplateException, IOException {
+    Configuration configuration = new FreeMarkerConfigurationFactoryBean().createConfiguration();
+    configuration.setTemplateExceptionHandler(TemplateExceptionHandler.IGNORE_HANDLER);
+    configuration.setCacheStorage(NullCacheStorage.INSTANCE);
+    configuration.setTemplateLoader(new StringTemplateLoader());
+    return configuration;
   }
 
   @Test
