@@ -5,12 +5,15 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import java.time.LocalDateTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -48,5 +51,25 @@ public class AgencyTopic {
   @Column(name = "update_date")
   private LocalDateTime updateDate;
 
+  /** This department's (Fachbereich) own data privacy policy (Datenschutzerklärung) text. */
+  @Column(name = "content_dpp")
+  private String contentDpp;
+
+  @Builder.Default
+  @Enumerated(EnumType.STRING)
+  @Column(name = "publication_status", nullable = false)
+  private PublicationStatus publicationStatus = PublicationStatus.DRAFT;
+
   @Transient TopicDTO topicData = new TopicDTO();
+
+  /**
+   * Guarantees the NOT NULL publication_status is never null on the no-arg / all-args construction
+   * paths (Lombok's @Builder.Default only applies to the builder).
+   */
+  @PrePersist
+  void applyDefaults() {
+    if (publicationStatus == null) {
+      publicationStatus = PublicationStatus.DRAFT;
+    }
+  }
 }
