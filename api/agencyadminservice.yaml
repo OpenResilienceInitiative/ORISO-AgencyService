@@ -295,11 +295,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/DepartmentDataProtectionResponseDTO'
         400:
-          description: BAD REQUEST - invalid/incomplete request
+          description: BAD REQUEST - invalid/incomplete request, or caller may not edit this agency
         401:
           description: UNAUTHORIZED - no/invalid role/authorization
-        403:
-          description: FORBIDDEN - caller may not edit this agency
         404:
           description: NOT FOUND - department (agency x topic) not found
         500:

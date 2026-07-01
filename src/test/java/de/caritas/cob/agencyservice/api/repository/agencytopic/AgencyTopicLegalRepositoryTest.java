@@ -122,4 +122,30 @@ class AgencyTopicLegalRepositoryTest {
     assertThat(found.get().getAgency().getId()).isEqualTo(agency.getId());
     assertThat(wrongTopic).isEmpty();
   }
+
+  @Test
+  void findByAgencyIdAndTopicId_Should_notReturnOtherAgencysDepartmentWithSameTopic() {
+    // given the same topicId 10 on two different agencies (the case a topicId-only query would leak)
+    var now = LocalDateTime.now();
+    Agency agency = persistAgency("Zentrum 5");
+    Agency otherAgency = persistAgency("Zentrum 6");
+    em.persist(
+        AgencyTopic.builder().agency(agency).topicId(10L).createDate(now).updateDate(now).build());
+    em.persist(
+        AgencyTopic.builder()
+            .agency(otherAgency)
+            .topicId(10L)
+            .createDate(now)
+            .updateDate(now)
+            .build());
+    em.flush();
+    em.clear();
+
+    // when querying agency's (10) it must return agency's row, never otherAgency's
+    var found = agencyTopicRepository.findByAgency_IdAndTopicId(agency.getId(), 10L);
+
+    assertThat(found).isPresent();
+    assertThat(found.get().getAgency().getId()).isEqualTo(agency.getId());
+    assertThat(found.get().getAgency().getId()).isNotEqualTo(otherAgency.getId());
+  }
 }

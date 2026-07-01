@@ -6,12 +6,15 @@ import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.AgencyAccessDeniedException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.NonNull;
@@ -52,12 +55,14 @@ public class DepartmentDataProtectionService {
   @Transactional
   public PublicationStatus publishDepartmentDataPrivacy(
       Long agencyId, Long topicId, Map<String, String> content, boolean publish) {
-    assertUserMayEditAgency(agencyId);
+    assertRestrictedAdminOwnsAgency(agencyId);
 
     AgencyTopic department =
         agencyTopicRepository
             .findByAgency_IdAndTopicId(agencyId, topicId)
             .orElseThrow(NotFoundException::new);
+
+    assertCallerTenantMatches(department.getAgency());
 
     department.setContentDpp(toJson(sanitizeTranslations(content)));
     department.setPublicationStatus(
@@ -68,7 +73,11 @@ public class DepartmentDataProtectionService {
     return department.getPublicationStatus();
   }
 
-  private void assertUserMayEditAgency(Long agencyId) {
+  /**
+   * Restricted agency admins may only touch agencies they administer (mirrors {@code
+   * AgencyUpdatePermissionValidator}). Full agency admins are handled by the tenant guard below.
+   */
+  private void assertRestrictedAdminOwnsAgency(Long agencyId) {
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
       var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
       if (adminAgencyIds == null || !adminAgencyIds.contains(agencyId)) {
@@ -79,6 +88,34 @@ public class DepartmentDataProtectionService {
         throw new AgencyAccessDeniedException();
       }
     }
+  }
+
+  /**
+   * Cross-tenant guard (mirrors {@code AgencyTenantValidator}): a full agency admin of tenant A must
+   * not edit tenant B's Fachbereich. Necessary because the Hibernate tenant filter is not installed
+   * when {@code multitenancy.enabled=false} (all deployed profiles), so agency-id membership alone
+   * does not scope full admins. Tenant {@code 0} (super/technical) and single-tenant mode (no tenant
+   * in context) are unrestricted.
+   */
+  private void assertCallerTenantMatches(Agency agency) {
+    Long effectiveTenantId = resolveEffectiveTenantId();
+    if (effectiveTenantId == null || effectiveTenantId.equals(0L)) {
+      return;
+    }
+    if (agency == null || !effectiveTenantId.equals(agency.getTenantId())) {
+      log.warn(
+          "Admin user {} (tenant {}) may not edit the data privacy policy of agency {} (tenant {})",
+          authenticatedUser.getUserId(),
+          effectiveTenantId,
+          agency == null ? null : agency.getId(),
+          agency == null ? null : agency.getTenantId());
+      throw new AgencyAccessDeniedException();
+    }
+  }
+
+  private Long resolveEffectiveTenantId() {
+    Long tenantIdFromAuth = authenticatedUser.getTenantId();
+    return tenantIdFromAuth != null ? tenantIdFromAuth : TenantContext.getCurrentTenant();
   }
 
   private Map<String, String> sanitizeTranslations(Map<String, String> content) {
@@ -92,7 +129,9 @@ public class DepartmentDataProtectionService {
                 Map.Entry::getKey,
                 entry ->
                     inputSanitizer.sanitizeAllowingFormattingAndLinks(
-                        entry.getValue() == null ? "" : entry.getValue())));
+                        entry.getValue() == null ? "" : entry.getValue()),
+                (existing, replacement) -> replacement,
+                LinkedHashMap::new));
   }
 
   private String toJson(Map<String, String> sanitized) {

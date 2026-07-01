@@ -11,14 +11,17 @@ import static org.mockito.Mockito.when;
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.AgencyAccessDeniedException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,14 +40,37 @@ class DepartmentDataProtectionServiceTest {
 
   @BeforeEach
   void setUp() {
+    TenantContext.clear(); // no ThreadLocal tenant leaks into the tenant guard
     // real sanitizer so we actually verify markup stripping, not a mock
     service =
         new DepartmentDataProtectionService(
             agencyTopicRepository, new InputSanitizer(), authenticatedUser, userAdminService);
   }
 
+  @AfterEach
+  void tearDown() {
+    TenantContext.clear();
+  }
+
   private AgencyTopic existingDepartment() {
     var department = AgencyTopic.builder().topicId(42L).build();
+    when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 42L))
+        .thenReturn(Optional.of(department));
+    return department;
+  }
+
+  private AgencyTopic existingDepartmentInTenant(Long agencyTenantId) {
+    var department =
+        AgencyTopic.builder()
+            .topicId(42L)
+            .agency(
+                Agency.builder()
+                    .id(7L)
+                    .name("Test-Zentrum")
+                    .consultingTypeId(1)
+                    .tenantId(agencyTenantId)
+                    .build())
+            .build();
     when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 42L))
         .thenReturn(Optional.of(department));
     return department;
@@ -127,5 +153,100 @@ class DepartmentDataProtectionServiceTest {
             () ->
                 service.publishDepartmentDataPrivacy(7L, 99L, Map.of("de", "<p>x</p>"), true));
     verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_throwAccessDenied_When_fullAdminEditsAnotherTenantsAgency() {
+    // full admin (not restricted) of tenant 1 tries to edit an agency belonging to tenant 2
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(authenticatedUser.getTenantId()).thenReturn(1L);
+    existingDepartmentInTenant(2L);
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>x</p>"), true));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_allow_When_fullAdminEditsOwnTenantsAgency() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(authenticatedUser.getTenantId()).thenReturn(1L);
+    existingDepartmentInTenant(1L);
+
+    var status =
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>ok</p>"), true);
+
+    assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
+    verify(agencyTopicRepository).save(any());
+  }
+
+  @Test
+  void publish_Should_keepAllowedFormattingAndLinks() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+
+    service.publishDepartmentDataPrivacy(
+        7L, 42L, Map.of("de", "<strong>Wichtig</strong> <a href=\"https://caritas.de\">Info</a>"),
+        true);
+
+    // guards against a regression to the strip-everything sanitize() policy
+    var stored = department.getContentDpp();
+    assertThat(stored).contains("<strong>").contains("Wichtig");
+    assertThat(stored).contains("href").contains("https://caritas.de");
+  }
+
+  @Test
+  void publish_Should_storeAllLanguagesInJsonMap() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+
+    service.publishDepartmentDataPrivacy(
+        7L, 42L, Map.of("de", "<p>Datenschutz</p>", "en", "<p>Privacy</p>"), true);
+
+    var stored = department.getContentDpp();
+    assertThat(stored).contains("\"de\":").contains("Datenschutz");
+    assertThat(stored).contains("\"en\":").contains("Privacy");
+  }
+
+  @Test
+  void publish_Should_overwriteContent_andFlipPublishedBackToDraft_When_republishedAsDraft() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>final</p>"), true);
+    assertThat(department.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+
+    // a second call as draft overwrites the content and reverts the status
+    var status =
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>revised</p>"), false);
+
+    assertThat(status).isEqualTo(PublicationStatus.DRAFT);
+    assertThat(department.getPublicationStatus()).isEqualTo(PublicationStatus.DRAFT);
+    assertThat(department.getContentDpp()).contains("revised").doesNotContain("final");
+  }
+
+  @Test
+  void publish_Should_storeEmptyJsonObject_When_contentIsNull() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+
+    var status = service.publishDepartmentDataPrivacy(7L, 42L, null, true);
+
+    assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
+    assertThat(department.getContentDpp()).isEqualTo("{}");
+  }
+
+  @Test
+  void publish_Should_coerceNullTranslationValueToEmptyString() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    var content = new java.util.HashMap<String, String>();
+    content.put("de", null);
+
+    service.publishDepartmentDataPrivacy(7L, 42L, content, true);
+
+    assertThat(department.getContentDpp()).isEqualTo("{\"de\":\"\"}");
   }
 }
