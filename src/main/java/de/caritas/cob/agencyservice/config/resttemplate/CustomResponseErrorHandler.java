@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.config.resttemplate;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.DefaultResponseErrorHandler;
@@ -15,8 +16,12 @@ public class CustomResponseErrorHandler extends DefaultResponseErrorHandler {
   @Override
   public void handleError(URI url, HttpMethod method, ClientHttpResponse response)
       throws IOException {
-    throw new ResponseStatusException(response.getStatusCode(),
-        method.name() + " " + url.toString());
+    String body =
+        response.getBody() != null
+            ? new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8)
+            : "";
+    throw new ResponseStatusException(
+        response.getStatusCode(), method.name() + " " + url.toString() + " " + body);
   }
 
 }
