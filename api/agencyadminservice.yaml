@@ -258,6 +258,55 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/dpp:
+    put:
+      tags:
+        - admin-agency-controller
+      summary: 'Publish or draft-save a department''s (Fachbereich = agency x topic) own data
+      privacy policy (DSE). [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+      its own agencies]'
+      operationId: publishDepartmentDataProtection
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/DepartmentDataProtectionDTO'
+        required: true
+      responses:
+        200:
+          description: OK - department data privacy policy stored
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentDataProtectionResponseDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        403:
+          description: FORBIDDEN - caller may not edit this agency
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/controls:
     get:
       tags:
@@ -878,6 +927,36 @@ components:
           enum:
             - 'ASC'
             - 'DESC'
+
+    DepartmentDataProtectionDTO:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML data privacy policy text (multilingual map)
+          additionalProperties:
+            type: string
+          example:
+            de: '<p>Datenschutzerklärung des Fachbereichs ...</p>'
+            en: '<p>Data privacy policy of the department ...</p>'
+        publish:
+          type: boolean
+          description: 'true = mark PUBLISHED (final legal document); false/absent = keep as DRAFT (draft-save)'
+          default: false
+
+    DepartmentDataProtectionResponseDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        publicationStatus:
+          type: string
+          description: Resulting publication status of the department's data privacy policy
+          enum:
+            - DRAFT
+            - PUBLISHED
 
     AgencyAdminAllowedPermissionToggles:
       $ref: './components/agency-settings.yaml#/components/schemas/AgencyAdminAllowedPermissionToggles'
