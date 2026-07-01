@@ -1,7 +1,5 @@
 package de.caritas.cob.agencyservice.api.admin.validation.validators;
 
-import static org.mockito.Mockito.when;
-
 import de.caritas.cob.agencyservice.api.admin.validation.validators.model.ValidateAgencyDTO;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
@@ -63,7 +61,6 @@ class AgencyTenantValidatorTest {
   @Test
   void validate_shouldNotThrowException_When_AuthenticatedUserIsSuperAdminAndTenantIdNotMatchingTenantContext() {
     TenantContext.setCurrentTenant(0L);
-    when(authenticatedUser.isTenantSuperAdmin()).thenReturn(true);
     var validateAgencyDTO = ValidateAgencyDTO.builder().tenantId(1L).build();
     try {
       agencyTenantValidator.validate(validateAgencyDTO);
@@ -71,7 +68,5 @@ class AgencyTenantValidatorTest {
       Fail.fail("Should not throw exception");
     }
   }
-
-
 
 }

@@ -8,6 +8,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,7 +23,6 @@ import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPos
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRangeRepository;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.LogService;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.jeasy.random.EasyRandom;
@@ -67,17 +67,11 @@ class AgencyPostcodeRangeAdminServiceTest {
   }
 
   @Test
-  void deleteAgencyPostcodeRange_Should_setAgencyOffline_When_givenPostcodeRangeIsTheLast() {
-    var postcodeRange = new AgencyPostcodeRange();
-    var agency = new Agency();
-    agency.setAgencyPostcodeRanges(Collections.singletonList(postcodeRange));
-    postcodeRange.setAgency(agency);
-    when(this.agencyPostcodeRangeRepository.findAllByAgencyId(anyLong()))
-        .thenReturn(Set.of(postcodeRange));
-
+  void deleteAgencyPostcodeRange_Should_NotSetAgencyOffline_When_givenPostcodeRangeIsTheLast() {
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(1L);
 
-    verify(this.agencyService, times(1)).setAgencyOffline(any());
+    verify(this.agencyPostcodeRangeRepository, times(1)).deleteAllByAgencyId(1L);
+    verify(this.agencyService, never()).setAgencyOffline(any());
   }
 
   @Test
