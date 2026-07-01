@@ -14,6 +14,7 @@ import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyPostcodeRangeResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionContentDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionResponseDTO;
 import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
@@ -232,6 +233,27 @@ public class AgencyAdminController implements AgencyadminApi {
    * @param departmentDataProtectionDTO multilingual content + publish flag
    * @return the resulting {@link DepartmentDataProtectionResponseDTO} publication status
    */
+  /**
+   * Entry point to read a department's (Fachbereich = agency × topic) own data privacy policy, used
+   * to prefill the admin editor. Same agency/tenant scoping as the publish endpoint.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @return the stored {@link DepartmentDataProtectionContentDTO} content + publication status
+   */
+  @Override
+  public ResponseEntity<DepartmentDataProtectionContentDTO> getDepartmentDataProtection(
+      Long agencyId, Long topicId) {
+    var view = departmentDataProtectionService.getDepartmentDataPrivacy(agencyId, topicId);
+    var response =
+        new DepartmentDataProtectionContentDTO()
+            .content(view.content())
+            .publicationStatus(
+                DepartmentDataProtectionContentDTO.PublicationStatusEnum.fromValue(
+                    view.publicationStatus().name()));
+    return ResponseEntity.ok(response);
+  }
+
   @Override
   public ResponseEntity<DepartmentDataProtectionResponseDTO> publishDepartmentDataProtection(
       Long agencyId, Long topicId, DepartmentDataProtectionDTO departmentDataProtectionDTO) {

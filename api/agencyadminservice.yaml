@@ -259,6 +259,45 @@ paths:
         - Bearer: [ ]
 
   /agencyadmin/agencies/{agencyId}/topics/{topicId}/dpp:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: 'Read a department''s (Fachbereich = agency x topic) own data privacy policy (DSE) to
+      prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+      its own agencies]'
+      operationId: getDepartmentDataProtection
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - department data privacy policy content and status
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentDataProtectionContentDTO'
+        400:
+          description: BAD REQUEST - caller may not access this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
     put:
       tags:
         - admin-agency-controller
@@ -952,6 +991,22 @@ components:
         publicationStatus:
           type: string
           description: Resulting publication status of the department's data privacy policy
+          enum:
+            - DRAFT
+            - PUBLISHED
+
+    DepartmentDataProtectionContentDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        content:
+          type: string
+          nullable: true
+          description: Stored multilingual content as a JSON language->HTML map string; null if never authored
+        publicationStatus:
+          type: string
+          description: Current publication status of the department's data privacy policy
           enum:
             - DRAFT
             - PUBLISHED
