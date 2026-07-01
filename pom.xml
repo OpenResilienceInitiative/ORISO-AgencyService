@@ -51,9 +51,16 @@
     <hibernate.search.version>6.1.1.Final</hibernate.search.version>
     <springfox.boot.starter.version>3.0.0</springfox.boot.starter.version>
     <sentry.version>8.43.2</sentry.version>
+    <owasp.java.html.sanitizer>20211018.1</owasp.java.html.sanitizer>
   </properties>
 
   <dependencies>
+    <!-- OWASP HTML sanitizer for user-supplied legal/DPP HTML (mirrors ORISO-TenantService) -->
+    <dependency>
+      <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+      <artifactId>owasp-java-html-sanitizer</artifactId>
+      <version>${owasp.java.html.sanitizer}</version>
+    </dependency>
     <!-- Spring Boot dependencies -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

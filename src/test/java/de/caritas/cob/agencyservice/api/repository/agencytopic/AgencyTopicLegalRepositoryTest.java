@@ -33,6 +33,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 class AgencyTopicLegalRepositoryTest {
 
   @Autowired private TestEntityManager em;
+  @Autowired private AgencyTopicRepository agencyTopicRepository;
 
   private Agency persistAgency(String name) {
     var now = LocalDateTime.now();
@@ -89,5 +90,36 @@ class AgencyTopicLegalRepositoryTest {
     // then
     assertThat(em.find(AgencyTopic.class, id).getPublicationStatus())
         .isEqualTo(PublicationStatus.DRAFT);
+  }
+
+  @Test
+  void findByAgencyIdAndTopicId_Should_returnTheMatchingFachbereich() {
+    // given two departments on the same agency plus one on another agency
+    var now = LocalDateTime.now();
+    Agency agency = persistAgency("Zentrum 3");
+    Agency otherAgency = persistAgency("Zentrum 4");
+    em.persist(
+        AgencyTopic.builder().agency(agency).topicId(10L).createDate(now).updateDate(now).build());
+    em.persist(
+        AgencyTopic.builder().agency(agency).topicId(20L).createDate(now).updateDate(now).build());
+    em.persist(
+        AgencyTopic.builder()
+            .agency(otherAgency)
+            .topicId(10L)
+            .createDate(now)
+            .updateDate(now)
+            .build());
+    em.flush();
+    em.clear();
+
+    // when
+    var found = agencyTopicRepository.findByAgency_IdAndTopicId(agency.getId(), 20L);
+    var wrongTopic = agencyTopicRepository.findByAgency_IdAndTopicId(agency.getId(), 99L);
+
+    // then only the exact (agency, topic) pair matches
+    assertThat(found).isPresent();
+    assertThat(found.get().getTopicId()).isEqualTo(20L);
+    assertThat(found.get().getAgency().getId()).isEqualTo(agency.getId());
+    assertThat(wrongTopic).isEmpty();
   }
 }
