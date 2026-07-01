@@ -45,9 +45,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.hateoas.client.LinkDiscoverers;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -61,32 +61,32 @@ class AgencyControllerTest {
   @Autowired
   private MockMvc mvc;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
-  @MockBean
+  @MockitoBean
   private AgencyService agencyService;
 
-  @MockBean
+  @MockitoBean
   private LinkDiscoverers linkDiscoverers;
 
-  @MockBean
+  @MockitoBean
   private RoleAuthorizationAuthorityMapper roleAuthorizationAuthorityMapper;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverter jwtAuthConverter;
 
-  @MockBean
+  @MockitoBean
   private AuthorisationService authorisationService;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverterProperties jwtAuthConverterProperties;
 
   @Mock
   private Logger logger;
 
   @Test
-  void getAgencies_Should_ReturnNoContent_When_ServiceReturnsEmptyList() throws Exception {
+  void getAgencies_Should_ReturnOk_When_ServiceReturnsEmptyList() throws Exception {
 
     when(agencyService.getAgencies(any(Optional.class), anyInt(), any(Optional.class), any(Optional.class), any(Optional.class), any(Optional.class)))
         .thenReturn(null);
@@ -95,7 +95,7 @@ class AgencyControllerTest {
         get(PATH_GET_LIST_OF_AGENCIES + "?" + VALID_POSTCODE_QUERY + "&"
             + VALID_CONSULTING_TYPE_QUERY + "&" + VALID_AGE_QUERY)
             .accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk());
   }
 
   @Test
@@ -124,7 +124,7 @@ class AgencyControllerTest {
       throws Exception {
 
     mvc.perform(get(PATH_GET_LIST_OF_AGENCIES + "?" + VALID_CONSULTING_TYPE_QUERY)
-        .accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
+        .accept(MediaType.APPLICATION_JSON)).andExpect(status().isOk());
   }
 
   @Test
@@ -285,7 +285,7 @@ class AgencyControllerTest {
   }
 
   @Test
-  void getTenantAgencies_Should_ReturnNoContent_When_ServiceReturnsEmptyList() throws Exception {
+  void getTenantAgencies_Should_ReturnOk_When_ServiceReturnsEmptyList() throws Exception {
 
     when(agencyService.getAgencies(anyString(), anyInt()))
         .thenReturn(null);
@@ -294,7 +294,7 @@ class AgencyControllerTest {
             get(PATH_GET_LIST_OF_AGENCIES_BY_TENANT + "?" + VALID_POSTCODE_QUERY + "&"
                 + VALID_TOPIC_ID_QUERY)
                 .accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk());
   }
 
   @Test

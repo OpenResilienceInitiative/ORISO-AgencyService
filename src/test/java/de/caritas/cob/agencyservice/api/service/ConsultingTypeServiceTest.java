@@ -41,10 +41,8 @@ class ConsultingTypeServiceTest {
   @Test
   void getExtendedConsultingTypeResponseDTO_Should_addTenantHeaderForMultiTenancy() {
     TenantContext.setCurrentTenant(1L);
-    var headers = new HttpHeaders();
     when(this.consultingTypeServiceApiControllerFactory.createControllerApi()).thenReturn(consultingTypeControllerApi);
     when(this.consultingTypeControllerApi.getApiClient()).thenReturn(apiClient);
-    when(this.securityHeaderSupplier.getCsrfHttpHeaders()).thenReturn(headers);
     ReflectionTestUtils.setField(tenantHeaderSupplier, "multitenancy", true);
     this.consultingTypeService.getExtendedConsultingTypeResponseDTO(0);
 
@@ -55,16 +53,15 @@ class ConsultingTypeServiceTest {
   }
 
   @Test
-  void getExtendedConsultingTypeResponseDTO_Should_addSecurityHeader() {
-    var headers = new HttpHeaders();
-    headers.add("header1", "header1");
+  void getExtendedConsultingTypeResponseDTO_Should_addTenantHeader_When_MultitenancyEnabled() {
+    TenantContext.setCurrentTenant(5L);
     when(this.consultingTypeServiceApiControllerFactory.createControllerApi()).thenReturn(consultingTypeControllerApi);
-    when(this.securityHeaderSupplier.getCsrfHttpHeaders()).thenReturn(headers);
     when(this.consultingTypeControllerApi.getApiClient()).thenReturn(apiClient);
+    ReflectionTestUtils.setField(tenantHeaderSupplier, "multitenancy", true);
     this.consultingTypeService.getExtendedConsultingTypeResponseDTO(0);
     HttpHeaders apiClientHeaders = (HttpHeaders) ReflectionTestUtils
         .getField(apiClient, "defaultHeaders");
-    assertEquals("header1", apiClientHeaders.get("header1").get(0));
+    assertEquals("5", apiClientHeaders.get("tenantId").get(0));
     TenantContext.clear();
   }
 

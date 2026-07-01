@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
@@ -30,9 +30,9 @@ public class AgencyServiceITBase {
   private AgencyService agencyService;
   @Autowired
   private AgencyRepository agencyRepository;
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
   public void getAgencies_Should_returnMatchingAgencies_When_postcodeAndConsultingTypeIsGiven()

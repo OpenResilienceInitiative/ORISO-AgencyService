@@ -22,22 +22,24 @@ import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest
-@TestPropertySource(properties = "feature.demographics.enabled=true")
+@TestPropertySource(properties = {"feature.demographics.enabled=true", "feature.topics.enabled=false"})
 @AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("testing")
 @Transactional
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyControllerWithDemographicsIT {
 
   private MockMvc mvc;
@@ -51,10 +53,10 @@ class AgencyControllerWithDemographicsIT {
         .build();
   }
 
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
   @Autowired
@@ -87,10 +89,11 @@ class AgencyControllerWithDemographicsIT {
   @Test
   void getAgencies_Should_ReturnNoContent_When_GenderParamsIsProvidedButNotMatching() throws Exception {
     mvc.perform(
-            get(PATH_GET_LIST_OF_AGENCIES + "?" + VALID_POSTCODE_QUERY + "&"
-                + VALID_CONSULTING_TYPE_QUERY + "&" + VALID_AGE_QUERY + "&" + VALID_GENDER_QUERY)
-                .accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isNoContent());
+        get(PATH_GET_LIST_OF_AGENCIES + "?" + VALID_POSTCODE_QUERY + "&"
+            + VALID_CONSULTING_TYPE_QUERY + "&" + VALID_AGE_QUERY + "&" + VALID_GENDER_QUERY)
+            .accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(0)));
   }
 
   @Test

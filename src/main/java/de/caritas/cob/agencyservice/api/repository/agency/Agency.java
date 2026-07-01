@@ -21,6 +21,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.sql.Types;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,9 +31,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.ParamDef;
-
-
 import org.hibernate.type.NumericBooleanConverter;
 
 @Entity
@@ -62,7 +62,7 @@ public class Agency implements TenantAware {
   @Column(name = "name", nullable = false)
   private String name;
 
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "text")
   private String description;
 
   @Size(max = 5)
@@ -78,8 +78,9 @@ public class Agency implements TenantAware {
   @Column(name = "city")
   private String city;
 
-  @Column(name = "is_team_agency", nullable = false)
+  @Column(name = "is_team_agency", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
   private boolean teamAgency;
 
   @PositiveOrZero
@@ -87,17 +88,18 @@ public class Agency implements TenantAware {
   @NonNull
   private Integer consultingTypeId;
 
-  @Column(name = "is_offline", nullable = false)
+  @Column(name = "is_offline", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
-
+  @JdbcTypeCode(Types.TINYINT)
   private boolean offline;
 
   @Size(max = 500)
   @Column(name = "url")
   private String url;
 
-  @Column(name = "is_external", nullable = false)
+  @Column(name = "is_external", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
   private boolean isExternal;
 
   @PositiveOrZero
@@ -124,17 +126,17 @@ public class Agency implements TenantAware {
   @Enumerated(EnumType.STRING)
   private DataProtectionResponsibleEntity dataProtectionResponsibleEntity;
 
-
-  @Column(name = "data_protection_officer_contact", nullable = false)
+  @Column(name = "data_protection_officer_contact", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionOfficerContactData;
 
-  @Column(name = "data_protection_alternative_contact", nullable = false)
+  @Column(name = "data_protection_alternative_contact", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionAlternativeContactData;
 
-  @Column(name = "data_protection_agency_contact", nullable = false)
+  @Column(name = "data_protection_agency_contact", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionAgencyResponsibleContactData;
-
-
 
   @OneToMany(targetEntity = AgencyPostcodeRange.class, mappedBy = "agency", fetch = FetchType.LAZY)
   private List<AgencyPostcodeRange> agencyPostcodeRanges;
@@ -153,7 +155,8 @@ public class Agency implements TenantAware {
   @Column(name = "counselling_relations")
   private String counsellingRelations;
 
-  @Column(name = "agency_logo")
+  @Column(name = "agency_logo", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String agencyLogo;
 
   @Column(name = "matrix_user_id")
@@ -162,7 +165,8 @@ public class Agency implements TenantAware {
   @Column(name = "matrix_password")
   private String matrixPassword;
 
-  @Column(name = "settings")
+  @Column(name = "settings", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String settings;
 
   @Transient

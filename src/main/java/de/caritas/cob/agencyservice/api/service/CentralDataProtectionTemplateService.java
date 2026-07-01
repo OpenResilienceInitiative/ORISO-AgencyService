@@ -7,10 +7,11 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtectionContactTemplateDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtectionOfficerDTO;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.FeatureToggleDTO;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +35,7 @@ public class CentralDataProtectionTemplateService {
   private boolean multitenancyWithSingleDomain;
 
   private boolean isTenantLevelLegalContentOverrideAllowed() {
-    de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled
-        legalContentChangesBySingleTenantAdminsAllowed =
+    FeatureToggleDTO legalContentChangesBySingleTenantAdminsAllowed =
         applicationSettingsService
             .getApplicationSettings()
             .getLegalContentChangesBySingleTenantAdminsAllowed();

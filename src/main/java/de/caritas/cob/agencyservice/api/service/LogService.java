@@ -2,7 +2,7 @@ package de.caritas.cob.agencyservice.api.service;
 
 import static org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace;
 
-import javax.ws.rs.BadRequestException;
+import jakarta.ws.rs.BadRequestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;

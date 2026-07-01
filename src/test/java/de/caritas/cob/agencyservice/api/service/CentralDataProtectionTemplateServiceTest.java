@@ -9,7 +9,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
-import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.FeatureToggleDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.AgencyContextDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Content;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtectionContactTemplateDTO;
@@ -19,10 +19,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -38,13 +38,13 @@ class CentralDataProtectionTemplateServiceTest {
   @Autowired
   CentralDataProtectionTemplateService centralDataProtectionTemplateService;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
-  @MockBean
+  @MockitoBean
   TenantService tenantService;
 
-  @MockBean
+  @MockitoBean
   ApplicationSettingsService applicationSettingsService;
 
   @BeforeEach
@@ -53,7 +53,7 @@ class CentralDataProtectionTemplateServiceTest {
         "multitenancyWithSingleDomain", false);
     when(applicationSettingsService.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().legalContentChangesBySingleTenantAdminsAllowed(
-            new ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled().value(true)));
+            new FeatureToggleDTO().value(true)));
   }
 
   @Test
@@ -97,7 +97,7 @@ class CentralDataProtectionTemplateServiceTest {
         "multitenancyWithSingleDomain", true);
     when(applicationSettingsService.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().legalContentChangesBySingleTenantAdminsAllowed(
-            new ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled().value(false)));
+            new FeatureToggleDTO().value(false)));
 
     when(tenantService.getMainTenant()).thenReturn(
         new RestrictedTenantDTO()

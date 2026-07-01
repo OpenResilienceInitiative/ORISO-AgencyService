@@ -16,7 +16,7 @@ import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.ApiClient;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
-import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.SettingDTO;
 import de.caritas.cob.agencyservice.config.apiclient.ApplicationSettingsApiControllerFactory;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
@@ -24,12 +24,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -40,10 +41,11 @@ import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantController
 
 @SpringBootTest
 @TestPropertySource(properties = {"feature.multitenancy.with.single.domain.enabled=true",
-    "multitenancy.enabled=true"})
+    "multitenancy.enabled=true", "feature.topics.enabled=false"})
 @AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("testing")
 @Transactional
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyControllerWithSingleDomainMultitenancyIT {
 
   private static final String VALID_COUNSELLING_RELATION_QUERY = "counsellingRelation=PARENTAL_COUNSELLING";
@@ -58,22 +60,22 @@ class AgencyControllerWithSingleDomainMultitenancyIT {
         .build();
   }
 
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
-  @MockBean
+  @MockitoBean
   private ApplicationSettingsApiControllerFactory applicationSettingsApiControllerFactory;
-  @MockBean
+  @MockitoBean
   private ApplicationsettingsControllerApi applicationsettingsControllerApi;
 
-  @MockBean
+  @MockitoBean
   private TenantControllerApi tenantControllerApi;
 
 
-  @MockBean
+  @MockitoBean
   private TenantServiceApiControllerFactory tenantServiceApiControllerFactory;
 
   @Autowired
@@ -89,7 +91,7 @@ class AgencyControllerWithSingleDomainMultitenancyIT {
         .thenReturn(
             new de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO());
     when(applicationsettingsControllerApi.getApplicationSettings()).thenReturn(new ApplicationSettingsDTO()
-        .mainTenantSubdomainForSingleDomainMultitenancy(new ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy().value("app")));
+        .mainTenantSubdomainForSingleDomainMultitenancy(new SettingDTO().value("app")));
     when(tenantControllerApi.getRestrictedTenantDataBySubdomain("app", null)).thenReturn(new RestrictedTenantDTO().id(0L));
     when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
     when(tenantControllerApi.getRestrictedTenantDataByTenantId(Mockito.anyLong())).thenReturn(new RestrictedTenantDTO().id(0L));
@@ -124,7 +126,8 @@ class AgencyControllerWithSingleDomainMultitenancyIT {
             get(PATH_GET_LIST_OF_AGENCIES + "?" + "postcode=53001" + "&"
                 + "consultingType=20" + "&" + "counsellingRelation=RELATIVE_COUNSELLING")
                 .accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", hasSize(0)));
   }
 
   @Test
