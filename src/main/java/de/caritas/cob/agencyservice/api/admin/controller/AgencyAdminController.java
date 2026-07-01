@@ -6,6 +6,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyA
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
@@ -13,6 +14,8 @@ import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyPostcodeRangeResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionResponseDTO;
 import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.model.RootDTO;
 import de.caritas.cob.agencyservice.api.model.Sort;
@@ -44,6 +47,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyAdminService agencyAdminService;
   private final @NonNull AgencyValidator agencyValidator;
   private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
+  private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
 
   /**
    * Creates the root hal based navigation entity.
@@ -216,6 +220,32 @@ public class AgencyAdminController implements AgencyadminApi {
             .fromAgency()).toList();
 
     return new ResponseEntity<>(agenciesResponse, HttpStatus.OK);
+  }
+
+  /**
+   * Entry point to publish (or draft-save) a department's (Fachbereich = agency × topic) own data
+   * privacy policy. Authorisation is scoped to the caller's agencies inside the service (IDOR
+   * guard) so a restricted agency admin can only edit its own Fachbereiche.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @param departmentDataProtectionDTO multilingual content + publish flag
+   * @return the resulting {@link DepartmentDataProtectionResponseDTO} publication status
+   */
+  @Override
+  public ResponseEntity<DepartmentDataProtectionResponseDTO> publishDepartmentDataProtection(
+      Long agencyId, Long topicId, DepartmentDataProtectionDTO departmentDataProtectionDTO) {
+    var status =
+        departmentDataProtectionService.publishDepartmentDataPrivacy(
+            agencyId,
+            topicId,
+            departmentDataProtectionDTO.getContent(),
+            Boolean.TRUE.equals(departmentDataProtectionDTO.getPublish()));
+    var response =
+        new DepartmentDataProtectionResponseDTO()
+            .publicationStatus(
+                DepartmentDataProtectionResponseDTO.PublicationStatusEnum.fromValue(status.name()));
+    return ResponseEntity.ok(response);
   }
 
   @Override

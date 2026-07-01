@@ -33,6 +33,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 class AgencyTopicLegalRepositoryTest {
 
   @Autowired private TestEntityManager em;
+  @Autowired private AgencyTopicRepository agencyTopicRepository;
 
   private Agency persistAgency(String name) {
     var now = LocalDateTime.now();
@@ -89,5 +90,62 @@ class AgencyTopicLegalRepositoryTest {
     // then
     assertThat(em.find(AgencyTopic.class, id).getPublicationStatus())
         .isEqualTo(PublicationStatus.DRAFT);
+  }
+
+  @Test
+  void findByAgencyIdAndTopicId_Should_returnTheMatchingFachbereich() {
+    // given two departments on the same agency plus one on another agency
+    var now = LocalDateTime.now();
+    Agency agency = persistAgency("Zentrum 3");
+    Agency otherAgency = persistAgency("Zentrum 4");
+    em.persist(
+        AgencyTopic.builder().agency(agency).topicId(10L).createDate(now).updateDate(now).build());
+    em.persist(
+        AgencyTopic.builder().agency(agency).topicId(20L).createDate(now).updateDate(now).build());
+    em.persist(
+        AgencyTopic.builder()
+            .agency(otherAgency)
+            .topicId(10L)
+            .createDate(now)
+            .updateDate(now)
+            .build());
+    em.flush();
+    em.clear();
+
+    // when
+    var found = agencyTopicRepository.findByAgency_IdAndTopicId(agency.getId(), 20L);
+    var wrongTopic = agencyTopicRepository.findByAgency_IdAndTopicId(agency.getId(), 99L);
+
+    // then only the exact (agency, topic) pair matches
+    assertThat(found).isPresent();
+    assertThat(found.get().getTopicId()).isEqualTo(20L);
+    assertThat(found.get().getAgency().getId()).isEqualTo(agency.getId());
+    assertThat(wrongTopic).isEmpty();
+  }
+
+  @Test
+  void findByAgencyIdAndTopicId_Should_notReturnOtherAgencysDepartmentWithSameTopic() {
+    // given the same topicId 10 on two different agencies (the case a topicId-only query would leak)
+    var now = LocalDateTime.now();
+    Agency agency = persistAgency("Zentrum 5");
+    Agency otherAgency = persistAgency("Zentrum 6");
+    em.persist(
+        AgencyTopic.builder().agency(agency).topicId(10L).createDate(now).updateDate(now).build());
+    em.persist(
+        AgencyTopic.builder()
+            .agency(otherAgency)
+            .topicId(10L)
+            .createDate(now)
+            .updateDate(now)
+            .build());
+    em.flush();
+    em.clear();
+
+    // when querying agency's (10) it must return agency's row, never otherAgency's
+    var found = agencyTopicRepository.findByAgency_IdAndTopicId(agency.getId(), 10L);
+
+    assertThat(found).isPresent();
+    assertThat(found.get().getAgency().getId()).isEqualTo(agency.getId());
+    assertThat(found.get().getAgency().getId()).isNotEqualTo(otherAgency.getId());
   }
 }
