@@ -20,9 +20,7 @@ import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRange;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRangeRepository;
-import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.LogService;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.jeasy.random.EasyRandom;
@@ -45,9 +43,6 @@ class AgencyPostcodeRangeAdminServiceTest {
   AgencyAdminService agencyAdminService;
 
   @Mock
-  AgencyService agencyService;
-
-  @Mock
   PostcodeRangeValidator postcodeRangeValidator;
 
   @Mock
@@ -67,7 +62,7 @@ class AgencyPostcodeRangeAdminServiceTest {
   }
 
   @Test
-  void deleteAgencyPostcodeRange_Should_deleteAllPostcodeRanges_When_called() {
+  void deleteAgencyPostcodeRange_Should_NotSetAgencyOffline_When_givenPostcodeRangeIsTheLast() {
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(1L);
 
     verify(this.agencyPostcodeRangeRepository, times(1)).deleteAllByAgencyId(1L);
