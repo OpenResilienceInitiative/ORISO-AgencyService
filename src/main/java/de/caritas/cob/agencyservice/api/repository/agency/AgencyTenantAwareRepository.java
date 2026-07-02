@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -62,8 +63,10 @@ public interface AgencyTenantAwareRepository extends JpaRepository<Agency, Long>
 
   Optional<Agency> findByIdAndDeleteDateNull(Long agencyId);
 
+  @EntityGraph(attributePaths = {"agencyTopics"})
   List<Agency> findByIdIn(List<Long> agencyIds);
 
+  @EntityGraph(attributePaths = {"agencyTopics"})
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
 }
