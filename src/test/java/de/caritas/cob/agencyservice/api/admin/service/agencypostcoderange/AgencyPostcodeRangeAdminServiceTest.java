@@ -8,7 +8,6 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,7 +20,6 @@ import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRange;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRangeRepository;
-import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import java.util.List;
 import java.util.Set;
@@ -43,9 +41,6 @@ class AgencyPostcodeRangeAdminServiceTest {
 
   @Mock
   AgencyAdminService agencyAdminService;
-
-  @Mock
-  AgencyService agencyService;
 
   @Mock
   PostcodeRangeValidator postcodeRangeValidator;
@@ -71,7 +66,6 @@ class AgencyPostcodeRangeAdminServiceTest {
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(1L);
 
     verify(this.agencyPostcodeRangeRepository, times(1)).deleteAllByAgencyId(1L);
-    verify(this.agencyService, never()).setAgencyOffline(any());
   }
 
   @Test

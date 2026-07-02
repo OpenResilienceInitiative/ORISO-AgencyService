@@ -3,7 +3,6 @@ package de.caritas.cob.agencyservice.api.service;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
-import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.config.apiclient.ConsultingTypeServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.ApiClient;
@@ -25,9 +24,6 @@ class ConsultingTypeServiceTest {
 
   @Mock
   ConsultingTypeControllerApi consultingTypeControllerApi;
-
-  @Mock
-  SecurityHeaderSupplier securityHeaderSupplier;
 
   @Spy
   TenantHeaderSupplier tenantHeaderSupplier;

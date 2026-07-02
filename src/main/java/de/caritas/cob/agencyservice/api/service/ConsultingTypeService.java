@@ -1,6 +1,5 @@
 package de.caritas.cob.agencyservice.api.service;
 
-import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
 import de.caritas.cob.agencyservice.config.CacheManagerConfig;
 import de.caritas.cob.agencyservice.config.apiclient.ConsultingTypeServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.ApiClient;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Component;
 public class ConsultingTypeService {
 
   private final @NonNull ConsultingTypeServiceApiControllerFactory consultingTypeServiceApiControllerFactory;
-  private final @NonNull SecurityHeaderSupplier securityHeaderSupplier;
   private final @NonNull TenantHeaderSupplier tenantHeaderSupplier;
 
   /**
