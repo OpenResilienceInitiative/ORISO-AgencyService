@@ -3,11 +3,14 @@ package de.caritas.cob.agencyservice.api.service;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
@@ -47,6 +50,15 @@ public class AgencyServiceTenantAwareTest {
 
   @Mock
   private ApplicationSettingsService applicationSettingsService;
+
+  @Mock
+  private MatrixProvisioningService matrixProvisioningService;
+
+  @Mock
+  private AgencySettingsService agencySettingsService;
+
+  @Mock
+  private AgencyAdminControlsService agencyAdminControlsService;
 
   private static final Long TENANT_ID = 1L;
 
