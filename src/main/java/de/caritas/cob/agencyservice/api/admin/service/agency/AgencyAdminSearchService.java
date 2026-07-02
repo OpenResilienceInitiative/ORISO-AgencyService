@@ -85,8 +85,6 @@ public class AgencyAdminSearchService {
       queryResult = isBlank(keyword) || hasOnlySpecialCharacters(keyword)
           ? searchAgenciesWithoutKeywordFilter(entityManager, agencyAdminSearch)
           : searchAgenciesByKeyword(entityManager, agencyAdminSearch);
-    } catch (Exception ex) {
-      log.error("Could not create entity manager", ex);
     }
 
     var resultStream = queryResult.getResult().stream();

@@ -30,12 +30,14 @@ import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
 import de.caritas.cob.agencyservice.api.model.DataProtectionContactDTO;
 import de.caritas.cob.agencyservice.api.model.DataProtectionDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
+import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
+import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import java.util.List;
@@ -84,6 +86,9 @@ class AgencyAdminServiceTest {
   AppointmentService appointmentService;
 
   @Mock
+  AgencyService agencyService;
+
+  @Mock
   private Logger logger;
 
   @Mock
@@ -104,9 +109,9 @@ class AgencyAdminServiceTest {
     ReflectionTestUtils.setField(agencyAdminService, "agencyTopicEnrichmentService", agencyTopicEnrichmentService);
     ReflectionTestUtils.setField(agencyAdminService, "demographicsConverter", demographicsConverter);
 
-    when(agencySettingsService.toSettings(any())).thenReturn(new Settings());
-    when(agencySettingsService.toSettingsJson(any())).thenReturn("{}");
-    when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
+    Mockito.lenient().when(agencySettingsService.toSettings(any())).thenReturn(new Settings());
+    Mockito.lenient().when(agencySettingsService.toSettingsJson(any())).thenReturn("{}");
+    Mockito.lenient().when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
         .thenAnswer(invocation -> invocation.getArgument(0) != null
             ? invocation.getArgument(0)
             : new Settings());
@@ -212,7 +217,8 @@ class AgencyAdminServiceTest {
 
     // then
     verify(this.agencyRepository).save(any());
-    verify(this.mergeService).getMergedTopics(Mockito.any(Agency.class), any(List.class));
+    verify(this.mergeService).getMergedTopicsForUpdate(Mockito.any(Agency.class), any(List.class),
+        any(List.class));
     verify(this.agencyTopicEnrichmentService).enrichAgencyWithTopics(agency);
     ReflectionTestUtils.setField(agencyAdminService, "featureTopicsEnabled", false);
   }
