@@ -2,7 +2,7 @@ package de.caritas.cob.agencyservice.config.resttemplate;
 
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -23,8 +23,8 @@ public class RestTemplateConfig {
   @Primary
   public RestTemplate restTemplate(RestTemplateBuilder builder) {
     return builder
-        .setConnectTimeout(Duration.ofSeconds(2))
-        .setReadTimeout(Duration.ofSeconds(5))
+        .connectTimeout(Duration.ofSeconds(2))
+        .readTimeout(Duration.ofSeconds(5))
         .errorHandler(new CustomResponseErrorHandler())
         .build();
   }
@@ -33,8 +33,8 @@ public class RestTemplateConfig {
   @Qualifier("matrixRestTemplate")
   public RestTemplate matrixRestTemplate(RestTemplateBuilder builder) {
     return builder
-        .setConnectTimeout(Duration.ofSeconds(2))
-        .setReadTimeout(Duration.ofSeconds(10))
+        .connectTimeout(Duration.ofSeconds(2))
+        .readTimeout(Duration.ofSeconds(10))
         .errorHandler(new CustomResponseErrorHandler())
         .build();
   }

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.web.client.RestTemplateAutoConfiguration;
+import org.springframework.boot.restclient.autoconfigure.RestTemplateAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
