@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.repository.agency;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -94,8 +95,10 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
 
   Optional<Agency> findByIdAndDeleteDateNull(Long agencyId);
 
+  @EntityGraph(attributePaths = {"agencyTopics"})
   List<Agency> findByIdIn(List<Long> agencyIds);
 
+  @EntityGraph(attributePaths = {"agencyTopics"})
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
   Optional<Agency> findById(Long agencyIds);

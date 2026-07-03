@@ -29,10 +29,13 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.ParamDef;
+
 import org.hibernate.type.NumericBooleanConverter;
 
 @Entity
@@ -43,9 +46,7 @@ import org.hibernate.type.NumericBooleanConverter;
 @Getter
 @Setter
 @Builder
-@FilterDef(
-    name = "tenantFilter",
-    parameters = {@ParamDef(name = "tenantId", type = Long.class)})
+@FilterDef(name = "tenantFilter", parameters = { @ParamDef(name = "tenantId", type = Long.class) })
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class Agency implements TenantAware {
 
@@ -154,7 +155,7 @@ public class Agency implements TenantAware {
   @Enumerated(EnumType.STRING)
   private DataProtectionResponsibleEntity dataProtectionResponsibleEntity;
 
-  @Column(name = "data_protection_officer_contact", columnDefinition = "longtext")
+  @Column(name = "data_protection_officer_contact", columnDefinition = "longtext", nullable = false)
   @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionOfficerContactData;
 
@@ -169,12 +170,8 @@ public class Agency implements TenantAware {
   @OneToMany(targetEntity = AgencyPostcodeRange.class, mappedBy = "agency", fetch = FetchType.LAZY)
   private List<AgencyPostcodeRange> agencyPostcodeRanges;
 
-  @OneToMany(
-      targetEntity = AgencyTopic.class,
-      mappedBy = "agency",
-      fetch = FetchType.LAZY,
-      cascade = CascadeType.ALL,
-      orphanRemoval = true)
+  @OneToMany(targetEntity = AgencyTopic.class, mappedBy = "agency", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+  @BatchSize(size = 50)
   private List<AgencyTopic> agencyTopics;
 
   @Column(name = "tenant_id")
