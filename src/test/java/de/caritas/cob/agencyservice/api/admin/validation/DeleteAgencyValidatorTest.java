@@ -20,9 +20,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(SpringRunner.class)
+@RunWith(MockitoJUnitRunner.class)
 public class DeleteAgencyValidatorTest {
 
   @InjectMocks
@@ -57,8 +57,7 @@ public class DeleteAgencyValidatorTest {
     when(this.userAdminService.getConsultantsOfAgency(any(), anyInt(), anyInt()))
         .thenReturn(Collections.emptyList());
 
-    ExtendedConsultingTypeResponseDTO consultingTypeSettings = this.easyRandom.nextObject(ExtendedConsultingTypeResponseDTO.class);
-    when(consultingTypeManager.getConsultingTypeSettings(anyInt())).thenReturn(consultingTypeSettings);
+    // no consultingTypeManager stubbing: DeleteAgencyValidator only checks assigned consultants
 
     Agency agency = this.easyRandom.nextObject(Agency.class);
     agency.setConsultingTypeId(CONSULTING_TYPE_SUCHT);

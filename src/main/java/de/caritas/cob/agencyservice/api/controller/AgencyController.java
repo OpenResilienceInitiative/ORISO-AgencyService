@@ -5,8 +5,11 @@ import static java.util.Optional.ofNullable;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTopicsDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentLegalContentDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentLegalDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
+import de.caritas.cob.agencyservice.api.service.DepartmentLegalService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.generated.api.controller.AgenciesApi;
 import io.swagger.annotations.Api;
@@ -33,6 +36,7 @@ public class AgencyController implements AgenciesApi {
 
   private final @NonNull AgencyService agencyService;
   private final @NonNull TopicEnrichmentService topicEnrichmentService;
+  private final @NonNull DepartmentLegalService departmentLegalService;
 
   @GetMapping("/internal/agencies/{agencyId}/matrix-service-account")
   public ResponseEntity<AgencyMatrixCredentialsDTO> getAgencyMatrixCredentials(
@@ -116,6 +120,25 @@ public class AgencyController implements AgenciesApi {
     var agencies = this.agencyService.getAgencies(consultingTypeId);
 
     return new ResponseEntity<>(agencies, HttpStatus.OK);
+  }
+
+  /**
+   * Returns the published legal texts (data privacy policy + imprint) of a department (agency ×
+   * topic) for end users. Draft or never-authored texts come back as {@code null} content — drafts
+   * are never exposed here.
+   *
+   * @param agencyId the agency id
+   * @param topicId  the topic id
+   * @return the department's published legal texts
+   */
+  @Override
+  public ResponseEntity<DepartmentLegalDTO> getDepartmentLegal(Long agencyId, Long topicId) {
+    var view = departmentLegalService.getPublishedDepartmentLegal(agencyId, topicId);
+    var response =
+        new DepartmentLegalDTO()
+            .dpp(new DepartmentLegalContentDTO().content(view.dppContent()))
+            .imprint(new DepartmentLegalContentDTO().content(view.imprintContent()));
+    return new ResponseEntity<>(response, HttpStatus.OK);
   }
 
   /**

@@ -16,7 +16,11 @@ public class AgencyTopicMergeService {
     if (requestTopicIds == null || requestTopicIds.isEmpty()) {
       return Lists.newArrayList();
     } else {
-      return getMergedTopicsForNonEmptyTopicList(agency, requestTopicIds);
+      // dedup request ids at the single choke point create and update share: a repeated id
+      // (e.g. [5, 5]) must yield at most one department row per (agency, topic), otherwise the
+      // insert would violate UNIQUE uq_agency_topic (ADR-003) at flush
+      return getMergedTopicsForNonEmptyTopicList(
+          agency, requestTopicIds.stream().distinct().collect(Collectors.toList()));
     }
   }
 

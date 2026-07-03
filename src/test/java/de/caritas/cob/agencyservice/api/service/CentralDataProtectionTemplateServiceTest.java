@@ -14,7 +14,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
-import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.FeatureToggleDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.AgencyContextDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Content;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtectionContactTemplateDTO;
@@ -63,7 +63,7 @@ class CentralDataProtectionTemplateServiceTest {
         "multitenancyWithSingleDomain", false);
     when(applicationSettingsService.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().legalContentChangesBySingleTenantAdminsAllowed(
-            new ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled().value(true)));
+            new FeatureToggleDTO().value(true)));
   }
 
   private static Configuration createFreemarkerConfiguration()
@@ -116,7 +116,7 @@ class CentralDataProtectionTemplateServiceTest {
         "multitenancyWithSingleDomain", true);
     when(applicationSettingsService.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().legalContentChangesBySingleTenantAdminsAllowed(
-            new ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled().value(false)));
+            new FeatureToggleDTO().value(false)));
 
     when(tenantService.getMainTenant()).thenReturn(
         new RestrictedTenantDTO()
@@ -156,7 +156,7 @@ class CentralDataProtectionTemplateServiceTest {
         "multitenancyWithSingleDomain", true);
     when(applicationSettingsService.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().legalContentChangesBySingleTenantAdminsAllowed(
-            new ApplicationSettingsDTOMultitenancyWithSingleDomainEnabled().value(true)));
+            new FeatureToggleDTO().value(true)));
 
     when(tenantService.getRestrictedTenantDataByTenantId(anyLong())).thenReturn(
         new RestrictedTenantDTO()
