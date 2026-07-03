@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -20,6 +21,7 @@ public class RestTemplateConfig {
    * @return {@link RestTemplate}
    */
   @Bean
+  @Primary
   public RestTemplate restTemplate(RestTemplateBuilder builder) {
     return builder
         .setConnectTimeout(Duration.ofSeconds(2))
