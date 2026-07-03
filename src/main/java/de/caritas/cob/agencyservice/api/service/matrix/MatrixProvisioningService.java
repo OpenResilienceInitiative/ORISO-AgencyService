@@ -193,7 +193,7 @@ public class MatrixProvisioningService {
       body.put("logout_devices", Boolean.FALSE);
 
       String resetPasswordUrl =
-          UriComponentsBuilder.fromHttpUrl(matrixConfig.getApiUrl(ENDPOINT_RESET_PASSWORD))
+          UriComponentsBuilder.fromUriString(matrixConfig.getApiUrl(ENDPOINT_RESET_PASSWORD))
               .pathSegment(userId)
               .toUriString();
 
@@ -270,5 +270,4 @@ public class MatrixProvisioningService {
     String password;
   }
 }
-
 

@@ -240,7 +240,8 @@ components:
         topicIds:
           type: array
           items:
-            type: long
+            type: integer
+            format: int64
         agencyLogo:
           type: string
           example: "base64 encoded image"
