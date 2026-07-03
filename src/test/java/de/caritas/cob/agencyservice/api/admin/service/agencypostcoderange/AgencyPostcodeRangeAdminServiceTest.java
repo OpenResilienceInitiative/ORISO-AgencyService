@@ -123,8 +123,7 @@ class AgencyPostcodeRangeAdminServiceTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  void updatePostcodeRange_Should_RemovePostcodeToOverwrite_BeforeValidation() {
+  void updatePostcodeRange_Should_ValidateNewRangesAndIntersection_BeforeSaving() {
     AgencyPostcodeRange agencyPostCodeRange = easyRandom.nextObject(AgencyPostcodeRange.class);
 
     when(agencyPostcodeRangeRepository.findAllByAgencyId(anyLong()))
@@ -133,9 +132,9 @@ class AgencyPostcodeRangeAdminServiceTest {
         AgencyPostcodeRange.class));
 
     agencyPostcodeRangeAdminService.updatePostcodeRange(AGENCY_ID, postcodeRangeDTO);
-    ArgumentCaptor<Set<AgencyPostcodeRange>> captor = ArgumentCaptor.forClass((Class) List.class);
-    verify(postcodeRangeValidator).validatePostcodeRanges(captor.capture());
-    assertThat(captor.getValue(), not(hasItem(agencyPostCodeRange)));
+
+    verify(postcodeRangeValidator, times(1)).validatePostcodeRanges(any());
+    verify(postcodeRangeValidator, times(1)).validatePostcodeRangeForIntersection(any(), any());
   }
 
   @Test

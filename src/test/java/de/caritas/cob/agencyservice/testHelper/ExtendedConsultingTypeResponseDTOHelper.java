@@ -4,9 +4,9 @@ import static java.util.Objects.nonNull;
 
 import de.caritas.cob.agencyservice.api.manager.consultingtype.registration.Registration;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.whiteSpot.WhiteSpot;
-import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.BasicConsultingTypeResponseDTORegistration;
+import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
-import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTOAllOfWhiteSpot;
+import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.WhiteSpotDTO;
 
 public class ExtendedConsultingTypeResponseDTOHelper {
 
@@ -15,18 +15,18 @@ public class ExtendedConsultingTypeResponseDTOHelper {
 
     var extendedConsultingTypeResponseDTO = new ExtendedConsultingTypeResponseDTO();
 
-    ExtendedConsultingTypeResponseDTOAllOfWhiteSpot whiteSpotDTO = null;
+    WhiteSpotDTO whiteSpotDTO = null;
     if (nonNull(whiteSpot)) {
-      whiteSpotDTO = new ExtendedConsultingTypeResponseDTOAllOfWhiteSpot();
+      whiteSpotDTO = new WhiteSpotDTO();
       if (nonNull(whiteSpot.getWhiteSpotAgencyId())) {
         whiteSpotDTO.setWhiteSpotAgencyId(whiteSpot.getWhiteSpotAgencyId().intValue());
       }
       whiteSpotDTO.setWhiteSpotAgencyAssigned(whiteSpot.isWhiteSpotAgencyAssigned());
     }
 
-    BasicConsultingTypeResponseDTORegistration registrationDTO = null;
+    RegistrationDTO registrationDTO = null;
     if (nonNull(registration)) {
-      registrationDTO = new BasicConsultingTypeResponseDTORegistration();
+      registrationDTO = new RegistrationDTO();
       registrationDTO.setMinPostcodeSize(registration.getMinPostcodeSize());
     }
     extendedConsultingTypeResponseDTO.setRegistration(registrationDTO);

@@ -48,4 +48,17 @@ class ConsultingTypeServiceTest {
     TenantContext.clear();
   }
 
+  @Test
+  void getExtendedConsultingTypeResponseDTO_Should_addTenantHeader_When_MultitenancyEnabled() {
+    TenantContext.setCurrentTenant(5L);
+    when(this.consultingTypeServiceApiControllerFactory.createControllerApi()).thenReturn(consultingTypeControllerApi);
+    when(this.consultingTypeControllerApi.getApiClient()).thenReturn(apiClient);
+    ReflectionTestUtils.setField(tenantHeaderSupplier, "multitenancy", true);
+    this.consultingTypeService.getExtendedConsultingTypeResponseDTO(0);
+    HttpHeaders apiClientHeaders = (HttpHeaders) ReflectionTestUtils
+        .getField(apiClient, "defaultHeaders");
+    assertEquals("5", apiClientHeaders.get("tenantId").get(0));
+    TenantContext.clear();
+  }
+
 }
