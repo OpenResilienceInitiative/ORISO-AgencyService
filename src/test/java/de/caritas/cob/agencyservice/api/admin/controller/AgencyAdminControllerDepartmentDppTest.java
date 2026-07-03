@@ -10,6 +10,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyA
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionView;
+import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionContentDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionDTO;
@@ -32,6 +33,7 @@ class AgencyAdminControllerDepartmentDppTest {
   @Mock private AgencyValidator agencyValidator;
   @Mock private AgencyAdminControlsFacade agencyAdminControlsFacade;
   @Mock private DepartmentDataProtectionService departmentDataProtectionService;
+  @Mock private DepartmentImprintService departmentImprintService;
 
   @InjectMocks private AgencyAdminController controller;
 
@@ -61,7 +63,7 @@ class AgencyAdminControllerDepartmentDppTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody()).isNotNull();
-    assertThat(response.getBody().getContent().get()).isEqualTo("{\"de\":\"<p>x</p>\"}");
+    assertThat(response.getBody().getContent()).isEqualTo("{\"de\":\"<p>x</p>\"}");
     assertThat(response.getBody().getPublicationStatus())
         .isEqualTo(DepartmentDataProtectionContentDTO.PublicationStatusEnum.PUBLISHED);
   }
