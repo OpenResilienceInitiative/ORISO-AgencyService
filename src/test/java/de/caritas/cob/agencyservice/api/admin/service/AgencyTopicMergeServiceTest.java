@@ -33,6 +33,16 @@ class AgencyTopicMergeServiceTest {
   }
 
   @Test
+  void getMergedTopics_Should_DeduplicateRepeatedRequestTopicIds() {
+    // a request carrying the same topic id twice (e.g. [5, 5]) must yield at most one department
+    // row per (agency, topic) - inserting both would violate UNIQUE uq_agency_topic at flush
+    List<AgencyTopic> mergedTopics = agencyTopicMergeService.getMergedTopics(agency,
+        Lists.newArrayList(5L, 5L, 7L));
+
+    assertThat(mergedTopics).extracting(topic -> topic.getTopicId()).containsExactly(5L, 7L);
+  }
+
+  @Test
   void getMergedTopics_Should_ReturnRequestTopicListIfAgencyTopicsIsNull() {
     // when
     List<AgencyTopic> mergedTopics = agencyTopicMergeService.getMergedTopics(agency,
