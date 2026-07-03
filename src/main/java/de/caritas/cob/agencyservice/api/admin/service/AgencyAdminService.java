@@ -287,8 +287,10 @@ public class AgencyAdminService {
     convertCounsellingRelations(updateAgencyDTO, agencyToUpdate);
 
     if (featureTopicsEnabled) {
-      List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopics(agencyToUpdate,
-          updateAgencyDTO.getTopicIds());
+      // Use getMergedTopicsForUpdate so that an update which does not carry topicIds (null) keeps
+      // the existing links instead of wiping them; an explicitly empty list still clears them.
+      List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopicsForUpdate(
+          agencyToUpdate, agency.getAgencyTopics(), updateAgencyDTO.getTopicIds());
       agencyToUpdate.setAgencyTopics(agencyTopics);
     } else {
       // If the Topic feature is not enabled, Hibernate use an empty PersistentBag,

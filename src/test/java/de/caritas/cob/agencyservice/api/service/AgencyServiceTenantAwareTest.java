@@ -3,15 +3,18 @@ package de.caritas.cob.agencyservice.api.service;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
+import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
-import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.BasicConsultingTypeResponseDTORegistration;
+import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings;
 import java.util.Optional;
@@ -48,6 +51,15 @@ public class AgencyServiceTenantAwareTest {
   @Mock
   private ApplicationSettingsService applicationSettingsService;
 
+  @Mock
+  private MatrixProvisioningService matrixProvisioningService;
+
+  @Mock
+  private AgencySettingsService agencySettingsService;
+
+  @Mock
+  private AgencyAdminControlsService agencyAdminControlsService;
+
   private static final Long TENANT_ID = 1L;
 
   @Before
@@ -69,7 +81,7 @@ public class AgencyServiceTenantAwareTest {
     // given
     ReflectionTestUtils.setField(agencyService, "topicsFeatureEnabled", true);
     ExtendedConsultingTypeResponseDTO dto = new ExtendedConsultingTypeResponseDTO().registration(
-        new BasicConsultingTypeResponseDTORegistration().minPostcodeSize(5));
+        new RegistrationDTO().minPostcodeSize(5));
     when(consultingTypeManager.getConsultingTypeSettings(1)).thenReturn(dto);
     RestrictedTenantDTO restrictedTenantDTO = new RestrictedTenantDTO().settings(
         new Settings().topicsInRegistrationEnabled(true));
@@ -91,7 +103,7 @@ public class AgencyServiceTenantAwareTest {
     // given
     ReflectionTestUtils.setField(agencyService, "topicsFeatureEnabled", true);
     ExtendedConsultingTypeResponseDTO dto = new ExtendedConsultingTypeResponseDTO().registration(
-        new BasicConsultingTypeResponseDTORegistration().minPostcodeSize(5));
+        new RegistrationDTO().minPostcodeSize(5));
     when(consultingTypeManager.getConsultingTypeSettings(1)).thenReturn(dto);
     RestrictedTenantDTO restrictedTenantDTO = new RestrictedTenantDTO().settings(
         new Settings().topicsInRegistrationEnabled(true));

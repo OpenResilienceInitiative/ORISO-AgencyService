@@ -6,6 +6,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyA
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
@@ -13,21 +14,22 @@ import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyPostcodeRangeResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionContentDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionResponseDTO;
 import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.model.RootDTO;
 import de.caritas.cob.agencyservice.api.model.Sort;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.generated.api.admin.controller.AgencyadminApi;
 import io.swagger.annotations.Api;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
-
 import java.util.List;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Controller to handle all agency admin requests.
  */
 @RestController
+@Validated
 @Api(tags = "admin-agency-controller")
 @RequiredArgsConstructor
 public class AgencyAdminController implements AgencyadminApi {
@@ -44,6 +47,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyAdminService agencyAdminService;
   private final @NonNull AgencyValidator agencyValidator;
   private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
+  private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
 
   /**
    * Creates the root hal based navigation entity.
@@ -77,8 +81,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyAdminSearchResultDTO> searchAgencies(
-      @NotNull @Valid Integer page, @NotNull @Valid Integer perPage, @Valid String q,
-      @Valid Sort sort) {
+      Integer page, Integer perPage, String q, Sort sort) {
 
     var agencyAdminSearchResultDTO =
         this.agencyAdminSearchService.searchAgencies(q, page, perPage, sort);
@@ -94,7 +97,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
-  public ResponseEntity<AgencyAdminFullResponseDTO> createAgency(@Valid AgencyDTO agencyDTO) {
+  public ResponseEntity<AgencyAdminFullResponseDTO> createAgency(AgencyDTO agencyDTO) {
 
 
     agencyValidator.validate(agencyDTO);
@@ -112,8 +115,8 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link AgencyAdminFullResponseDTO} entity
    */
   @Override
-  public ResponseEntity<AgencyAdminFullResponseDTO> updateAgency(@PathVariable Long agencyId,
-      @Valid UpdateAgencyDTO updateAgencyDTO) {
+  public ResponseEntity<AgencyAdminFullResponseDTO> updateAgency(
+      @PathVariable Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
 
     agencyValidator.validate(agencyId, updateAgencyDTO);
     var agencyAdminFullResponseDTO = agencyAdminService
@@ -157,7 +160,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> createAgencyPostcodeRange(
-      @PathVariable Long agencyId, @Valid PostcodeRangeDTO postcodeRangeDTO) {
+      @PathVariable Long agencyId, PostcodeRangeDTO postcodeRangeDTO) {
 
     return new ResponseEntity<>(
         agencyPostcodeRangeAdminService.createPostcodeRanges(agencyId, postcodeRangeDTO),
@@ -173,7 +176,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> updateAgencyPostcodeRange(
-      @PathVariable Long agencyId, @Valid PostcodeRangeDTO postcodeRangeDTO) {
+      @PathVariable Long agencyId, PostcodeRangeDTO postcodeRangeDTO) {
     var rangeResponseDTO = agencyPostcodeRangeAdminService
         .updatePostcodeRange(agencyId, postcodeRangeDTO);
 
@@ -200,15 +203,14 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link ResponseEntity} with the status code.
    */
   @Override
-  public ResponseEntity<Void> changeAgencyType(Long agencyId,
-      @Valid AgencyTypeRequestDTO agencyTypeRequestDTO) {
+  public ResponseEntity<Void> changeAgencyType(
+      Long agencyId, AgencyTypeRequestDTO agencyTypeRequestDTO) {
     this.agencyAdminService.changeAgencyType(agencyId, agencyTypeRequestDTO);
     return new ResponseEntity<>(HttpStatus.OK);
   }
 
   @Override
-  public ResponseEntity<List<AgencyAdminFullResponseDTO>> getAgenciesByTenantId(
-      Long tenantId) {
+  public ResponseEntity<List<AgencyAdminFullResponseDTO>> getAgenciesByTenantId(Long tenantId) {
 
     var agencies = this.agencyAdminService.getAgenciesByTenantId(tenantId);
     var agenciesResponse = agencies.stream()
@@ -216,6 +218,53 @@ public class AgencyAdminController implements AgencyadminApi {
             .fromAgency()).toList();
 
     return new ResponseEntity<>(agenciesResponse, HttpStatus.OK);
+  }
+
+  /**
+   * Entry point to publish (or draft-save) a department's (Fachbereich = agency × topic) own data
+   * privacy policy. Authorisation is scoped to the caller's agencies inside the service (IDOR
+   * guard) so a restricted agency admin can only edit its own Fachbereiche.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @param departmentDataProtectionDTO multilingual content + publish flag
+   * @return the resulting {@link DepartmentDataProtectionResponseDTO} publication status
+   */
+  /**
+   * Entry point to read a department's (Fachbereich = agency × topic) own data privacy policy, used
+   * to prefill the admin editor. Same agency/tenant scoping as the publish endpoint.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @return the stored {@link DepartmentDataProtectionContentDTO} content + publication status
+   */
+  @Override
+  public ResponseEntity<DepartmentDataProtectionContentDTO> getDepartmentDataProtection(
+      Long agencyId, Long topicId) {
+    var view = departmentDataProtectionService.getDepartmentDataPrivacy(agencyId, topicId);
+    var response =
+        new DepartmentDataProtectionContentDTO()
+            .content(view.content())
+            .publicationStatus(
+                DepartmentDataProtectionContentDTO.PublicationStatusEnum.fromValue(
+                    view.publicationStatus().name()));
+    return ResponseEntity.ok(response);
+  }
+
+  @Override
+  public ResponseEntity<DepartmentDataProtectionResponseDTO> publishDepartmentDataProtection(
+      Long agencyId, Long topicId, DepartmentDataProtectionDTO departmentDataProtectionDTO) {
+    var status =
+        departmentDataProtectionService.publishDepartmentDataPrivacy(
+            agencyId,
+            topicId,
+            departmentDataProtectionDTO.getContent(),
+            Boolean.TRUE.equals(departmentDataProtectionDTO.getPublish()));
+    var response =
+        new DepartmentDataProtectionResponseDTO()
+            .publicationStatus(
+                DepartmentDataProtectionResponseDTO.PublicationStatusEnum.fromValue(status.name()));
+    return ResponseEntity.ok(response);
   }
 
   @Override
@@ -227,7 +276,7 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   @PreAuthorize("hasAuthority('AUTHORIZATION_GET_ALL_AGENCIES')")
   public ResponseEntity<AgencyAdminControls> updateAgencyAdminControls(
-      @Valid AgencyAdminControls agencyAdminControls) {
+      AgencyAdminControls agencyAdminControls) {
     return new ResponseEntity<>(
         agencyAdminControlsFacade.updateAgencyAdminControls(agencyAdminControls), HttpStatus.OK);
   }

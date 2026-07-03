@@ -39,11 +39,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
@@ -51,7 +51,11 @@ import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 
 @RunWith(SpringRunner.class)
-@TestPropertySource(properties = "spring.profiles.active=testing")
+@TestPropertySource(properties = {
+    "spring.profiles.active=testing",
+    "csrf.header.property=csrfHeader",
+    "csrf.cookie.property=csrfCookie"
+})
 @SpringBootTest
 @AutoConfigureMockMvc
 @AutoConfigureTestDatabase(replace = Replace.ANY)
@@ -64,16 +68,16 @@ public class AgencyAdminControllerAuthorizationIT {
   @Autowired
   private MockMvc mvc;
 
-  @MockBean
+  @MockitoBean
   private AgencyAdminSearchService agencyAdminFullResponseDTO;
 
-  @MockBean
+  @MockitoBean
   private AgencyPostcodeRangeAdminService agencyPostCodeRangeAdminService;
 
-  @MockBean
+  @MockitoBean
   private AgencyAdminService agencyAdminService;
 
-  @MockBean
+  @MockitoBean
   private AgencyValidator agencyValidator;
 
   @Test
@@ -137,6 +141,20 @@ public class AgencyAdminControllerAuthorizationIT {
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isUnauthorized());
+
+    verifyNoMoreInteractions(this.agencyAdminService);
+    verifyNoMoreInteractions(this.agencyValidator);
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  public void createAgency_Should_ReturnForbiddenAndCallNoMethods_When_csrfTokenIsMissing()
+      throws Exception {
+
+    mvc.perform(post(CREATE_AGENCY_PATH)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(VALID_AGENCY_DTO))
+        .andExpect(status().isForbidden());
 
     verifyNoMoreInteractions(this.agencyAdminService);
     verifyNoMoreInteractions(this.agencyValidator);

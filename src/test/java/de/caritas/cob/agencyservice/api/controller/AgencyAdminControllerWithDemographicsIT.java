@@ -1,7 +1,7 @@
 package de.caritas.cob.agencyservice.api.controller;
 
 
-import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 import static org.hamcrest.Matchers.contains;
 import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.when;
@@ -24,47 +24,53 @@ import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.testHelper.PathConstants;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest
 @ActiveProfiles("testing")
-@TestPropertySource(properties = "feature.demographics.enabled=true")
+@TestPropertySource(properties = {"feature.demographics.enabled=true", "feature.topics.enabled=false"})
 @AutoConfigureMockMvc(addFilters = false)
 @Transactional
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyAdminControllerWithDemographicsIT {
+
+  private static final String CSRF_TOKEN = "test";
 
   static final String PATH_GET_AGENCY_BY_ID = "/agencyadmin/agencies/1736";
 
   private MockMvc mockMvc;
 
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
   @Autowired
   private WebApplicationContext context;
 
-  @MockBean
+  @MockitoBean
   AuthenticatedUser authenticatedUser;
 
-  @MockBean
+  @MockitoBean
   TenantService tenantService;
 
   @BeforeEach
@@ -76,7 +82,15 @@ class AgencyAdminControllerWithDemographicsIT {
         .build();
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO().settings(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings().featureCentralDataProtectionTemplateEnabled(false)));
+    when(authenticatedUser.getTenantId()).thenReturn(1L);
 
+  }
+
+  private MockHttpServletRequestBuilder withCsrf(
+      MockHttpServletRequestBuilder requestBuilder) {
+    return requestBuilder
+        .header("X-CSRF-Token", CSRF_TOKEN)
+        .cookie(new Cookie("CSRF-TOKEN", CSRF_TOKEN));
   }
 
   @Test
@@ -110,9 +124,9 @@ class AgencyAdminControllerWithDemographicsIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(post(PathConstants.CREATE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(post(PathConstants.CREATE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("_embedded.id").exists())
         .andExpect(jsonPath("_embedded.name").value("Test name"))
@@ -141,9 +155,9 @@ class AgencyAdminControllerWithDemographicsIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
         .andExpect(jsonPath("_embedded.name").value("Test update name"))
@@ -171,11 +185,9 @@ class AgencyAdminControllerWithDemographicsIT {
     String payload = JsonConverter.convertToJson(agencyDTO);
 
     // when, then
-    mockMvc.perform(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
+    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
             .contentType(APPLICATION_JSON)
-            .content(payload))
+            .content(payload)))
         .andExpect(status().isBadRequest());
   }
 }
-
-

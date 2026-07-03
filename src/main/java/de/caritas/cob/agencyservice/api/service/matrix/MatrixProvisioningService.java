@@ -126,7 +126,7 @@ public class MatrixProvisioningService {
             ex.getResponseBodyAsString());
       }
     } catch (ResponseStatusException ex) {
-      if (isUserAlreadyExisting(ex.getStatusCode(), null)) {
+      if (isUserAlreadyExisting(ex.getStatusCode(), ex.getReason())) {
         String userId = String.format("@%s:%s", username, matrixConfig.getServerName());
         if (resetExistingUserPassword(userId, password)) {
           log.info("Matrix user {} already existed. Password rotated.", username);
@@ -170,7 +170,7 @@ public class MatrixProvisioningService {
     }
     if (status != null && status.value() == HttpStatus.BAD_REQUEST.value()) {
       if (responseBody == null) {
-        return true;
+        return false;
       }
       return responseBody.contains("M_USER_IN_USE");
     }
@@ -199,7 +199,7 @@ public class MatrixProvisioningService {
       body.put("logout_devices", Boolean.FALSE);
 
       String resetPasswordUrl =
-          UriComponentsBuilder.fromHttpUrl(matrixConfig.getApiUrl(ENDPOINT_RESET_PASSWORD))
+          UriComponentsBuilder.fromUriString(matrixConfig.getApiUrl(ENDPOINT_RESET_PASSWORD))
               .pathSegment(userId)
               .toUriString();
 
@@ -276,5 +276,4 @@ public class MatrixProvisioningService {
     String password;
   }
 }
-
 

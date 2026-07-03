@@ -56,9 +56,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.hateoas.client.LinkDiscoverers;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -79,42 +79,42 @@ public class AgencyAdminControllerTest {
   public static final int AGE_TO = 100;
   @Autowired
   private MockMvc mvc;
-  @MockBean
+  @MockitoBean
   private AgencyAdminService agencyAdminService;
-  @MockBean
+  @MockitoBean
   private AgencyValidator agencyValidator;
-  @MockBean
+  @MockitoBean
   private AgencyAdminSearchService agencyAdminFullResponseDTO;
-  @MockBean
+  @MockitoBean
   private AgencyPostcodeRangeAdminService agencyPostCodeRangeAdminService;
-  @MockBean
+  @MockitoBean
   private LinkDiscoverers linkDiscoverers;
-  @MockBean
+  @MockitoBean
   private RoleAuthorizationAuthorityMapper roleAuthorizationAuthorityMapper;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverter jwtAuthConverter;
 
-  @MockBean
+  @MockitoBean
   private AuthorisationService authorisationService;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverterProperties jwtAuthConverterProperties;
 
-  @MockBean
+  @MockitoBean
   private UserAdminServiceApiControllerFactory adminServiceApiControllerFactory;
 
-  @MockBean
+  @MockitoBean
   private SecurityHeaderSupplier securityHeaderSupplier;
 
-  @MockBean
+  @MockitoBean
   private TenantHeaderSupplier tenantHeaderSupplier;
 
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
 
-  @MockBean
+  @MockitoBean
   private AgencyRepository agencyRepository;
 
 
