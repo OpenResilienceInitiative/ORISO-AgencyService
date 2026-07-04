@@ -11,7 +11,7 @@ import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Restricted
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
@@ -42,9 +42,9 @@ class TenantServiceGetRestrictedTenantDataForSingleTenantCacheTest {
     }
   }
 
-  @MockBean private TenantServiceApiControllerFactory tenantServiceApiControllerFactory;
+  @MockitoBean private TenantServiceApiControllerFactory tenantServiceApiControllerFactory;
 
-  @MockBean private ApplicationSettingsService applicationSettingsService;
+  @MockitoBean private ApplicationSettingsService applicationSettingsService;
 
   @Autowired private TenantService tenantService;
 
