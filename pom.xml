@@ -419,6 +419,10 @@
                 <interfaceOnly>true</interfaceOnly>
                 <sourceFolder>/</sourceFolder>
                 <useSpringBoot3>true</useSpringBoot3>
+                <!-- Spring Boot 4 serves MVC JSON with Jackson 3; the Jackson-2-only JsonNullable
+                     wrapper would serialise as {"present":...} and break request binding, so
+                     nullable fields are generated as plain types instead. -->
+                <openApiNullable>false</openApiNullable>
               </configOptions>
               <inputSpec>${project.basedir}/api/agencyservice.yaml</inputSpec>
               <generatorName>spring</generatorName>
@@ -439,6 +443,10 @@
                 <interfaceOnly>true</interfaceOnly>
                 <sourceFolder>/</sourceFolder>
                 <useSpringBoot3>true</useSpringBoot3>
+                <!-- Spring Boot 4 serves MVC JSON with Jackson 3; the Jackson-2-only JsonNullable
+                     wrapper would serialise as {"present":...} and break request binding, so
+                     nullable fields are generated as plain types instead. -->
+                <openApiNullable>false</openApiNullable>
               </configOptions>
               <inputSpec>${project.basedir}/api/agencyadminservice.yaml</inputSpec>
               <generatorName>spring</generatorName>

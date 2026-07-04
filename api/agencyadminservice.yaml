@@ -344,6 +344,92 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/imprint:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: 'Read a department''s (Fachbereich = agency x topic) own imprint (Impressum) to
+      prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+      its own agencies]'
+      operationId: getDepartmentImprint
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - department imprint content and status
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentImprintContentDTO'
+        400:
+          description: BAD REQUEST - caller may not access this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: 'Publish or draft-save a department''s (Fachbereich = agency x topic) own imprint
+      (Impressum). [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own
+      agencies]'
+      operationId: publishDepartmentImprint
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/DepartmentImprintDTO'
+        required: true
+      responses:
+        200:
+          description: OK - department imprint stored
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentImprintResponseDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request, or caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/controls:
     get:
       tags:
@@ -1007,6 +1093,53 @@ components:
         publicationStatus:
           type: string
           description: Current publication status of the department's data privacy policy
+          enum:
+            - DRAFT
+            - PUBLISHED
+
+    DepartmentImprintDTO:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML imprint text (multilingual map).
+            Keys with the __meta suffix carry JSON translation metadata instead of HTML.
+          additionalProperties:
+            type: string
+          example:
+            de: '<p>Impressum des Fachbereichs ...</p>'
+            en: '<p>Imprint of the department ...</p>'
+        publish:
+          type: boolean
+          description: 'true = mark PUBLISHED (final legal document); false/absent = keep as DRAFT (draft-save)'
+          default: false
+
+    DepartmentImprintResponseDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        publicationStatus:
+          type: string
+          description: Resulting publication status of the department's imprint
+          enum:
+            - DRAFT
+            - PUBLISHED
+
+    DepartmentImprintContentDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        content:
+          type: string
+          nullable: true
+          description: Stored multilingual content as a JSON language->HTML map string; null if never authored
+        publicationStatus:
+          type: string
+          description: Current publication status of the department's imprint
           enum:
             - DRAFT
             - PUBLISHED

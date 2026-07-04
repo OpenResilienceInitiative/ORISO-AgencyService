@@ -17,6 +17,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,7 +25,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "agency_topic")
+@Table(
+    name = "agency_topic",
+    uniqueConstraints =
+        @UniqueConstraint(
+            name = "uq_agency_topic",
+            columnNames = {"agency_id", "topic_id"}))
 @AllArgsConstructor
 @RequiredArgsConstructor
 @Getter
@@ -60,16 +66,28 @@ public class AgencyTopic {
   @Column(name = "publication_status", nullable = false)
   private PublicationStatus publicationStatus = PublicationStatus.DRAFT;
 
+  /** This department's (Fachbereich) own imprint (Impressum) text. */
+  @Column(name = "content_imprint")
+  private String contentImprint;
+
+  @Builder.Default
+  @Enumerated(EnumType.STRING)
+  @Column(name = "publication_status_imprint", nullable = false)
+  private PublicationStatus publicationStatusImprint = PublicationStatus.DRAFT;
+
   @Transient TopicDTO topicData = new TopicDTO();
 
   /**
-   * Guarantees the NOT NULL publication_status is never null on the no-arg / all-args construction
-   * paths (Lombok's @Builder.Default only applies to the builder).
+   * Guarantees the NOT NULL publication statuses are never null on the no-arg / all-args
+   * construction paths (Lombok's @Builder.Default only applies to the builder).
    */
   @PrePersist
   void applyDefaults() {
     if (publicationStatus == null) {
       publicationStatus = PublicationStatus.DRAFT;
+    }
+    if (publicationStatusImprint == null) {
+      publicationStatusImprint = PublicationStatus.DRAFT;
     }
   }
 }

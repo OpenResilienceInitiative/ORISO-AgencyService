@@ -32,6 +32,8 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerEr
 import de.caritas.cob.agencyservice.api.model.AgencyTopicsDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
+import de.caritas.cob.agencyservice.api.service.DepartmentLegalService;
+import de.caritas.cob.agencyservice.api.service.DepartmentLegalView;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
@@ -66,6 +68,9 @@ class AgencyControllerTest {
 
   @MockitoBean
   private AgencyService agencyService;
+
+  @MockitoBean
+  private DepartmentLegalService departmentLegalService;
 
   @MockitoBean
   private LinkDiscoverers linkDiscoverers;
@@ -340,6 +345,45 @@ class AgencyControllerTest {
         .andExpect(jsonPath("[0].name").value(AGENCY_RESPONSE_DTO.getName()));
 
     verify(agencyService, atLeastOnce()).getAgencies(anyString(), anyInt());
+  }
+
+  @Test
+  void getDepartmentLegal_Should_ReturnPublishedContents_When_ServiceReturnsThem()
+      throws Exception {
+
+    when(departmentLegalService.getPublishedDepartmentLegal(7L, 42L))
+        .thenReturn(
+            new DepartmentLegalView("{\"de\":\"<p>DSE</p>\"}", "{\"de\":\"<p>Impressum</p>\"}"));
+
+    mvc.perform(get("/agencies/7/topics/42/legal").accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.dpp.content").value("{\"de\":\"<p>DSE</p>\"}"))
+        .andExpect(jsonPath("$.imprint.content").value("{\"de\":\"<p>Impressum</p>\"}"));
+  }
+
+  @Test
+  void getDepartmentLegal_Should_ReturnNullContents_When_TextsAreDraftsOrAbsent()
+      throws Exception {
+
+    // the service resolves drafts/never-authored texts to null - the JSON must carry null, so a
+    // draft can never leak through this public endpoint
+    when(departmentLegalService.getPublishedDepartmentLegal(7L, 42L))
+        .thenReturn(new DepartmentLegalView(null, null));
+
+    mvc.perform(get("/agencies/7/topics/42/legal").accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.dpp.content").doesNotExist())
+        .andExpect(jsonPath("$.imprint.content").doesNotExist());
+  }
+
+  @Test
+  void getDepartmentLegal_Should_ReturnNotFound_When_DepartmentDoesNotExist() throws Exception {
+
+    when(departmentLegalService.getPublishedDepartmentLegal(7L, 99L))
+        .thenThrow(new de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException());
+
+    mvc.perform(get("/agencies/7/topics/99/legal").accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isNotFound());
   }
 
 }
