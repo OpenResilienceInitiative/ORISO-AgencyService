@@ -11,9 +11,9 @@ import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -28,7 +28,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MatrixProvisioningService {
 
@@ -40,6 +39,13 @@ public class MatrixProvisioningService {
   private final @NonNull RestTemplate restTemplate;
 
   private final SecureRandom secureRandom = new SecureRandom();
+
+  public MatrixProvisioningService(
+      @NonNull MatrixConfig matrixConfig,
+      @NonNull @Qualifier("matrixRestTemplate") RestTemplate restTemplate) {
+    this.matrixConfig = matrixConfig;
+    this.restTemplate = restTemplate;
+  }
 
   public Optional<MatrixCredentials> ensureAgencyAccount(String baseUsername, String displayName) {
     try {
