@@ -15,26 +15,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 /**
  * Self-contained persistence test for ADR-003's "department = unique (agency × topic)" rule: the
  * {@code agency_topic} table carries {@code UNIQUE(agency_id, topic_id)} plus the department's own
- * imprint ({@code content_imprint} / {@code publication_status_imprint}). Mirrors the H2 setup of
- * {@link AgencyTopicLegalRepositoryTest}: dialect overridden to H2 with schema generated from the
- * entities, so the {@code @UniqueConstraint} on {@link AgencyTopic} is materialised and provable in
- * a bare local build.
+ * imprint ({@code content_imprint} / {@code publication_status_imprint}). Uses the {@code testing}
+ * profile (see {@code application-testing.properties}) so Hibernate builds the schema from the
+ * entities on H2.
  */
-@TestPropertySource(
-    properties = {
-      "spring.profiles.active=testing",
-      "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-      "spring.jpa.hibernate.ddl-auto=create-drop"
-    })
+@TestPropertySource(properties = {"spring.profiles.active=testing"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
 @ExtendWith(SpringExtension.class)
-@DataJpaTest
+@DataJpaTest(excludeAutoConfiguration = LiquibaseAutoConfiguration.class)
 class AgencyTopicDepartmentConstraintRepositoryTest {
 
   @Autowired private TestEntityManager em;
@@ -46,6 +41,9 @@ class AgencyTopicDepartmentConstraintRepositoryTest {
             .name(name)
             .consultingTypeId(1)
             .dataProtectionResponsibleEntity(DataProtectionResponsibleEntity.AGENCY_RESPONSIBLE)
+            .dataProtectionOfficerContactData("officer")
+            .dataProtectionAlternativeContactData("alternative")
+            .dataProtectionAgencyResponsibleContactData("agency")
             .createDate(now)
             .updateDate(now)
             .build());

@@ -58,6 +58,9 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.hateoas.client.LinkDiscoverers;
 import org.springframework.http.MediaType;
@@ -70,7 +73,10 @@ import org.springframework.test.web.servlet.MockMvc;
 @RunWith(SpringRunner.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
-    classes = AgencyServiceApplication.class)
+    classes = {
+      AgencyServiceApplication.class,
+      AgencyAdminControllerTest.UserAdminApiClientTestConfiguration.class
+    })
 @AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(
     locations = "classpath:application-testing.properties")
@@ -106,9 +112,6 @@ public class AgencyAdminControllerTest {
   private JwtAuthConverterProperties jwtAuthConverterProperties;
 
   @MockitoBean
-  private UserAdminServiceApiControllerFactory adminServiceApiControllerFactory;
-
-  @MockitoBean
   private SecurityHeaderSupplier securityHeaderSupplier;
 
   @MockitoBean
@@ -121,6 +124,19 @@ public class AgencyAdminControllerTest {
   @MockitoBean
   private AgencyRepository agencyRepository;
 
+  /**
+   * Mockito inline cannot instrument {@link UserAdminServiceApiControllerFactory} because it
+   * references OpenAPI-generated client types; provide a plain mock bean instead.
+   */
+  @TestConfiguration
+  static class UserAdminApiClientTestConfiguration {
+
+    @Bean
+    @Primary
+    UserAdminServiceApiControllerFactory userAdminServiceApiControllerFactory() {
+      return Mockito.mock(UserAdminServiceApiControllerFactory.class);
+    }
+  }
 
   @Test
   public void searchAgencies_Should_returnBadRequest_When_requiredPaginationParamsAreMissing()

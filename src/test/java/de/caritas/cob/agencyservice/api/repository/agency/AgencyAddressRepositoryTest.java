@@ -9,23 +9,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 /**
  * Self-contained persistence test for the Beratungszentrum (agency centre) address/contact fields
- * that the admin create/edit forms need. Overrides the dialect to H2 so Hibernate builds the schema
- * from the entities and the test is runnable in a bare local build.
+ * that the admin create/edit forms need. Uses the {@code testing} profile (see
+ * {@code application-testing.properties}) so Hibernate builds the schema from the entities on H2.
  */
-@TestPropertySource(
-    properties = {
-      "spring.profiles.active=testing",
-      "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-      "spring.jpa.hibernate.ddl-auto=create-drop"
-    })
+@TestPropertySource(properties = {"spring.profiles.active=testing"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
 @ExtendWith(SpringExtension.class)
-@DataJpaTest
+@DataJpaTest(excludeAutoConfiguration = LiquibaseAutoConfiguration.class)
 class AgencyAddressRepositoryTest {
 
   @Autowired private TestEntityManager em;

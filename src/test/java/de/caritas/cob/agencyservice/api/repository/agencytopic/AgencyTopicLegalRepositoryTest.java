@@ -11,25 +11,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 /**
  * Self-contained persistence test for the per-Fachbereich (department = agency × topic) legal model:
  * each {@code agency_topic} carries its own data privacy policy ({@code content_dpp}) and a
- * publication status. The module's other {@code @DataJpaTest} tests assume an externally provisioned
- * schema (MariaDB dialect), so this test overrides the dialect to H2 and lets Hibernate build the
- * schema from the entities — runnable and meaningful in a bare local build.
+ * publication status. Uses the {@code testing} profile (see {@code application-testing.properties})
+ * so Hibernate builds the schema from the entities on H2.
  */
-@TestPropertySource(
-    properties = {
-      "spring.profiles.active=testing",
-      "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-      "spring.jpa.hibernate.ddl-auto=create-drop"
-    })
+@TestPropertySource(properties = {"spring.profiles.active=testing"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
 @ExtendWith(SpringExtension.class)
-@DataJpaTest
+@DataJpaTest(excludeAutoConfiguration = LiquibaseAutoConfiguration.class)
 class AgencyTopicLegalRepositoryTest {
 
   @Autowired private TestEntityManager em;
