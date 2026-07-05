@@ -61,6 +61,10 @@
   <include file="db/changelog/changeset/0021_agency_topic_legal/0021_changeSet.xml"/>
   <include file="db/changelog/changeset/0022_agency_address_contact/0022_changeSet.xml"/>
   <include file="db/changelog/changeset/0023_agency_topic_department/0023_changeSet.xml"/>
+  <!-- ADR-003 dev mode: make agency.data_protection_officer_contact explicitly nullable so
+       testing/dev can create agencies without it; required stays enforced at the app layer in
+       prod (agency.department.require-dpo-contact). Additive, preconditioned (MARK_RAN). -->
+  <include file="db/changelog/changeset/0024_agency_dpo_contact_nullable/0024_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB
