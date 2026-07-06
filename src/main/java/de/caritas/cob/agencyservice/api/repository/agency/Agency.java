@@ -155,7 +155,13 @@ public class Agency implements TenantAware {
   @Enumerated(EnumType.STRING)
   private DataProtectionResponsibleEntity dataProtectionResponsibleEntity;
 
-  @Column(name = "data_protection_officer_contact", columnDefinition = "longtext", nullable = false)
+  // ADR-003 dev mode: the DB column is nullable (changeset 0016 declares it NULL, made explicit
+  // in 0024). "Required" is enforced at the application layer, gated by the
+  // agency.department.require-dpo-contact flag (default true in prod, false in testing/dev), so
+  // dev/test flows and the @DataJpaTest persistence tests can insert an Agency without it while
+  // production still rejects a missing DPO contact. Keeping nullable=false here would re-impose a
+  // hard NOT NULL on the create-drop test schema and block testing — see #oriso-codereview thread.
+  @Column(name = "data_protection_officer_contact", columnDefinition = "longtext")
   @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionOfficerContactData;
 
