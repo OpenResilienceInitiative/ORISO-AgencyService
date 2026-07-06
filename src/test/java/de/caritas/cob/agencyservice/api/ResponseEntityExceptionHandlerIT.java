@@ -31,9 +31,9 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.hateoas.client.LinkDiscoverers;
 import org.springframework.http.HttpStatus;
@@ -52,25 +52,25 @@ public class ResponseEntityExceptionHandlerIT {
   @Autowired
   private MockMvc mvc;
 
-  @MockBean
+  @MockitoBean
   private AgencyService agencyService;
 
-  @MockBean
+  @MockitoBean
   private LinkDiscoverers linkDiscoverers;
 
-  @MockBean
+  @MockitoBean
   private RoleAuthorizationAuthorityMapper roleAuthorizationAuthorityMapper;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverter jwtAuthConverter;
 
   @Mock
   private Logger logger;
 
-  @MockBean
+  @MockitoBean
   private AuthorisationService authorisationService;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverterProperties jwtAuthConverterProperties;
 
   @Before
@@ -166,12 +166,12 @@ public class ResponseEntityExceptionHandlerIT {
   public void handleException_Should_ReturnStatusOfExceptionAndLogError_When_HttpClientErrorExceptionIsThrown()
       throws Exception {
 
-    HttpClientErrorException exception = new HttpClientErrorException(HttpStatus.CHECKPOINT);
+    HttpClientErrorException exception = new HttpClientErrorException(HttpStatus.EARLY_HINTS);
     when(agencyService.getAgencies(any())).thenThrow(exception);
 
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isCheckpoint());
+        .andExpect(status().isEarlyHints());
   }
 
   @Test

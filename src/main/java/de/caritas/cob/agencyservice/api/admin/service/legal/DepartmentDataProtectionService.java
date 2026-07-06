@@ -1,9 +1,13 @@
 package de.caritas.cob.agencyservice.api.admin.service.legal;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.AgencyAccessDeniedException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
@@ -32,11 +36,20 @@ import org.springframework.transaction.annotation.Transactional;
  * sanitised per translation, and (c) stored as a JSON language→HTML map in {@code
  * agency_topic.content_dpp} — mirroring how the tenant privacy/DPA content is persisted so the admin
  * UI can reuse the same language-aware viewer.
+ *
+ * <p>Like {@link DepartmentImprintService}, {@code __meta}-suffixed keys (the platform-wide
+ * translation-metadata convention) carry JSON, not HTML: running them through the HTML sanitizer
+ * would corrupt the payload (quotes become entities → invalid JSON), so they are passed through
+ * unsanitised. Because this metadata is stored verbatim and later served publicly, it is validated
+ * against a strict schema ({@link #assertValidJson}) rather than a mere parse check, so no
+ * unsanitised free text can hide behind the suffix.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DepartmentDataProtectionService {
+
+  private static final String META_KEY_SUFFIX = "__meta";
 
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
   private final @NonNull InputSanitizer inputSanitizer;
@@ -44,6 +57,8 @@ public class DepartmentDataProtectionService {
   private final @NonNull UserAdminService userAdminService;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectReader metaJsonReader =
+      objectMapper.readerFor(JsonNode.class).with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   /**
    * Sanitises and stores the department's DPP for the given agency × topic. When {@code publish} is
@@ -147,11 +162,78 @@ public class DepartmentDataProtectionService {
         .collect(
             Collectors.toMap(
                 Map.Entry::getKey,
-                entry ->
-                    inputSanitizer.sanitizeAllowingFormattingAndLinks(
-                        entry.getValue() == null ? "" : entry.getValue()),
+                entry -> sanitizeOrValidateValue(entry.getKey(), entry.getValue()),
                 (existing, replacement) -> replacement,
                 LinkedHashMap::new));
+  }
+
+  /**
+   * {@code __meta}-suffixed keys carry translation metadata as JSON and are stored verbatim after a
+   * strict validation; every other key is OWASP HTML-sanitised.
+   */
+  private String sanitizeOrValidateValue(String key, String value) {
+    var safeValue = value == null ? "" : value;
+    if (key.endsWith(META_KEY_SUFFIX)) {
+      assertValidJson(key, safeValue);
+      return safeValue;
+    }
+    return inputSanitizer.sanitizeAllowingFormattingAndLinks(safeValue);
+  }
+
+  /**
+   * Strictly validates a {@code __meta} translation-metadata payload. Because the value is stored
+   * unsanitised and later served publicly, a mere "parses without error" check is not enough: the
+   * value must be a non-blank JSON object holding only {@code mt} (boolean), {@code src} (string)
+   * and {@code at} (string), with {@code src}/{@code at} non-blank. Blanks, scalars, arrays,
+   * trailing tokens and any unknown field are rejected with a 400.
+   */
+  private void assertValidJson(String key, String value) {
+    if (value == null || value.isBlank()) {
+      throw invalidMeta(key);
+    }
+    final JsonNode node;
+    try {
+      node = metaJsonReader.readValue(value);
+    } catch (JsonProcessingException e) {
+      throw invalidMeta(key);
+    }
+    if (node == null || !node.isObject()) {
+      throw invalidMeta(key);
+    }
+    int knownFields = 0;
+    if (node.has("mt")) {
+      requireBoolean(key, node.get("mt"));
+      knownFields++;
+    }
+    if (node.has("src")) {
+      requireNonBlankText(key, node.get("src"));
+      knownFields++;
+    }
+    if (node.has("at")) {
+      requireNonBlankText(key, node.get("at"));
+      knownFields++;
+    }
+    // any remaining property is an unknown field and must be rejected
+    if (node.size() != knownFields) {
+      throw invalidMeta(key);
+    }
+  }
+
+  private void requireBoolean(String key, JsonNode value) {
+    if (value == null || !value.isBoolean()) {
+      throw invalidMeta(key);
+    }
+  }
+
+  private void requireNonBlankText(String key, JsonNode value) {
+    if (value == null || !value.isTextual() || value.asText().isBlank()) {
+      throw invalidMeta(key);
+    }
+  }
+
+  private BadRequestException invalidMeta(String key) {
+    return new BadRequestException(
+        String.format("Translation metadata key '%s' does not contain valid JSON", key));
   }
 
   private String toJson(Map<String, String> sanitized) {

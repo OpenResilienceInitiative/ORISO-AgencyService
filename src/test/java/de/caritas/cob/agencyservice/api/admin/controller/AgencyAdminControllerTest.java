@@ -56,12 +56,16 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.hateoas.client.LinkDiscoverers;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
@@ -69,54 +73,70 @@ import org.springframework.test.web.servlet.MockMvc;
 @RunWith(SpringRunner.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
-    classes = AgencyServiceApplication.class)
+    classes = {
+      AgencyServiceApplication.class,
+      AgencyAdminControllerTest.UserAdminApiClientTestConfiguration.class
+    })
 @AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(
     locations = "classpath:application-testing.properties")
+// activates the testing profile so startup-only guards (@Profile("!testing"), e.g.
+// ConfigurationValidator) do not require deployment secrets in this unit test context
+@ActiveProfiles("testing")
 public class AgencyAdminControllerTest {
 
   public static final int AGE_FROM = 25;
   public static final int AGE_TO = 100;
   @Autowired
   private MockMvc mvc;
-  @MockBean
+  @MockitoBean
   private AgencyAdminService agencyAdminService;
-  @MockBean
+  @MockitoBean
   private AgencyValidator agencyValidator;
-  @MockBean
+  @MockitoBean
   private AgencyAdminSearchService agencyAdminFullResponseDTO;
-  @MockBean
+  @MockitoBean
   private AgencyPostcodeRangeAdminService agencyPostCodeRangeAdminService;
-  @MockBean
+  @MockitoBean
   private LinkDiscoverers linkDiscoverers;
-  @MockBean
+  @MockitoBean
   private RoleAuthorizationAuthorityMapper roleAuthorizationAuthorityMapper;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverter jwtAuthConverter;
 
-  @MockBean
+  @MockitoBean
   private AuthorisationService authorisationService;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverterProperties jwtAuthConverterProperties;
 
-  @MockBean
-  private UserAdminServiceApiControllerFactory adminServiceApiControllerFactory;
-
-  @MockBean
+  @MockitoBean
   private SecurityHeaderSupplier securityHeaderSupplier;
 
-  @MockBean
+  @MockitoBean
   private TenantHeaderSupplier tenantHeaderSupplier;
 
-  @MockBean
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
 
-  @MockBean
+  @MockitoBean
   private AgencyRepository agencyRepository;
 
+  /**
+   * Mockito inline cannot instrument {@link UserAdminServiceApiControllerFactory} because it
+   * references OpenAPI-generated client types; provide a plain mock bean instead.
+   */
+  @TestConfiguration
+  static class UserAdminApiClientTestConfiguration {
+
+    @Bean
+    @Primary
+    UserAdminServiceApiControllerFactory userAdminServiceApiControllerFactory() {
+      return Mockito.mock(UserAdminServiceApiControllerFactory.class);
+    }
+  }
 
   @Test
   public void searchAgencies_Should_returnBadRequest_When_requiredPaginationParamsAreMissing()
@@ -158,6 +178,7 @@ public class AgencyAdminControllerTest {
     agencyDTO.setPostcode(VALID_POSTCODE);
     agencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(agencyDTO.getDemographics());
+    setValidDataProtection(agencyDTO.getDataProtection());
     AgencyAdminFullResponseDTO agencyAdminFullResponseDTO =
         easyRandom.nextObject(AgencyAdminFullResponseDTO.class);
 
@@ -174,6 +195,25 @@ public class AgencyAdminControllerTest {
   private void setValidDemographics(DemographicsDTO demographics) {
     demographics.setAgeFrom(AGE_FROM);
     demographics.setAgeTo(AGE_TO);
+  }
+
+  /**
+   * EasyRandom fills the nested data protection contacts with random strings; the postcode
+   * fields carry a Size(5,5) bean validation constraint that is cascaded since the OpenAPI
+   * generator adds @Valid to nested properties, so random values fail with a generic 400
+   * before the controller-level validators run.
+   */
+  private void setValidDataProtection(de.caritas.cob.agencyservice.api.model.DataProtectionDTO
+      dataProtection) {
+    if (dataProtection == null) {
+      return;
+    }
+    java.util.stream.Stream.of(
+            dataProtection.getDataProtectionOfficerContact(),
+            dataProtection.getAgencyDataProtectionResponsibleContact(),
+            dataProtection.getAlternativeDataProtectionRepresentativeContact())
+        .filter(java.util.Objects::nonNull)
+        .forEach(contact -> contact.setPostcode(VALID_POSTCODE));
   }
 
   @Test
@@ -193,6 +233,7 @@ public class AgencyAdminControllerTest {
     agencyDTO.setPostcode(VALID_POSTCODE);
     agencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(agencyDTO.getDemographics());
+    setValidDataProtection(agencyDTO.getDataProtection());
     doThrow(new InvalidConsultingTypeException()).when(agencyValidator).validate(agencyDTO);
     this.mvc
         .perform(
@@ -212,6 +253,7 @@ public class AgencyAdminControllerTest {
     agencyDTO.setPostcode(VALID_POSTCODE);
     agencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(agencyDTO.getDemographics());
+    setValidDataProtection(agencyDTO.getDataProtection());
     doThrow(new InvalidPostcodeException()).when(agencyValidator).validate(agencyDTO);
     this.mvc
         .perform(
@@ -259,6 +301,7 @@ public class AgencyAdminControllerTest {
     updateAgencyDTO.setPostcode(VALID_POSTCODE);
     updateAgencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(updateAgencyDTO.getDemographics());
+    setValidDataProtection(updateAgencyDTO.getDataProtection());
     AgencyAdminFullResponseDTO agencyAdminFullResponseDTO =
         easyRandom.nextObject(AgencyAdminFullResponseDTO.class);
 
@@ -290,6 +333,7 @@ public class AgencyAdminControllerTest {
     updateAgencyDTO.setName("name");
     updateAgencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(updateAgencyDTO.getDemographics());
+    setValidDataProtection(updateAgencyDTO.getDataProtection());
     doThrow(new InvalidOfflineStatusException())
         .when(agencyValidator)
         .validate(1L, updateAgencyDTO);
@@ -310,6 +354,7 @@ public class AgencyAdminControllerTest {
     updateAgencyDTO.setPostcode(VALID_POSTCODE);
     updateAgencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(updateAgencyDTO.getDemographics());
+    setValidDataProtection(updateAgencyDTO.getDataProtection());
     doThrow(new InvalidPostcodeException()).when(agencyValidator).validate(1L, updateAgencyDTO);
     this.mvc
         .perform(

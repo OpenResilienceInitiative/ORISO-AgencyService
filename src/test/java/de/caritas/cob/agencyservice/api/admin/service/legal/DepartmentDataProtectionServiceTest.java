@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.AgencyAccessDeniedException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
@@ -281,5 +282,126 @@ class DepartmentDataProtectionServiceTest {
     service.publishDepartmentDataPrivacy(7L, 42L, content, true);
 
     assertThat(department.getContentDpp()).isEqualTo("{\"de\":\"\"}");
+  }
+
+  @Test
+  void publish_Should_passThroughMetaSuffixedKeysUnsanitized() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    // translation-metadata convention: __meta-suffixed keys carry JSON, not HTML - sanitising
+    // them would corrupt the payload (quotes -> HTML entities -> invalid JSON), so they are
+    // passed through verbatim after a strict schema validation instead
+    var metaJson = "{\"mt\":true,\"src\":\"de\",\"at\":\"2026-07-04T10:00:00Z\"}";
+
+    service.publishDepartmentDataPrivacy(
+        7L, 42L, Map.of("de", "<p>Datenschutz</p>", "de__meta", metaJson), true);
+
+    var stored = department.getContentDpp();
+    assertThat(stored).contains("\"de__meta\":");
+    // the JSON payload survives verbatim (an HTML sanitizer would have escaped the quotes away)
+    assertThat(stored).contains("src").contains("2026-07-04T10:00:00Z");
+    assertThat(stored).doesNotContain("&#34;").doesNotContain("&quot;");
+  }
+
+  @Test
+  void publish_Should_acceptValidMetaSuffixedKey_andPersist() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    var status =
+        service.publishDepartmentDataPrivacy(
+            7L, 42L, Map.of("de__meta", "{\"mt\":true,\"src\":\"de\",\"at\":\"2026-07-04\"}"), true);
+
+    assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
+    verify(agencyTopicRepository).save(any());
+  }
+
+  @Test
+  void publish_Should_rejectMetaSuffixedKeys_When_valueIsNotValidJson() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(
+                    7L, 42L, Map.of("de__meta", "not-json{"), true));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_rejectMetaSuffixedKeys_When_valueIsEmptyString() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () -> service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", ""), true));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_rejectMetaSuffixedKeys_When_valueIsJsonArray() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(
+                    7L, 42L, Map.of("de__meta", "[\"de\",\"en\"]"), true));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_rejectMetaSuffixedKeys_When_valueIsJsonScalar() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(
+                    7L, 42L, Map.of("de__meta", "\"just-a-string\""), true));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_rejectMetaSuffixedKeys_When_valueHasUnknownField() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(
+                    7L, 42L, Map.of("de__meta", "{\"mt\":true,\"unexpected\":\"x\"}"), true));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_rejectMetaSuffixedKeys_When_mtIsNotBoolean() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(
+                    7L, 42L, Map.of("de__meta", "{\"mt\":\"true\"}"), true));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void publish_Should_rejectMetaSuffixedKeys_When_srcIsBlank() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(
+                    7L, 42L, Map.of("de__meta", "{\"src\":\"   \"}"), true));
+    verify(agencyTopicRepository, never()).save(any());
   }
 }

@@ -12,6 +12,7 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestExcept
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
+import de.caritas.cob.agencyservice.api.model.AgencyDepartmentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
@@ -20,6 +21,7 @@ import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
@@ -230,6 +232,9 @@ public class AgencyService {
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
+    if (multitenancyWithSingleDomain) {
+      return Optional.empty();
+    }
     return Optional.of(consultingTypeId);
   }
 
@@ -472,8 +477,31 @@ public class AgencyService {
         .demographics(getDemographics(agency))
         .tenantId(agency.getTenantId())
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
+        .departments(
+            agency.getAgencyTopics().stream().map(this::convertToAgencyDepartmentDTO).toList())
         .agencyLogo(agency.getAgencyLogo());
 
+  }
+
+  /**
+   * Maps a department (Fachbereich = agency × topic) to its registration-search view: the topic id
+   * plus whether its own legal texts (ADR-003) are published. Uses the already-loaded {@code
+   * agencyTopics} association (the same one {@code topicIds} is built from), so no additional
+   * query is issued per agency or topic.
+   */
+  private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic) {
+    return new AgencyDepartmentDTO()
+        .topicId(agencyTopic.getTopicId())
+        .hasPublishedDpp(
+            hasPublishedContent(agencyTopic.getContentDpp(), agencyTopic.getPublicationStatus()))
+        .hasPublishedImprint(
+            hasPublishedContent(
+                agencyTopic.getContentImprint(), agencyTopic.getPublicationStatusImprint()));
+  }
+
+  private boolean hasPublishedContent(String content, PublicationStatus status) {
+    var hasContent = content != null && !content.isBlank();
+    return PublicationStatus.PUBLISHED == status && hasContent;
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

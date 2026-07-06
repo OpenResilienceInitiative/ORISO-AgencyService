@@ -30,7 +30,7 @@ public class AgencyAdminControlEntity {
   @Column(name = "id", updatable = false, nullable = false)
   private Long id;
 
-  @Column(name = "controls", nullable = false)
+  @Column(name = "controls", nullable = false, columnDefinition = "text")
   private String controls;
 
   @Column(name = "update_date", nullable = false)

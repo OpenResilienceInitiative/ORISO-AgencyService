@@ -171,6 +171,40 @@ paths:
           description: FORBIDDEN - no/invalid CSRF token
         500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /agencies/{agencyId}/topics/{topicId}/legal:
+    get:
+      tags:
+        - agency-controller
+      summary: 'Returns the published legal texts (data privacy policy and imprint) of a
+        department (agency x topic). Draft or never-authored texts are returned as null content -
+        drafts are never exposed to users. [Authorization: none]'
+      operationId: getDepartmentLegal
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - successfull operation
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentLegalDTO'
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /agencies/consultingtype/{consultingTypeId}:
     get:
       tags:
@@ -240,7 +274,8 @@ components:
         topicIds:
           type: array
           items:
-            type: long
+            type: integer
+            format: int64
         agencyLogo:
           type: string
           example: "base64 encoded image"
@@ -261,6 +296,48 @@ components:
             external:
               type: boolean
               example: "false"
+            departments:
+              type: array
+              description: The agency's departments (one per assigned topic) with the publication
+                state of their own legal texts. Optional - older clients can ignore it.
+              items:
+                $ref: '#/components/schemas/AgencyDepartmentDTO'
+
+    AgencyDepartmentDTO:
+      type: object
+      properties:
+        topicId:
+          type: integer
+          format: int64
+          example: 7
+        hasPublishedDpp:
+          type: boolean
+          description: true if the department has a published data privacy policy of its own
+          example: true
+        hasPublishedImprint:
+          type: boolean
+          description: true if the department has a published imprint of its own
+          example: false
+
+    DepartmentLegalDTO:
+      type: object
+      required:
+        - dpp
+        - imprint
+      properties:
+        dpp:
+          $ref: '#/components/schemas/DepartmentLegalContentDTO'
+        imprint:
+          $ref: '#/components/schemas/DepartmentLegalContentDTO'
+
+    DepartmentLegalContentDTO:
+      type: object
+      properties:
+        content:
+          type: string
+          nullable: true
+          description: Published multilingual content as a JSON language->HTML map string;
+            null when the text is a draft or was never authored (drafts are never exposed)
 
     AgencyTopicsDTO:
       type: object

@@ -26,7 +26,7 @@ jobs:
     - name: Run AgencyService tests and build
       uses: ./.github/actions/maven-build
       with:
-        java_version: '17'
+        java_version: '21'
 
     - name: Publish AgencyService Docker image
       uses: ./.github/actions/docker-build-push

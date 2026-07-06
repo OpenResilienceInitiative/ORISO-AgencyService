@@ -32,6 +32,8 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerEr
 import de.caritas.cob.agencyservice.api.model.AgencyTopicsDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
+import de.caritas.cob.agencyservice.api.service.DepartmentLegalService;
+import de.caritas.cob.agencyservice.api.service.DepartmentLegalView;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
@@ -45,15 +47,20 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.hateoas.client.LinkDiscoverers;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(AgencyController.class)
+@WebMvcTest(
+    controllers = AgencyController.class,
+    excludeAutoConfiguration = OAuth2ResourceServerAutoConfiguration.class)
 @AutoConfigureMockMvc(addFilters = false)
+@ActiveProfiles("testing")
 class AgencyControllerTest {
 
   static final String PATH_GET_AGENCIES_BY_CONSULTINGTYPE = "/agencies/consultingtype/1";
@@ -61,25 +68,28 @@ class AgencyControllerTest {
   @Autowired
   private MockMvc mvc;
 
-  @MockBean
+  @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
-  @MockBean
+  @MockitoBean
   private AgencyService agencyService;
 
-  @MockBean
+  @MockitoBean
+  private DepartmentLegalService departmentLegalService;
+
+  @MockitoBean
   private LinkDiscoverers linkDiscoverers;
 
-  @MockBean
+  @MockitoBean
   private RoleAuthorizationAuthorityMapper roleAuthorizationAuthorityMapper;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverter jwtAuthConverter;
 
-  @MockBean
+  @MockitoBean
   private AuthorisationService authorisationService;
 
-  @MockBean
+  @MockitoBean
   private JwtAuthConverterProperties jwtAuthConverterProperties;
 
   @Mock
@@ -340,6 +350,45 @@ class AgencyControllerTest {
         .andExpect(jsonPath("[0].name").value(AGENCY_RESPONSE_DTO.getName()));
 
     verify(agencyService, atLeastOnce()).getAgencies(anyString(), anyInt());
+  }
+
+  @Test
+  void getDepartmentLegal_Should_ReturnPublishedContents_When_ServiceReturnsThem()
+      throws Exception {
+
+    when(departmentLegalService.getPublishedDepartmentLegal(7L, 42L))
+        .thenReturn(
+            new DepartmentLegalView("{\"de\":\"<p>DSE</p>\"}", "{\"de\":\"<p>Impressum</p>\"}"));
+
+    mvc.perform(get("/agencies/7/topics/42/legal").accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.dpp.content").value("{\"de\":\"<p>DSE</p>\"}"))
+        .andExpect(jsonPath("$.imprint.content").value("{\"de\":\"<p>Impressum</p>\"}"));
+  }
+
+  @Test
+  void getDepartmentLegal_Should_ReturnNullContents_When_TextsAreDraftsOrAbsent()
+      throws Exception {
+
+    // the service resolves drafts/never-authored texts to null - the JSON must carry null, so a
+    // draft can never leak through this public endpoint
+    when(departmentLegalService.getPublishedDepartmentLegal(7L, 42L))
+        .thenReturn(new DepartmentLegalView(null, null));
+
+    mvc.perform(get("/agencies/7/topics/42/legal").accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.dpp.content").doesNotExist())
+        .andExpect(jsonPath("$.imprint.content").doesNotExist());
+  }
+
+  @Test
+  void getDepartmentLegal_Should_ReturnNotFound_When_DepartmentDoesNotExist() throws Exception {
+
+    when(departmentLegalService.getPublishedDepartmentLegal(7L, 99L))
+        .thenThrow(new de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException());
+
+    mvc.perform(get("/agencies/7/topics/99/legal").accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isNotFound());
   }
 
 }

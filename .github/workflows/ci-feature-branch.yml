@@ -18,4 +18,4 @@ jobs:
     - name: Run AgencyService tests and build
       uses: ./.github/actions/maven-build
       with:
-        java_version: '17'
+        java_version: '21'

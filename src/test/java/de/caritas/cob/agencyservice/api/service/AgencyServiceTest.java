@@ -44,9 +44,11 @@ import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
-import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.BasicConsultingTypeResponseDTORegistration;
+import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
@@ -205,6 +207,46 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getListOfAgencies_Should_MapDepartmentsWithLegalPublicationFlags()
+      throws MissingConsultingTypeException {
+
+    // one department with both legal texts published, one still fully in draft
+    Agency agency = Agency.builder().id(100L).name("Zentrum").consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .build();
+    AgencyTopic publishedDepartment = AgencyTopic.builder().agency(agency).topicId(1L)
+        .contentDpp("{\"de\":\"<p>DSE</p>\"}").publicationStatus(PublicationStatus.PUBLISHED)
+        .contentImprint("{\"de\":\"<p>Impressum</p>\"}")
+        .publicationStatusImprint(PublicationStatus.PUBLISHED).build();
+    AgencyTopic draftDepartment = AgencyTopic.builder().agency(agency).topicId(2L)
+        .contentDpp("{\"de\":\"<p>Entwurf</p>\"}").publicationStatus(PublicationStatus.DRAFT)
+        .build();
+    ReflectionTestUtils.setField(agency, "agencyTopics",
+        List.of(publishedDepartment, draftDepartment));
+
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(List.of(agency));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var result =
+        agencyService.getAgencies(Optional.of(VALID_POSTCODE), CONSULTING_TYPE_SUCHT,
+            Optional.empty());
+
+    assertEquals(1, result.size());
+    var departments = result.get(0).getDepartments();
+    assertEquals(2, departments.size());
+    var byTopicId = departments.stream()
+        .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
+    assertTrue(byTopicId.get(1L).getHasPublishedDpp());
+    assertTrue(byTopicId.get(1L).getHasPublishedImprint());
+    assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedDpp());
+    assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedImprint());
+    // the existing topicIds contract is untouched
+    assertEquals(List.of(1L, 2L), result.get(0).getTopicIds());
+  }
+
+  @Test
   public void getListOfAgencies_Should_ReturnWhiteSpotAgency_WhenNoAgencyFoundForGivenPostcodeAndAgencyHasSetWhiteSpotAgency()
       throws MissingConsultingTypeException {
 
@@ -338,7 +380,7 @@ public class AgencyServiceTest {
     // given
     ReflectionTestUtils.setField(agencyService, "topicsFeatureEnabled", true);
     ExtendedConsultingTypeResponseDTO dto = new ExtendedConsultingTypeResponseDTO().registration(
-        new BasicConsultingTypeResponseDTORegistration().minPostcodeSize(5));
+        new RegistrationDTO().minPostcodeSize(5));
     when(consultingTypeManager.getConsultingTypeSettings(1)).thenReturn(dto);
     RestrictedTenantDTO restrictedTenantDTO = new RestrictedTenantDTO().settings(
         new Settings().topicsInRegistrationEnabled(true));
@@ -354,7 +396,7 @@ public class AgencyServiceTest {
     // given
     ReflectionTestUtils.setField(agencyService, "topicsFeatureEnabled", true);
     ExtendedConsultingTypeResponseDTO dto = new ExtendedConsultingTypeResponseDTO().registration(
-        new BasicConsultingTypeResponseDTORegistration().minPostcodeSize(5));
+        new RegistrationDTO().minPostcodeSize(5));
     when(consultingTypeManager.getConsultingTypeSettings(1)).thenReturn(dto);
     RestrictedTenantDTO restrictedTenantDTO = new RestrictedTenantDTO().settings(
         new Settings().topicsInRegistrationEnabled(true));
