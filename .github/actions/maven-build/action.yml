@@ -1,9 +1,8 @@
-name: Reusable Maven Build steps
+name: Reusable Maven validation and build steps
 
 inputs:
   java_version:
     required: true
-    type: string
 
 runs:
   using: 'composite'
@@ -15,6 +14,10 @@ runs:
       distribution: 'temurin'
       cache: maven
 
-  - name: Build with Maven Wrapper
+  - name: Run Maven tests
     shell: bash
-    run: ./mvnw -B -Dmaven.test.skip=true package
+    run: ./mvnw -B test
+
+  - name: Package Java application
+    shell: bash
+    run: ./mvnw -B package -DskipTests
