@@ -699,6 +699,34 @@ components:
           type: string
           maxLength: 100
           example: "Bonn"
+        street:
+          type: string
+          maxLength: 255
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          maxLength: 20
+          example: "12a"
+        floorBuilding:
+          type: string
+          maxLength: 100
+          example: "2. OG, Haus B"
+        country:
+          type: string
+          maxLength: 100
+          example: "Deutschland"
+        phone:
+          type: string
+          maxLength: 30
+          example: "0761 123456"
+        phoneSecondary:
+          type: string
+          maxLength: 30
+          example: "0761 654321"
+        email:
+          type: string
+          maxLength: 255
+          example: "kontakt@beratungsstelle.de"
         teamAgency:
           type: boolean
           example: false
@@ -826,6 +854,34 @@ components:
           type: string
           maxLength: 100
           example: "Muenchen"
+        street:
+          type: string
+          maxLength: 255
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          maxLength: 20
+          example: "12a"
+        floorBuilding:
+          type: string
+          maxLength: 100
+          example: "2. OG, Haus B"
+        country:
+          type: string
+          maxLength: 100
+          example: "Deutschland"
+        phone:
+          type: string
+          maxLength: 30
+          example: "0761 123456"
+        phoneSecondary:
+          type: string
+          maxLength: 30
+          example: "0761 654321"
+        email:
+          type: string
+          maxLength: 255
+          example: "kontakt@beratungsstelle.de"
         teamAgency:
           type: boolean
           example: false
@@ -900,6 +956,34 @@ components:
           type: string
           example: "Muenchen"
           maxLength: 100
+        street:
+          type: string
+          maxLength: 255
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          maxLength: 20
+          example: "12a"
+        floorBuilding:
+          type: string
+          maxLength: 100
+          example: "2. OG, Haus B"
+        country:
+          type: string
+          maxLength: 100
+          example: "Deutschland"
+        phone:
+          type: string
+          maxLength: 30
+          example: "0761 123456"
+        phoneSecondary:
+          type: string
+          maxLength: 30
+          example: "0761 654321"
+        email:
+          type: string
+          maxLength: 255
+          example: "kontakt@beratungsstelle.de"
         offline:
           type: boolean
           example: false
