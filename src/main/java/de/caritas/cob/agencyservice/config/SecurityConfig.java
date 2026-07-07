@@ -99,6 +99,10 @@ public class SecurityConfig {
             .hasAuthority(AuthorityValue.GET_ALL_AGENCIES)
             .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
+            // /agencies/topics enriches via an authenticated ConsultingTypeService call and is
+            // only used by logged-in clients; anonymous access must 401 here instead of NPE-500ing
+            // in the request-scoped AuthenticatedUser bean.
+            .requestMatchers("/agencies/topics", "/agencies/topics/").authenticated()
             .requestMatchers("/agencies/**").permitAll()
             .requestMatchers("/internal/agencies/**").permitAll()
             .anyRequest().denyAll())
