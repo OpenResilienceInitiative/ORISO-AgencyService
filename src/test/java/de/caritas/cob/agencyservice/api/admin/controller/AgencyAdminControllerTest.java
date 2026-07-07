@@ -179,6 +179,7 @@ public class AgencyAdminControllerTest {
     agencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(agencyDTO.getDemographics());
     setValidDataProtection(agencyDTO.getDataProtection());
+    setValidAddress(agencyDTO);
     AgencyAdminFullResponseDTO agencyAdminFullResponseDTO =
         easyRandom.nextObject(AgencyAdminFullResponseDTO.class);
 
@@ -216,6 +217,32 @@ public class AgencyAdminControllerTest {
         .forEach(contact -> contact.setPostcode(VALID_POSTCODE));
   }
 
+  /**
+   * EasyRandom fills the structured address/contact fields with random strings that overrun
+   * the Size(max) constraints on the short columns (house number, phone), producing a generic
+   * 400 before the controller-level validators run. Set them to valid short values, mirroring
+   * {@link #setValidDataProtection}.
+   */
+  private void setValidAddress(AgencyDTO agencyDTO) {
+    agencyDTO.setStreet("Teststraße");
+    agencyDTO.setHouseNumber("1");
+    agencyDTO.setFloorBuilding("EG");
+    agencyDTO.setCountry("Deutschland");
+    agencyDTO.setPhone("0761 1");
+    agencyDTO.setPhoneSecondary("0761 2");
+    agencyDTO.setEmail("a@b.de");
+  }
+
+  private void setValidAddress(UpdateAgencyDTO updateAgencyDTO) {
+    updateAgencyDTO.setStreet("Teststraße");
+    updateAgencyDTO.setHouseNumber("1");
+    updateAgencyDTO.setFloorBuilding("EG");
+    updateAgencyDTO.setCountry("Deutschland");
+    updateAgencyDTO.setPhone("0761 1");
+    updateAgencyDTO.setPhoneSecondary("0761 2");
+    updateAgencyDTO.setEmail("a@b.de");
+  }
+
   @Test
   public void createAgency_Should_ReturnBadRequest_WhenAgencyDtoIsMissing() throws Exception {
     this.mvc
@@ -234,6 +261,7 @@ public class AgencyAdminControllerTest {
     agencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(agencyDTO.getDemographics());
     setValidDataProtection(agencyDTO.getDataProtection());
+    setValidAddress(agencyDTO);
     doThrow(new InvalidConsultingTypeException()).when(agencyValidator).validate(agencyDTO);
     this.mvc
         .perform(
@@ -254,6 +282,7 @@ public class AgencyAdminControllerTest {
     agencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(agencyDTO.getDemographics());
     setValidDataProtection(agencyDTO.getDataProtection());
+    setValidAddress(agencyDTO);
     doThrow(new InvalidPostcodeException()).when(agencyValidator).validate(agencyDTO);
     this.mvc
         .perform(
@@ -302,6 +331,7 @@ public class AgencyAdminControllerTest {
     updateAgencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(updateAgencyDTO.getDemographics());
     setValidDataProtection(updateAgencyDTO.getDataProtection());
+    setValidAddress(updateAgencyDTO);
     AgencyAdminFullResponseDTO agencyAdminFullResponseDTO =
         easyRandom.nextObject(AgencyAdminFullResponseDTO.class);
 
@@ -334,6 +364,7 @@ public class AgencyAdminControllerTest {
     updateAgencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(updateAgencyDTO.getDemographics());
     setValidDataProtection(updateAgencyDTO.getDataProtection());
+    setValidAddress(updateAgencyDTO);
     doThrow(new InvalidOfflineStatusException())
         .when(agencyValidator)
         .validate(1L, updateAgencyDTO);
@@ -355,6 +386,7 @@ public class AgencyAdminControllerTest {
     updateAgencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
     setValidDemographics(updateAgencyDTO.getDemographics());
     setValidDataProtection(updateAgencyDTO.getDataProtection());
+    setValidAddress(updateAgencyDTO);
     doThrow(new InvalidPostcodeException()).when(agencyValidator).validate(1L, updateAgencyDTO);
     this.mvc
         .perform(
