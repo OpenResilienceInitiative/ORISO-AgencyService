@@ -10,6 +10,7 @@ import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
@@ -53,6 +54,9 @@ public class AgencyServiceTenantAwareTest {
 
   @Mock
   private MatrixProvisioningService matrixProvisioningService;
+
+  @Mock
+  private AgencyMatrixPasswordCipher matrixPasswordCipher;
 
   @Mock
   private AgencySettingsService agencySettingsService;
