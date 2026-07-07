@@ -14,9 +14,45 @@ runs:
       distribution: 'temurin'
       cache: maven
 
+  # Blocking unit-test gate (Test Quality Audit 2026-07-04, item 3).
+  # Runs the surefire `unit-tests` execution (test phase, **/*Test) and fails the
+  # build if any report shows failures/errors — or if NO reports were produced at
+  # all (a green build with zero reports means tests were silently skipped).
   - name: Run Maven tests
     shell: bash
-    run: ./mvnw -B test
+    run: |
+      ./mvnw -B test
+      python3 - <<'PY'
+      from pathlib import Path
+      import sys
+      import xml.etree.ElementTree as ET
+
+      reports = sorted(Path("target/surefire-reports").glob("TEST-*.xml"))
+      if not reports:
+          print("::error::Zero surefire reports found — tests were silently skipped or never ran.")
+          sys.exit(1)
+
+      total_tests = 0
+      failing_reports = []
+      for report in reports:
+          root = ET.parse(report).getroot()
+          total_tests += int(root.attrib.get("tests", 0))
+          failures = int(root.attrib.get("failures", 0))
+          errors = int(root.attrib.get("errors", 0))
+          if failures or errors:
+              failing_reports.append((report, failures, errors))
+
+      print(f"Parsed {len(reports)} surefire report(s), {total_tests} tests.")
+      if total_tests == 0:
+          print("::error::Surefire reports contain zero executed tests.")
+          sys.exit(1)
+
+      if failing_reports:
+          print("Maven reported test failures/errors:")
+          for report, failures, errors in failing_reports:
+              print(f"- {report}: failures={failures}, errors={errors}")
+          sys.exit(1)
+      PY
 
   - name: Package Java application
     shell: bash
