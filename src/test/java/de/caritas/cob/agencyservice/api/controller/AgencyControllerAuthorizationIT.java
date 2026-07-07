@@ -5,7 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -63,8 +63,8 @@ public class AgencyControllerAuthorizationIT {
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isUnauthorized());
 
-    verifyNoMoreInteractions(this.agencyService);
-    verifyNoMoreInteractions(this.topicEnrichmentService);
+    verifyNoInteractions(this.agencyService);
+    verifyNoInteractions(this.topicEnrichmentService);
   }
 
   @Test
@@ -82,6 +82,7 @@ public class AgencyControllerAuthorizationIT {
         .andExpect(status().isNoContent());
 
     verify(this.agencyService, times(1)).getAgenciesTopics();
+    verify(this.topicEnrichmentService, times(1)).enrichTopicIdsWithTopicData(any());
   }
 
   @Test
