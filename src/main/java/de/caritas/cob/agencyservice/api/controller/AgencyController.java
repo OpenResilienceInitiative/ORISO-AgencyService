@@ -103,8 +103,7 @@ public class AgencyController implements AgenciesApi {
 
     var agencies = agencyService.getAgencies(agencyIds);
 
-    return agencies.isEmpty() ? new ResponseEntity<>(HttpStatus.NOT_FOUND)
-        : new ResponseEntity<>(agencies, HttpStatus.OK);
+    return new ResponseEntity<>(agencies, HttpStatus.OK);
   }
 
   /**

@@ -166,13 +166,15 @@ class AgencyControllerTest {
   }
 
   @Test
-  void getAgencies_With_Ids_Should_ReturnNoContent_When_ServiceReturnsNoAgency()
+  void getAgencies_With_Ids_Should_ReturnOkAndEmptyList_When_ServiceReturnsNoAgency()
       throws Exception {
 
     when(agencyService.getAgencies(anyList())).thenReturn(Collections.emptyList());
 
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID).accept(MediaType.APPLICATION_JSON))
-        .andExpect(status().isNotFound());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isArray())
+        .andExpect(jsonPath("$").isEmpty());
   }
 
   @Test
