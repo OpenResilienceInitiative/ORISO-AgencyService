@@ -46,6 +46,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
@@ -108,6 +109,9 @@ public class AgencyServiceTest {
 
   @Mock
   private MatrixProvisioningService matrixProvisioningService;
+
+  @Mock
+  private AgencyMatrixPasswordCipher matrixPasswordCipher;
 
   private static final Long TENANT_ID = null;
 

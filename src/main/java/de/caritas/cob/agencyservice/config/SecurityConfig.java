@@ -1,5 +1,6 @@
 package de.caritas.cob.agencyservice.config;
 
+import de.caritas.cob.agencyservice.api.authorization.Authority;
 import de.caritas.cob.agencyservice.api.authorization.Authority.AuthorityValue;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverter;
@@ -35,8 +36,7 @@ public class SecurityConfig {
 
   public static final String[] WHITE_LIST =
       new String[]{"/agencies/docs", "/agencies/docs/**", "/v2/api-docs", "/configuration/ui",
-          "/swagger-resources/**", "/configuration/security", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**", "/actuator/health", "/actuator/health/**",
-          "/internal/agencies", "/internal/agencies/**"};
+          "/swagger-resources/**", "/configuration/security", "/swagger-ui.html", "/swagger-ui/**", "/webjars/**", "/actuator/health", "/actuator/health/**"};
 
   @Autowired
   AuthorisationService authorisationService;
@@ -104,7 +104,7 @@ public class SecurityConfig {
             // in the request-scoped AuthenticatedUser bean.
             .requestMatchers("/agencies/topics", "/agencies/topics/").authenticated()
             .requestMatchers("/agencies/**").permitAll()
-            .requestMatchers("/internal/agencies/**").permitAll()
+            .requestMatchers("/internal/agencies/**").hasAuthority(AuthorityValue.TECHNICAL_USER)
             .anyRequest().denyAll())
         .oauth2ResourceServer(oauth2 -> oauth2.jwt(
             jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())));

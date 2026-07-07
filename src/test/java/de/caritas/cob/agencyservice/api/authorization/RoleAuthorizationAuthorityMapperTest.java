@@ -62,6 +62,20 @@ public class RoleAuthorizationAuthorityMapperTest {
   }
 
   @Test
+  public void mapAuthorities_Should_returnGrantedTechnicalUserAuthority_When_authorityIsTechnicalUser() {
+    List<GrantedAuthority> grantedAuthorities = Stream.of("technical")
+        .map(SimpleGrantedAuthority::new)
+        .collect(Collectors.toList());
+
+    Collection<? extends GrantedAuthority> mappedAuthorities =
+        this.roleAuthorizationAuthorityMapper.mapAuthorities(grantedAuthorities);
+
+    assertThat(mappedAuthorities).hasSize(1);
+    assertThat(mappedAuthorities.iterator().next().getAuthority())
+        .isEqualTo(AuthorityValue.TECHNICAL_USER);
+  }
+
+  @Test
   public void mapAuthorities_Should_returnEmptyCollection_When_authorityIsEmpty() {
     Collection<? extends GrantedAuthority> mappedAuthorities = this.roleAuthorizationAuthorityMapper
         .mapAuthorities(emptyList());
