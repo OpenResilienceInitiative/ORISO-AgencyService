@@ -1,0 +1,4 @@
+-- Intentional no-op rollback.
+-- This changeset syncs demo/initial-delivery baseline rows with upsert semantics.
+-- Rolling back by deleting agency/topic/postcode rows could remove customer-edited
+-- data after the baseline has been used.

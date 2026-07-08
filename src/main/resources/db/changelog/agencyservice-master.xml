@@ -65,6 +65,9 @@
        testing/dev can create agencies without it; required stays enforced at the app layer in
        prod (agency.department.require-dpo-contact). Additive, preconditioned (MARK_RAN). -->
   <include file="db/changelog/changeset/0024_agency_dpo_contact_nullable/0024_changeSet.xml"/>
+  <!-- Demo/initial-delivery data is opt-in. Enable with Liquibase context
+       "demo-baseline" for demo environments or before customer-facing demo runs. -->
+  <include file="db/changelog/changeset/0025_demo_baseline/0025_changeSet.xml" contextFilter="demo-baseline"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB
