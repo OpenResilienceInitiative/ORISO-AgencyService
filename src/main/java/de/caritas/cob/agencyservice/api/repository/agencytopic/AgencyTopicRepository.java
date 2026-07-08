@@ -1,7 +1,10 @@
 package de.caritas.cob.agencyservice.api.repository.agencytopic;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for the department-level ({@code Fachbereich} = agency × topic) rows, used by the
@@ -12,4 +15,8 @@ public interface AgencyTopicRepository extends JpaRepository<AgencyTopic, Long> 
 
   /** Finds the department row for a given agency and topic (the natural key of a Fachbereich). */
   Optional<AgencyTopic> findByAgency_IdAndTopicId(Long agencyId, Long topicId);
+
+  /** Finds all department rows for a given agency. */
+  @Query(value = "select * from agency_topic where agency_id = :agencyId", nativeQuery = true)
+  List<AgencyTopic> findAllByAgencyId(@Param("agencyId") Long agencyId);
 }

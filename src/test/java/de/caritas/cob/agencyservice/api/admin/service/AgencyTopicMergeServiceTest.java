@@ -143,7 +143,9 @@ class AgencyTopicMergeServiceTest {
         agencyTopicMergeService.getMergedTopicsForUpdate(agency, existingTopics, null);
 
     // then the existing topics are kept (not wiped)
+    assertThat(mergedTopics).containsExactlyElementsOf(existingTopics);
     assertThat(mergedTopics).extracting(AgencyTopic::getTopicId).containsExactly(1L, 2L);
+    assertThat(mergedTopics).extracting(AgencyTopic::getAgency).containsOnly(agency);
   }
 
   @Test
@@ -181,5 +183,21 @@ class AgencyTopicMergeServiceTest {
 
     // then the result reflects exactly the requested topics
     assertThat(mergedTopics).extracting(AgencyTopic::getTopicId).containsExactly(2L, 3L);
+  }
+
+  @Test
+  void getMergedTopicsForUpdate_Should_ReuseExistingTopicWhenRequestContainsSameTopic() {
+    // given an existing database row and a request carrying the same topic id
+    var existingTopic = AgencyTopic.builder().id(42L).topicId(2L).build();
+
+    // when
+    List<AgencyTopic> mergedTopics =
+        agencyTopicMergeService.getMergedTopicsForUpdate(agency, Lists.newArrayList(existingTopic),
+            Lists.newArrayList(2L, 2L));
+
+    // then no duplicate row is created for the unique agency-topic key
+    assertThat(mergedTopics).containsExactly(existingTopic);
+    assertThat(mergedTopics).extracting(AgencyTopic::getId).containsExactly(42L);
+    assertThat(mergedTopics).extracting(AgencyTopic::getAgency).containsOnly(agency);
   }
 }

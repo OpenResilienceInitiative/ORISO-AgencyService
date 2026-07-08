@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +38,8 @@ import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
@@ -73,6 +76,9 @@ class AgencyAdminServiceTest {
 
   @Mock
   AgencyTopicMergeService mergeService;
+
+  @Mock
+  AgencyTopicRepository agencyTopicRepository;
 
   @Mock
   AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -215,7 +221,10 @@ class AgencyAdminServiceTest {
     agency.setCounsellingRelations(null);
     when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
+    when(agencyTopicRepository.findAllByAgencyId(anyLong()))
+        .thenReturn(Lists.newArrayList(AgencyTopic.builder().topicId(1L).build()));
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setTopicIds(Lists.newArrayList(2L));
 
     // when
     agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
