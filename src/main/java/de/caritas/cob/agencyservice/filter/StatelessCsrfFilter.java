@@ -60,6 +60,10 @@ public class StatelessCsrfFilter extends OncePerRequestFilter {
     filterChain.doFilter(request, response);
   }
 
+  /**
+   * Admin UI calls the API host with a bearer token while the CSRF cookie stays on the admin host.
+   * Cross-host mutations must not be rejected by the cookie/header CSRF check.
+   */
   private boolean isBearerAuthenticatedRequest(HttpServletRequest request) {
     String authorizationHeader = request.getHeader("Authorization");
     return authorizationHeader != null
