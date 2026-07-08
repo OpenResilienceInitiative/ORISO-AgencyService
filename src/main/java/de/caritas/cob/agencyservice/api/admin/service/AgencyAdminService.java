@@ -24,6 +24,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
@@ -55,6 +56,7 @@ public class AgencyAdminService {
   private final @NonNull UserAdminService userAdminService;
   private final @NonNull DeleteAgencyValidator deleteAgencyValidator;
   private final @NonNull AgencyTopicMergeService agencyTopicMergeService;
+  private final @NonNull AgencyTopicRepository agencyTopicRepository;
   private final @NonNull AppointmentService appointmentService;
   private final @NonNull AgencyService agencyService;
   private final @NonNull AuthenticatedUser authenticatedUser;
@@ -303,8 +305,9 @@ public class AgencyAdminService {
     if (featureTopicsEnabled) {
       // Use getMergedTopicsForUpdate so that an update which does not carry topicIds (null) keeps
       // the existing links instead of wiping them; an explicitly empty list still clears them.
+      var existingAgencyTopics = agencyTopicRepository.findAllByAgencyId(agency.getId());
       List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopicsForUpdate(
-          agencyToUpdate, agency.getAgencyTopics(), updateAgencyDTO.getTopicIds());
+          agencyToUpdate, existingAgencyTopics, updateAgencyDTO.getTopicIds());
       agencyToUpdate.setAgencyTopics(agencyTopics);
     } else {
       // If the Topic feature is not enabled, Hibernate use an empty PersistentBag,

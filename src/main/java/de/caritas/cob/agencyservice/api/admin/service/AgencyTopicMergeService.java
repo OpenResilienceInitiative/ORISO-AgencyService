@@ -44,9 +44,14 @@ public class AgencyTopicMergeService {
   public List<AgencyTopic> getMergedTopicsForUpdate(Agency targetAgency,
       List<AgencyTopic> existingTopics, List<Long> requestTopicIds) {
     if (requestTopicIds == null) {
-      return createAgencyTopicList(targetAgency, extractTopicIds(existingTopics));
+      return reassignToAgency(targetAgency, existingTopics);
     }
-    return getMergedTopics(targetAgency, requestTopicIds);
+    if (requestTopicIds.isEmpty()) {
+      return Lists.newArrayList();
+    }
+    return getAgencyTopics(targetAgency,
+        requestTopicIds.stream().distinct().collect(Collectors.toList()),
+        existingTopics == null ? Lists.newArrayList() : existingTopics);
   }
 
   private List<AgencyTopic> getMergedTopicsForNonEmptyTopicList(Agency agency, List<Long> requestTopicIds) {
@@ -64,6 +69,7 @@ public class AgencyTopicMergeService {
     var topicsToUpdate = existingAgencyTopics.stream()
         .filter(topicWithIdExistInTheRequest(requestTopicIds)).collect(
             Collectors.toList());
+    reassignToAgency(agency, topicsToUpdate);
 
     List<AgencyTopic> resultList = Lists.newArrayList();
     resultList.addAll(topicsToUpdate);
@@ -82,6 +88,14 @@ public class AgencyTopicMergeService {
       return Lists.newArrayList();
     }
     return agencyTopics.stream().map(AgencyTopic::getTopicId).collect(Collectors.toList());
+  }
+
+  private List<AgencyTopic> reassignToAgency(Agency agency, List<AgencyTopic> agencyTopics) {
+    if (agencyTopics == null) {
+      return Lists.newArrayList();
+    }
+    agencyTopics.forEach(agencyTopic -> agencyTopic.setAgency(agency));
+    return agencyTopics;
   }
 
   private Predicate<AgencyTopic> topicWithIdExistInTheRequest(List<Long> topicIds) {
