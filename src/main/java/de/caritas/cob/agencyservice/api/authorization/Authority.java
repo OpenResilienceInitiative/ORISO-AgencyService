@@ -19,7 +19,10 @@ public enum Authority {
 
   RESTRICTED_CONSULTANT_ADMIN("restricted-consultant-admin", AuthorityValue.SEARCH_AGENCIES),
 
-  ADVICE_SEEKER("user", AuthorityValue.SEARCH_AGENCIES_WITHIN_TENANT);
+  ADVICE_SEEKER("user", AuthorityValue.SEARCH_AGENCIES_WITHIN_TENANT),
+
+  /** Keycloak technical user used for service-to-service calls (e.g. Matrix credential lookup). */
+  TECHNICAL_USER("technical", AuthorityValue.TECHNICAL_USER);
 
   private final String roleName;
   private final List<String> authorities;
@@ -59,6 +62,7 @@ public enum Authority {
     public static final String RESTRICTED_AGENCY_ADMIN = PREFIX + "RESTRICTED_AGENCY_ADMIN";
     public static final String SEARCH_AGENCIES_WITHIN_TENANT = PREFIX + "SEARCH_AGENCIES_WITHIN_TENANT";
     public static final String GET_ALL_AGENCIES = PREFIX + "GET_ALL_AGENCIES";
+    public static final String TECHNICAL_USER = PREFIX + "TECHNICAL_USER";
 
   }
 

@@ -26,6 +26,7 @@ import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
+import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Collections;
@@ -57,6 +58,8 @@ public class AgencyService {
   private final @NonNull ConsultingTypeManager consultingTypeManager;
   private final @NonNull AgencyRepository agencyRepository;
   private final @NonNull MatrixProvisioningService matrixProvisioningService;
+
+  private final @NonNull AgencyMatrixPasswordCipher matrixPasswordCipher;
 
   private final @NonNull TenantService tenantService;
   private final @NonNull DemographicsConverter demographicsConverter;
@@ -188,7 +191,7 @@ public class AgencyService {
 
     if (nonNull(agency.getMatrixUserId()) && nonNull(agency.getMatrixPassword())) {
       log.info("Agency {} already has Matrix credentials: {}", agency.getName(), agency.getMatrixUserId());
-      return Optional.of(new AgencyMatrixCredentialsDTO(agency.getMatrixUserId(), agency.getMatrixPassword()));
+      return Optional.of(matrixCredentialsDto(agency));
     }
 
     log.info("No existing Matrix credentials found. Provisioning new account for agency {}", agency.getName());
@@ -203,11 +206,12 @@ public class AgencyService {
       }
 
       var creds = optionalCredentials.get();
+      var encryptedPassword = matrixPasswordCipher.encrypt(creds.getPassword());
       agency.setMatrixUserId(creds.getUserId());
-      agency.setMatrixPassword(creds.getPassword());
+      agency.setMatrixPassword(encryptedPassword);
       if (saveEntity) {
         agencyRepository.updateMatrixCredentials(
-            agency.getId(), creds.getUserId(), creds.getPassword());
+            agency.getId(), creds.getUserId(), encryptedPassword);
         log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}",
             agency.getName(), agency.getId(), creds.getUserId());
       }
@@ -226,9 +230,13 @@ public class AgencyService {
   public Optional<AgencyMatrixCredentialsDTO> getMatrixCredentials(Long agencyId) {
     return agencyRepository
         .findById(agencyId)
-        .map(
-            agency -> new AgencyMatrixCredentialsDTO(
-                agency.getMatrixUserId(), agency.getMatrixPassword()));
+        .map(this::matrixCredentialsDto);
+  }
+
+  private AgencyMatrixCredentialsDTO matrixCredentialsDto(Agency agency) {
+    return new AgencyMatrixCredentialsDTO(
+        agency.getMatrixUserId(),
+        matrixPasswordCipher.decrypt(agency.getMatrixPassword()));
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
