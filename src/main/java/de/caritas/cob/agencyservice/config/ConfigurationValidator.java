@@ -51,9 +51,6 @@ public class ConfigurationValidator {
   @Value("${matrix.admin-password:}")
   private String matrixAdminPassword;
 
-  @Value("${service.encryption.appkey:}")
-  private String serviceEncryptionAppkey;
-
   @Value("${consulting.type.service.api.url:}")
   private String consultingTypeServiceApiUrl;
 
@@ -102,9 +99,6 @@ public class ConfigurationValidator {
     }
     if (isEmpty(matrixAdminPassword)) {
       missingConfigs.add("matrix.admin-password (MATRIX_ADMIN_PASSWORD)");
-    }
-    if (isEmpty(serviceEncryptionAppkey)) {
-      missingConfigs.add("service.encryption.appkey (SERVICE_ENCRYPTION_APPKEY)");
     }
     if (isEmpty(consultingTypeServiceApiUrl)) {
       missingConfigs.add("consulting.type.service.api.url (CONSULTING_TYPE_SERVICE_API_URL)");
