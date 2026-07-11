@@ -659,7 +659,8 @@ components:
       type: object
       properties:
         id:
-          type: long
+          type: integer
+          format: int64
           example: 12132
         name:
           type: string
@@ -899,7 +900,8 @@ components:
         topicIds:
           type: array
           items:
-            type: long
+            type: integer
+            format: int64
         demographics:
           $ref: '#/components/schemas/DemographicsDTO'
         tenantId:
@@ -997,7 +999,8 @@ components:
         topicIds:
           type: array
           items:
-            type: long
+            type: integer
+            format: int64
         demographics:
           $ref: '#/components/schemas/DemographicsDTO'
         counsellingRelations:

@@ -28,6 +28,7 @@ class ConfigurationValidatorTest {
     setField(validator, "matrixServerName");
     setField(validator, "matrixAdminUsername");
     setField(validator, "matrixAdminPassword");
+    setField(validator, "serviceEncryptionAppkey");
     setField(validator, "consultingTypeServiceApiUrl");
     setField(validator, "tenantServiceApiUrl");
     setField(validator, "userAdminServiceApiUrl");
