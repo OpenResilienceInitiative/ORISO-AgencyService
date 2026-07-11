@@ -10,6 +10,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.jdbc.Sql;
@@ -23,6 +26,9 @@ class AgencyRepositoryIT {
 
   @Autowired
   private AgencyRepository agencyRepository;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   @Test
   void findById_Should_loadAgencyWithTopics() {
@@ -95,11 +101,52 @@ class AgencyRepositoryIT {
   }
 
   @Test
+  void demoBaselineSync_Should_beIdempotentAndMakeStandardRegistrationTopicsVisible() {
+    // given, when
+    syncDemoBaseline();
+    syncDemoBaseline();
+
+    // then
+    var parentsAndFamilyAgencies =
+        agencyRepository.searchWithTopic("88885", 5, 1, 10, null, null, null, 1L);
+    var childrenAndYouthAgencies =
+        agencyRepository.searchWithTopic("88885", 5, 1, 2, null, null, null, 1L);
+
+    assertThat(parentsAndFamilyAgencies)
+        .extracting(Agency::getId)
+        .contains(246L);
+    assertThat(childrenAndYouthAgencies)
+        .extracting(Agency::getId)
+        .contains(246L);
+
+    Integer duplicateAgencyTopics = jdbcTemplate.queryForObject(
+        """
+            SELECT COUNT(*)
+            FROM (
+              SELECT AGENCY_ID, TOPIC_ID
+              FROM AGENCY_TOPIC
+              WHERE AGENCY_ID = 246 AND TOPIC_ID IN (2, 10)
+              GROUP BY AGENCY_ID, TOPIC_ID
+              HAVING COUNT(*) > 1
+            )
+            """,
+        Integer.class);
+
+    assertThat(duplicateAgencyTopics).isZero();
+  }
+
+  @Test
   void searchWithTopic_Should_notFindAgencyByPostcodeAndConsultingTypeAndTopicId_When_ConsultingTypeDoesNotMatch() {
     // given, when
     var agencyList = agencyRepository.searchWithTopic("53113", 5, 1, 1, null, null, null, 1L);
     // then
     assertThat(agencyList).isEmpty();
+  }
+
+  private void syncDemoBaseline() {
+    var populator = new ResourceDatabasePopulator(
+        new ClassPathResource("/database/DemoBaselineAgencyVisibility.sql"));
+    populator.execute(jdbcTemplate.getDataSource());
   }
 
 
