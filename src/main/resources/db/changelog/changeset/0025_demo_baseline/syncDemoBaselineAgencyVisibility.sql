@@ -133,14 +133,8 @@ ON DUPLICATE KEY UPDATE
     `publication_status` = COALESCE(`publication_status`, 'DRAFT'),
     `publication_status_imprint` = COALESCE(`publication_status_imprint`, 'DRAFT');
 
-SET @demo_sequence_postcode_value := (
-    SELECT GREATEST(COALESCE(MAX(`id`), 0), 900000001)
-    FROM `agencyservice`.`agency_postcode_range`
-);
-DO SETVAL(`agencyservice`.`sequence_agency_postcode_range`, @demo_sequence_postcode_value, 0);
-
-SET @demo_sequence_agency_topic_value := (
-    SELECT GREATEST(COALESCE(MAX(`id`), 0), 900000010)
-    FROM `agencyservice`.`agency_topic`
-);
-DO SETVAL(`agencyservice`.`sequence_agency_topic`, @demo_sequence_agency_topic_value, 0);
+-- MariaDB requires SETVAL's next_value argument to be an integer literal.
+-- SETVAL never lowers a sequence, so these reserved baseline IDs are safe even
+-- when an environment has already advanced beyond them.
+DO SETVAL(`agencyservice`.`sequence_agency_postcode_range`, 900000001, 0);
+DO SETVAL(`agencyservice`.`sequence_agency_topic`, 900000010, 0);
