@@ -133,8 +133,11 @@ ON DUPLICATE KEY UPDATE
     `publication_status` = COALESCE(`publication_status`, 'DRAFT'),
     `publication_status_imprint` = COALESCE(`publication_status_imprint`, 'DRAFT');
 
--- MariaDB requires SETVAL's next_value argument to be an integer literal.
--- SETVAL never lowers a sequence, so these reserved baseline IDs are safe even
--- when an environment has already advanced beyond them.
-DO SETVAL(`agencyservice`.`sequence_agency_postcode_range`, 900000001, 0);
-DO SETVAL(`agencyservice`.`sequence_agency_topic`, 900000010, 0);
+-- MariaDB requires SETVAL's next_value argument to be an integer literal (a user
+-- variable or subquery raises ERROR 1064). We pass the baseline row IDs as the
+-- last-USED value (is_used = 1), so the next NEXTVAL returns id + increment and
+-- skips past the reserved IDs -- otherwise the following app INSERT would collide
+-- with the demo rows (ERROR 1062 Duplicate entry). SETVAL never lowers a sequence,
+-- so this is a no-op on environments that already advanced beyond these IDs.
+DO SETVAL(`agencyservice`.`sequence_agency_postcode_range`, 900000001, 1);
+DO SETVAL(`agencyservice`.`sequence_agency_topic`, 900000010, 1);
