@@ -13,7 +13,9 @@ public class AgencyAdminControlsConverter {
     }
     return new AgencyAdminControls()
         .permissionsPageEnabled(settings.getPermissionsPageEnabled())
-        .allowedPermissionToggles(toAllowedPermissionToggles(settings.getAllowedPermissionToggles()));
+        .allowedPermissionToggles(toAllowedPermissionToggles(settings.getAllowedPermissionToggles()))
+        .enforcedPermissionToggles(
+            toAllowedPermissionToggles(settings.getEnforcedPermissionToggles()));
   }
 
   public AgencyAdminControlsSettings toAgencyAdminControlsSettings(AgencyAdminControls controls) {
@@ -24,6 +26,8 @@ public class AgencyAdminControlsConverter {
         .permissionsPageEnabled(nullAsTrue(controls.getPermissionsPageEnabled()))
         .allowedPermissionToggles(
             toAllowedPermissionTogglesSettings(controls.getAllowedPermissionToggles()))
+        .enforcedPermissionToggles(
+            toEnforcedPermissionTogglesSettings(controls.getEnforcedPermissionToggles()))
         .build();
   }
 
@@ -33,6 +37,10 @@ public class AgencyAdminControlsConverter {
 
   private Boolean nullAsTrue(Boolean value) {
     return value != null ? value : Boolean.TRUE;
+  }
+
+  private Boolean nullAsFalse(Boolean value) {
+    return value != null ? value : Boolean.FALSE;
   }
 
   private AgencyAdminAllowedPermissionToggles toAllowedPermissionToggles(
@@ -103,6 +111,42 @@ public class AgencyAdminControlsConverter {
         .voiceMessagesOneOnOneChats(nullAsTrue(toggles.getVoiceMessagesOneOnOneChats()))
         .voiceMessagesGroupChats(nullAsTrue(toggles.getVoiceMessagesGroupChats()))
         .voiceMessagesSupervisionChats(nullAsTrue(toggles.getVoiceMessagesSupervisionChats()))
+        .build();
+  }
+
+  private AgencyAdminAllowedPermissionTogglesSettings toEnforcedPermissionTogglesSettings(
+      AgencyAdminAllowedPermissionToggles toggles) {
+    if (toggles == null) {
+      return null;
+    }
+    return AgencyAdminAllowedPermissionTogglesSettings.builder()
+        .appearance(nullAsFalse(toggles.getAppearance()))
+        .anonymousChat(nullAsFalse(toggles.getAnonymousChat()))
+        .calls(nullAsFalse(toggles.getCalls()))
+        .groupChat(nullAsFalse(toggles.getGroupChat()))
+        .supervision(nullAsFalse(toggles.getSupervision()))
+        .supervisionAnonymousChats(nullAsFalse(toggles.getSupervisionAnonymousChats()))
+        .supervisionOneOnOneChats(nullAsFalse(toggles.getSupervisionOneOnOneChats()))
+        .audioCalls(nullAsFalse(toggles.getAudioCalls()))
+        .audioCallsAnonymousChats(nullAsFalse(toggles.getAudioCallsAnonymousChats()))
+        .audioCallsOneOnOneChats(nullAsFalse(toggles.getAudioCallsOneOnOneChats()))
+        .audioCallsGroupChats(nullAsFalse(toggles.getAudioCallsGroupChats()))
+        .audioCallsSupervisionChats(nullAsFalse(toggles.getAudioCallsSupervisionChats()))
+        .videoCalls(nullAsFalse(toggles.getVideoCalls()))
+        .videoCallsAnonymousChats(nullAsFalse(toggles.getVideoCallsAnonymousChats()))
+        .videoCallsOneOnOneChats(nullAsFalse(toggles.getVideoCallsOneOnOneChats()))
+        .videoCallsGroupChats(nullAsFalse(toggles.getVideoCallsGroupChats()))
+        .videoCallsSupervisionChats(nullAsFalse(toggles.getVideoCallsSupervisionChats()))
+        .threads(nullAsFalse(toggles.getThreads()))
+        .threadsAnonymousChats(nullAsFalse(toggles.getThreadsAnonymousChats()))
+        .threadsOneOnOneChats(nullAsFalse(toggles.getThreadsOneOnOneChats()))
+        .threadsGroupChats(nullAsFalse(toggles.getThreadsGroupChats()))
+        .threadsSupervisionChats(nullAsFalse(toggles.getThreadsSupervisionChats()))
+        .voiceMessages(nullAsFalse(toggles.getVoiceMessages()))
+        .voiceMessagesAnonymousChats(nullAsFalse(toggles.getVoiceMessagesAnonymousChats()))
+        .voiceMessagesOneOnOneChats(nullAsFalse(toggles.getVoiceMessagesOneOnOneChats()))
+        .voiceMessagesGroupChats(nullAsFalse(toggles.getVoiceMessagesGroupChats()))
+        .voiceMessagesSupervisionChats(nullAsFalse(toggles.getVoiceMessagesSupervisionChats()))
         .build();
   }
 }
