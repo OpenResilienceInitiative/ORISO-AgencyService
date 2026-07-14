@@ -1123,14 +1123,16 @@ components:
       properties:
         field:
           type: string
-          example: 'name|description|postcode|city|teamAgency|offline'
+          example: 'id|name|description|postcode|city|teamAgency|offline|createDate'
           enum:
+            - 'id'
             - 'name'
             - 'description'
             - 'postCode'
             - 'city'
             - 'teamAgency'
             - 'offline'
+            - 'createDate'
         order:
           type: string
           example: 'ASC|DESC'
