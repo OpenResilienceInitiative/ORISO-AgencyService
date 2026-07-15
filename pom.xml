@@ -50,7 +50,6 @@
     <maven.compiler.target>21</maven.compiler.target>
     <hibernate.search.version>6.1.1.Final</hibernate.search.version>
     <springfox.boot.starter.version>3.0.0</springfox.boot.starter.version>
-    <sentry.version>8.46.0</sentry.version>
     <owasp.java.html.sanitizer>20211018.1</owasp.java.html.sanitizer>
   </properties>
 
@@ -107,16 +106,6 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-freemarker</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.sentry</groupId>
-      <artifactId>sentry-spring-boot-4-starter</artifactId>
-      <version>${sentry.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.sentry</groupId>
-      <artifactId>sentry-logback</artifactId>
-      <version>${sentry.version}</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.security</groupId>
