@@ -1,6 +1,7 @@
 package de.caritas.cob.agencyservice.api.repository.legaltext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
@@ -152,6 +153,120 @@ class LegalTextRepositoryTest {
     assertThat(legalTextRepository.findByTenantIdAndKindOrderByLabelAsc(1L, LegalTextKind.DPP))
         .extracting(LegalText::getLabel)
         .containsExactly("t1 dpp");
+  }
+
+  @Test
+  void persist_Should_applyCreateAndUpdateDate_When_notSet() {
+    // the DB columns are NOT NULL; the entity must survive saves where no caller set the dates
+    LegalText text =
+        LegalText.builder()
+            .tenantId(1L)
+            .kind(LegalTextKind.DPP)
+            .label("Ohne Datum")
+            .content("{}")
+            .build();
+
+    Long id = em.persistFlushFind(text).getId();
+    em.clear();
+
+    LegalText reloaded = em.find(LegalText.class, id);
+    assertThat(reloaded.getCreateDate()).isNotNull();
+    assertThat(reloaded.getUpdateDate()).isNotNull();
+  }
+
+  @Test
+  void update_Should_refreshUpdateDate() {
+    var past = LocalDateTime.now().minusDays(3);
+    LegalText text =
+        em.persistFlushFind(
+            LegalText.builder()
+                .tenantId(1L)
+                .kind(LegalTextKind.DPP)
+                .label("Alt")
+                .content("{}")
+                .createDate(past)
+                .updateDate(past)
+                .build());
+
+    text.setLabel("Neu");
+    em.persistAndFlush(text);
+    em.clear();
+
+    assertThat(em.find(LegalText.class, text.getId()).getUpdateDate()).isAfter(past);
+  }
+
+  @Test
+  void persist_Should_rejectDppReferenceOfWrongKind() {
+    // a department's DPP slot must never point at an IMPRINT object — the consent screen would
+    // render the wrong document kind
+    Agency agency = persistAgency("Zentrum Guard");
+    var now = LocalDateTime.now();
+    LegalText imprintText =
+        em.persistFlushFind(
+            LegalText.builder()
+                .tenantId(null)
+                .kind(LegalTextKind.IMPRINT)
+                .label("Impressum")
+                .content("{}")
+                .createDate(now)
+                .updateDate(now)
+                .build());
+    AgencyTopic department =
+        AgencyTopic.builder().agency(agency).topicId(50L).createDate(now).updateDate(now).build();
+    department.setDpp(imprintText);
+
+    assertThatExceptionOfType(RuntimeException.class)
+        .isThrownBy(() -> em.persistAndFlush(department))
+        .withStackTraceContaining("kind");
+  }
+
+  @Test
+  void persist_Should_rejectImprintReferenceOfWrongKind() {
+    Agency agency = persistAgency("Zentrum Guard 2");
+    var now = LocalDateTime.now();
+    LegalText dppText =
+        em.persistFlushFind(
+            LegalText.builder()
+                .tenantId(null)
+                .kind(LegalTextKind.DPP)
+                .label("DSE")
+                .content("{}")
+                .createDate(now)
+                .updateDate(now)
+                .build());
+    AgencyTopic department =
+        AgencyTopic.builder().agency(agency).topicId(51L).createDate(now).updateDate(now).build();
+    department.setImprint(dppText);
+
+    assertThatExceptionOfType(RuntimeException.class)
+        .isThrownBy(() -> em.persistAndFlush(department))
+        .withStackTraceContaining("kind");
+  }
+
+  @Test
+  void persist_Should_rejectReferenceToAnotherTenantsText() {
+    // a department must never reference another Träger's legal document
+    var now = LocalDateTime.now();
+    Agency agency = persistAgency("Zentrum Tenant-Guard");
+    agency.setTenantId(5L);
+    em.persistAndFlush(agency);
+    LegalText foreignText =
+        em.persistFlushFind(
+            LegalText.builder()
+                .tenantId(9L)
+                .kind(LegalTextKind.DPP)
+                .label("Fremde DSE")
+                .content("{}")
+                .createDate(now)
+                .updateDate(now)
+                .build());
+    AgencyTopic department =
+        AgencyTopic.builder().agency(agency).topicId(52L).createDate(now).updateDate(now).build();
+    department.setDpp(foreignText);
+
+    assertThatExceptionOfType(RuntimeException.class)
+        .isThrownBy(() -> em.persistAndFlush(department))
+        .withStackTraceContaining("tenant");
   }
 
   @Test

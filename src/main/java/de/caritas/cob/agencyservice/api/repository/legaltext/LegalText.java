@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
@@ -68,11 +69,26 @@ public class LegalText {
   @Column(name = "update_date")
   private LocalDateTime updateDate;
 
-  /** Mirrors {@code AgencyTopic#applyDefaults}: NOT NULL status survives non-builder paths. */
+  /**
+   * Mirrors {@code AgencyTopic#applyDefaults}: the NOT NULL columns (status, dates) survive
+   * non-builder construction paths and repository saves where no caller set them explicitly.
+   */
   @PrePersist
   void applyDefaults() {
     if (publicationStatus == null) {
       publicationStatus = PublicationStatus.DRAFT;
     }
+    var now = LocalDateTime.now();
+    if (createDate == null) {
+      createDate = now;
+    }
+    if (updateDate == null) {
+      updateDate = now;
+    }
+  }
+
+  @PreUpdate
+  void refreshUpdateDate() {
+    updateDate = LocalDateTime.now();
   }
 }

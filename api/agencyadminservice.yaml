@@ -349,8 +349,8 @@ paths:
       tags:
         - admin-agency-controller
       summary: 'List the caller tenant''s shared legal texts of one kind, each with its department
-      usage count ("used by N departments", ADR-014). [Authorization: Role: agency-admin or
-      restricted-agency-admin]'
+      usage count ("used by N departments", ADR-014). Library CRUD is full-admin only: a shared
+      text applies tenant-wide. [Authorization: Role: agency-admin]'
       operationId: getLegalTexts
       parameters:
         - name: kind
@@ -379,7 +379,7 @@ paths:
       tags:
         - admin-agency-controller
       summary: 'Create a shared legal text owned by the caller''s tenant (ADR-014).
-      [Authorization: Role: agency-admin or restricted-agency-admin]'
+      [Authorization: Role: agency-admin — full admins only, see GET]'
       operationId: createLegalText
       requestBody:
         content:
@@ -407,9 +407,10 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Update a shared legal text (label, multilingual content, publication status).
-      Changes apply to every department referencing the text. [Authorization: Role: agency-admin
-      or restricted-agency-admin, scoped to the owning tenant]'
+      summary: 'Update a shared legal text (label, multilingual content, optionally publication
+      status — omitted publish keeps the current status). Changes apply to every department
+      referencing the text. [Authorization: Role: agency-admin — full admins only, scoped to the
+      owning tenant]'
       operationId: updateLegalText
       parameters:
         - name: legalTextId
@@ -1352,7 +1353,9 @@ components:
             type: string
         publish:
           type: boolean
-          default: false
+          nullable: true
+          description: 'true = PUBLISHED, false = DRAFT; omitted/null = keep the current
+            publication status (a label/content-only update never unpublishes)'
 
     LegalTextAssignmentDTO:
       type: object
