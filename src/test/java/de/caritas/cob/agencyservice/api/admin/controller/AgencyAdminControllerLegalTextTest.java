@@ -92,9 +92,10 @@ class AgencyAdminControllerLegalTextTest {
   }
 
   @Test
-  void updateLegalText_Should_delegate() {
+  void updateLegalText_Should_passNullPublish_ToPreserveCurrentStatus() {
+    // omitted publish flag = keep the current publication status (review regression)
     when(legalTextAdminService.updateLegalText(
-            eq(1L), eq("Umbenannt"), eq(Map.of("de", "<p>y</p>")), eq(false)))
+            eq(1L), eq("Umbenannt"), eq(Map.of("de", "<p>y</p>")), isNull()))
         .thenReturn(view(1L, 2L));
 
     var body =
@@ -103,6 +104,22 @@ class AgencyAdminControllerLegalTextTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody().getUsageCount()).isEqualTo(2L);
+  }
+
+  @Test
+  void updateLegalText_Should_passExplicitPublishFlag() {
+    when(legalTextAdminService.updateLegalText(
+            eq(1L), eq("Umbenannt"), eq(Map.of("de", "<p>y</p>")), eq(Boolean.TRUE)))
+        .thenReturn(view(1L, 2L));
+
+    var body =
+        new UpdateLegalTextDTO()
+            .label("Umbenannt")
+            .content(Map.of("de", "<p>y</p>"))
+            .publish(true);
+    var response = controller.updateLegalText(1L, body);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
   }
 
   @Test

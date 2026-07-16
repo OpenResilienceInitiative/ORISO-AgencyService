@@ -57,9 +57,17 @@ public class LegalTextAdminService {
   private final ObjectReader metaJsonReader =
       objectMapper.readerFor(JsonNode.class).with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
-  /** Lists the caller tenant's legal texts of one kind, each with its department usage count. */
+  /**
+   * Lists the caller tenant's legal texts of one kind, each with its department usage count.
+   *
+   * <p>Library CRUD is full-agency-admin only: a shared text applies to every referencing
+   * department, so a restricted admin (scoped to specific agencies) must not read or change
+   * tenant-wide legal content. Restricted admins keep the per-department publish endpoints and the
+   * agency-scoped assignment below.
+   */
   @Transactional(readOnly = true)
   public List<LegalTextAdminView> listLegalTexts(LegalTextKind kind) {
+    assertFullAgencyAdmin();
     Long tenantId = resolveEffectiveTenantId();
     List<LegalText> texts =
         isUnrestricted(tenantId)
@@ -68,10 +76,11 @@ public class LegalTextAdminService {
     return texts.stream().map(this::toView).toList();
   }
 
-  /** Creates a legal text owned by the caller's tenant. */
+  /** Creates a legal text owned by the caller's tenant (full agency admins only). */
   @Transactional
   public LegalTextAdminView createLegalText(
       LegalTextKind kind, String label, Map<String, String> content, boolean publish) {
+    assertFullAgencyAdmin();
     assertValidLabel(label);
     var now = LocalDateTime.now();
     var text =
@@ -87,10 +96,15 @@ public class LegalTextAdminService {
     return toView(legalTextRepository.save(text));
   }
 
-  /** Updates label, content and publication status of a caller-tenant text. */
+  /**
+   * Updates label, content and (optionally) publication status of a caller-tenant text (full
+   * agency admins only). A {@code null} publish flag preserves the current publication status — a
+   * label/content-only update must never silently unpublish a published text.
+   */
   @Transactional
   public LegalTextAdminView updateLegalText(
-      Long legalTextId, String label, Map<String, String> content, boolean publish) {
+      Long legalTextId, String label, Map<String, String> content, Boolean publish) {
+    assertFullAgencyAdmin();
     LegalText text =
         legalTextRepository.findById(legalTextId).orElseThrow(NotFoundException::new);
     assertCallerTenantOwnsText(text);
@@ -98,9 +112,24 @@ public class LegalTextAdminService {
 
     text.setLabel(label);
     text.setContent(toJson(sanitizeTranslations(content)));
-    text.setPublicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
+    if (publish != null) {
+      text.setPublicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
+    }
     text.setUpdateDate(LocalDateTime.now());
     return toView(legalTextRepository.save(text));
+  }
+
+  /**
+   * Library CRUD guard: shared texts apply tenant-wide, so restricted agency admins (scoped to
+   * specific agencies) are rejected here and use the per-department endpoints instead.
+   */
+  private void assertFullAgencyAdmin() {
+    if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
+      log.warn(
+          "Restricted admin user {} may not manage the tenant-wide legal-text library",
+          authenticatedUser.getUserId());
+      throw new AgencyAccessDeniedException();
+    }
   }
 
   /**

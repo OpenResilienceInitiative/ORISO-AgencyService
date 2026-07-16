@@ -359,7 +359,8 @@ public class AgencyAdminController implements AgencyadminApi {
             legalTextId,
             updateLegalTextDTO.getLabel(),
             updateLegalTextDTO.getContent(),
-            Boolean.TRUE.equals(updateLegalTextDTO.getPublish()));
+            // null = preserve the current publication status (see service javadoc)
+            updateLegalTextDTO.getPublish());
     return ResponseEntity.ok(toLegalTextAdminDto(view));
   }
 

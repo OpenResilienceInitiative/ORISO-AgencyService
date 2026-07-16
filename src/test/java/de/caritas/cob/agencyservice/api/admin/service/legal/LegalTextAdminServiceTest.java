@@ -196,6 +196,54 @@ class LegalTextAdminServiceTest {
         .isThrownBy(() -> service.updateLegalText(99L, "x", Map.of("de", "x"), false));
   }
 
+  // --- library CRUD is full-admin only (review: a restricted admin must not be able to change
+  // tenant-wide shared texts that agencies outside their scope reference) ---
+
+  @Test
+  void list_Should_throwAccessDenied_When_restrictedAgencyAdmin() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.listLegalTexts(LegalTextKind.DPP));
+  }
+
+  @Test
+  void create_Should_throwAccessDenied_When_restrictedAgencyAdmin() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(
+            () -> service.createLegalText(LegalTextKind.DPP, "x", Map.of("de", "x"), false));
+    verify(legalTextRepository, never()).save(any());
+  }
+
+  @Test
+  void update_Should_throwAccessDenied_When_restrictedAgencyAdmin() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.updateLegalText(1L, "x", Map.of("de", "x"), false));
+    verify(legalTextRepository, never()).save(any());
+  }
+
+  // --- publish semantics on update ---
+
+  @Test
+  void update_Should_preservePublicationStatus_When_publishOmitted() {
+    // review: a label/content-only update must not silently unpublish a published text
+    when(authenticatedUser.getTenantId()).thenReturn(5L);
+    var existing = text(1L, 5L, LegalTextKind.DPP);
+    existing.setPublicationStatus(PublicationStatus.PUBLISHED);
+    when(legalTextRepository.findById(1L)).thenReturn(Optional.of(existing));
+    when(legalTextRepository.save(any(LegalText.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    when(agencyTopicRepository.countByDpp_Id(1L)).thenReturn(1L);
+
+    service.updateLegalText(1L, "Nur Label", Map.of("de", "<p>x</p>"), null);
+
+    assertThat(existing.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+  }
+
   // --- assignment ---
 
   @Test
