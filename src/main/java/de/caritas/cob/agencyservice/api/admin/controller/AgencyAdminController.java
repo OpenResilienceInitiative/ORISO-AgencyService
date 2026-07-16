@@ -8,8 +8,14 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchSe
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
+import de.caritas.cob.agencyservice.api.model.CreateLegalTextDTO;
+import de.caritas.cob.agencyservice.api.model.LegalTextAdminDTO;
+import de.caritas.cob.agencyservice.api.model.LegalTextAssignmentDTO;
+import de.caritas.cob.agencyservice.api.model.UpdateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
@@ -53,6 +59,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
   private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
   private final @NonNull DepartmentImprintService departmentImprintService;
+  private final @NonNull LegalTextAdminService legalTextAdminService;
 
   /**
    * Creates the root hal based navigation entity.
@@ -318,6 +325,69 @@ public class AgencyAdminController implements AgencyadminApi {
             .publicationStatus(
                 DepartmentImprintResponseDTO.PublicationStatusEnum.fromValue(status.name()));
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Lists the caller tenant's shared legal texts of one kind, each with its "used by N
+   * departments" count (ADR-014 legal-text library).
+   */
+  @Override
+  public ResponseEntity<List<LegalTextAdminDTO>> getLegalTexts(String kind) {
+    var views = legalTextAdminService.listLegalTexts(LegalTextKind.valueOf(kind));
+    return ResponseEntity.ok(views.stream().map(this::toLegalTextAdminDto).toList());
+  }
+
+  /** Creates a shared legal text owned by the caller's tenant (ADR-014). */
+  @Override
+  public ResponseEntity<LegalTextAdminDTO> createLegalText(
+      CreateLegalTextDTO createLegalTextDTO) {
+    var view =
+        legalTextAdminService.createLegalText(
+            LegalTextKind.valueOf(createLegalTextDTO.getKind().getValue()),
+            createLegalTextDTO.getLabel(),
+            createLegalTextDTO.getContent(),
+            Boolean.TRUE.equals(createLegalTextDTO.getPublish()));
+    return ResponseEntity.ok(toLegalTextAdminDto(view));
+  }
+
+  /** Updates a shared legal text; the change applies to every department referencing it. */
+  @Override
+  public ResponseEntity<LegalTextAdminDTO> updateLegalText(
+      Long legalTextId, UpdateLegalTextDTO updateLegalTextDTO) {
+    var view =
+        legalTextAdminService.updateLegalText(
+            legalTextId,
+            updateLegalTextDTO.getLabel(),
+            updateLegalTextDTO.getContent(),
+            Boolean.TRUE.equals(updateLegalTextDTO.getPublish()));
+    return ResponseEntity.ok(toLegalTextAdminDto(view));
+  }
+
+  /**
+   * Assigns a shared legal text to a department's DPP or imprint slot, or clears the slot
+   * (tenant-level fallback applies again). IDOR/tenant guards live in the service.
+   */
+  @Override
+  public ResponseEntity<Void> assignDepartmentLegalText(
+      Long agencyId, Long topicId, LegalTextAssignmentDTO legalTextAssignmentDTO) {
+    legalTextAdminService.assignDepartmentLegalText(
+        agencyId,
+        topicId,
+        LegalTextKind.valueOf(legalTextAssignmentDTO.getKind().getValue()),
+        legalTextAssignmentDTO.getLegalTextId());
+    return ResponseEntity.noContent().build();
+  }
+
+  private LegalTextAdminDTO toLegalTextAdminDto(
+      de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminView view) {
+    return new LegalTextAdminDTO()
+        .id(view.id())
+        .kind(LegalTextAdminDTO.KindEnum.fromValue(view.kind().name()))
+        .label(view.label())
+        .content(view.content())
+        .publicationStatus(
+            LegalTextAdminDTO.PublicationStatusEnum.fromValue(view.publicationStatus().name()))
+        .usageCount(view.usageCount());
   }
 
   @Override

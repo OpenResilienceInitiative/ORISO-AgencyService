@@ -6,4 +6,6 @@ import org.springframework.data.repository.CrudRepository;
 public interface LegalTextRepository extends CrudRepository<LegalText, Long> {
 
   List<LegalText> findByTenantIdAndKindOrderByLabelAsc(Long tenantId, LegalTextKind kind);
+
+  List<LegalText> findByKindOrderByLabelAsc(LegalTextKind kind);
 }
