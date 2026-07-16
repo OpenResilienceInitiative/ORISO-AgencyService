@@ -19,4 +19,10 @@ public interface AgencyTopicRepository extends JpaRepository<AgencyTopic, Long> 
   /** Finds all department rows for a given agency. */
   @Query(value = "select * from agency_topic where agency_id = :agencyId", nativeQuery = true)
   List<AgencyTopic> findAllByAgencyId(@Param("agencyId") Long agencyId);
+
+  /** How many departments reference this shared DPP text ("used by N", ADR-014). */
+  long countByDpp_Id(Long legalTextId);
+
+  /** How many departments reference this shared Impressum text ("used by N", ADR-014). */
+  long countByImprint_Id(Long legalTextId);
 }

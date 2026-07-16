@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.repository.agencytopic;
 
 import de.caritas.cob.agencyservice.api.model.TopicDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import java.time.LocalDateTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -74,6 +75,20 @@ public class AgencyTopic {
   @Enumerated(EnumType.STRING)
   @Column(name = "publication_status_imprint", nullable = false)
   private PublicationStatus publicationStatusImprint = PublicationStatus.DRAFT;
+
+  /**
+   * ADR-014: reference to the shared data privacy policy object. When set it wins over the inline
+   * {@link #contentDpp}; several departments may point at the same text. {@code null} = fall back
+   * to the inline column (pre-backfill rows) or, if that is empty too, to the tenant-level text.
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "dpp_id")
+  private LegalText dpp;
+
+  /** ADR-014: reference to the shared Impressum object, same semantics as {@link #dpp}. */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "imprint_id")
+  private LegalText imprint;
 
   @Transient TopicDTO topicData = new TopicDTO();
 

@@ -9,6 +9,8 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -101,6 +103,73 @@ class DepartmentLegalServiceTest {
 
     assertThat(view.dppContent()).isNull();
     assertThat(view.imprintContent()).isNull();
+  }
+
+  @Test
+  void getPublishedDepartmentLegal_Should_preferReferencedLegalText_OverInlineContent() {
+    // ADR-014: when the department references a shared legal-text object, that object is the
+    // truth — the leftover inline copy must be ignored entirely.
+    var department =
+        department(
+            "{\"de\":\"<p>alte Inline-DSE</p>\"}",
+            PublicationStatus.PUBLISHED,
+            null,
+            PublicationStatus.DRAFT);
+    department.setDpp(
+        LegalText.builder()
+            .id(100L)
+            .kind(LegalTextKind.DPP)
+            .label("Geteilte DSE")
+            .content("{\"de\":\"<p>geteilte DSE</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED)
+            .build());
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>geteilte DSE</p>\"}");
+  }
+
+  @Test
+  void getPublishedDepartmentLegal_Should_returnNull_When_referencedTextIsDraft() {
+    // a DRAFT shared object must not fall back to a published inline leftover — the reference,
+    // once set, fully replaces the inline column
+    var department =
+        department(
+            "{\"de\":\"<p>alte Inline-DSE</p>\"}",
+            PublicationStatus.PUBLISHED,
+            null,
+            PublicationStatus.DRAFT);
+    department.setDpp(
+        LegalText.builder()
+            .id(100L)
+            .kind(LegalTextKind.DPP)
+            .label("Entwurf")
+            .content("{\"de\":\"<p>Entwurf</p>\"}")
+            .publicationStatus(PublicationStatus.DRAFT)
+            .build());
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isNull();
+  }
+
+  @Test
+  void getPublishedDepartmentLegal_Should_resolveImprintReferenceIndependently() {
+    var department =
+        department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
+    department.setImprint(
+        LegalText.builder()
+            .id(101L)
+            .kind(LegalTextKind.IMPRINT)
+            .label("Geteiltes Impressum")
+            .content("{\"de\":\"<p>Impressum</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED)
+            .build());
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isNull();
+    assertThat(view.imprintContent()).isEqualTo("{\"de\":\"<p>Impressum</p>\"}");
   }
 
   @Test

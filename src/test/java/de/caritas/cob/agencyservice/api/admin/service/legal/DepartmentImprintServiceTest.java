@@ -16,6 +16,8 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -75,6 +77,53 @@ class DepartmentImprintServiceTest {
     when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 42L))
         .thenReturn(Optional.of(department));
     return department;
+  }
+
+  @Test
+  void publish_Should_writeThroughToReferencedLegalText_When_departmentReferencesOne() {
+    // ADR-014: the referenced shared Impressum object is the truth; the legacy per-department
+    // endpoint writes through to it instead of the ignored inline column.
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    var referenced =
+        LegalText.builder()
+            .id(101L)
+            .kind(LegalTextKind.IMPRINT)
+            .label("Geteiltes Impressum")
+            .content("{\"de\":\"<p>alt</p>\"}")
+            .publicationStatus(PublicationStatus.DRAFT)
+            .build();
+    department.setImprint(referenced);
+
+    var status = service.publishDepartmentImprint(7L, 42L, Map.of("de", "<p>neu</p>"), true);
+
+    assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
+    assertThat(referenced.getContent()).contains("neu");
+    assertThat(referenced.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getContentImprint()).isNull();
+  }
+
+  @Test
+  void read_Should_returnReferencedLegalText_When_departmentReferencesOne() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setContentImprint("{\"de\":\"<p>inline-alt</p>\"}");
+    department.setPublicationStatusImprint(PublicationStatus.DRAFT);
+    department.setImprint(
+        LegalText.builder()
+            .id(101L)
+            .kind(LegalTextKind.IMPRINT)
+            .label("Geteiltes Impressum")
+            .content("{\"de\":\"<p>geteilt</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED)
+            .build());
+
+    var view = service.getDepartmentImprint(7L, 42L);
+
+    assertThat(view.content()).isEqualTo("{\"de\":\"<p>geteilt</p>\"}");
+    assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
   }
 
   @Test

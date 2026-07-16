@@ -11,6 +11,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -71,13 +72,25 @@ public class DepartmentImprintService {
 
     assertCallerTenantMatches(department.getAgency());
 
-    department.setContentImprint(toJson(sanitizeTranslations(content)));
-    department.setPublicationStatusImprint(
-        publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
-    department.setUpdateDate(LocalDateTime.now());
+    var sanitizedJson = toJson(sanitizeTranslations(content));
+    var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
+    var now = LocalDateTime.now();
+
+    LegalText referenced = department.getImprint();
+    if (referenced != null) {
+      // ADR-014: the referenced shared object is the truth — write through to it; the inline
+      // column stays untouched (the read path ignores it once a reference exists).
+      referenced.setContent(sanitizedJson);
+      referenced.setPublicationStatus(status);
+      referenced.setUpdateDate(now);
+    } else {
+      department.setContentImprint(sanitizedJson);
+      department.setPublicationStatusImprint(status);
+    }
+    department.setUpdateDate(now);
     agencyTopicRepository.save(department);
 
-    return department.getPublicationStatusImprint();
+    return status;
   }
 
   /**
@@ -96,6 +109,11 @@ public class DepartmentImprintService {
 
     assertCallerTenantMatches(department.getAgency());
 
+    LegalText referenced = department.getImprint();
+    if (referenced != null) {
+      return new DepartmentImprintView(
+          referenced.getContent(), referenced.getPublicationStatus());
+    }
     return new DepartmentImprintView(
         department.getContentImprint(), department.getPublicationStatusImprint());
   }

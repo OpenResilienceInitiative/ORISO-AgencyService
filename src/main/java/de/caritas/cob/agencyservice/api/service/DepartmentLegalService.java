@@ -5,6 +5,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,9 +40,30 @@ public class DepartmentLegalService {
     assertAgencyIsNotDeleted(department.getAgency());
 
     return new DepartmentLegalView(
-        publishedContentOrNull(department.getContentDpp(), department.getPublicationStatus()),
-        publishedContentOrNull(
-            department.getContentImprint(), department.getPublicationStatusImprint()));
+        resolveDpp(department), resolveImprint(department));
+  }
+
+  /**
+   * ADR-014 resolution order: a referenced shared legal-text object, once assigned, fully replaces
+   * the legacy inline column — including its DRAFT state. Only reference-less (pre-backfill) rows
+   * fall back to the inline content.
+   */
+  private String resolveDpp(AgencyTopic department) {
+    LegalText referenced = department.getDpp();
+    if (referenced != null) {
+      return publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return publishedContentOrNull(
+        department.getContentDpp(), department.getPublicationStatus());
+  }
+
+  private String resolveImprint(AgencyTopic department) {
+    LegalText referenced = department.getImprint();
+    if (referenced != null) {
+      return publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return publishedContentOrNull(
+        department.getContentImprint(), department.getPublicationStatusImprint());
   }
 
   private void assertAgencyIsNotDeleted(Agency agency) {
