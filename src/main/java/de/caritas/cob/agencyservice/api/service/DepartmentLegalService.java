@@ -5,6 +5,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,9 +40,36 @@ public class DepartmentLegalService {
     assertAgencyIsNotDeleted(department.getAgency());
 
     return new DepartmentLegalView(
-        publishedContentOrNull(department.getContentDpp(), department.getPublicationStatus()),
-        publishedContentOrNull(
-            department.getContentImprint(), department.getPublicationStatusImprint()));
+        resolveDpp(department), resolveImprint(department));
+  }
+
+  /**
+   * ADR-014 resolution order: a referenced shared legal-text object, once assigned, fully replaces
+   * the legacy inline column — including its DRAFT state. Only reference-less rows fall back to the
+   * inline content.
+   *
+   * <p><b>Unassign semantics (this release):</b> clearing {@code dpp_id}/{@code imprint_id} makes a
+   * department reference-less again, so it falls back to its own inline {@code content_dpp}/{@code
+   * content_imprint} — NOT to a tenant-level fallback document. The backfill deliberately keeps the
+   * inline columns for one release as this read-fallback and as the rollback anchor; they are not
+   * cleared on unassign. Tenant-level fallback is future work (see ADR-014 / #134).
+   */
+  private String resolveDpp(AgencyTopic department) {
+    LegalText referenced = department.getDpp();
+    if (referenced != null) {
+      return publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return publishedContentOrNull(
+        department.getContentDpp(), department.getPublicationStatus());
+  }
+
+  private String resolveImprint(AgencyTopic department) {
+    LegalText referenced = department.getImprint();
+    if (referenced != null) {
+      return publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return publishedContentOrNull(
+        department.getContentImprint(), department.getPublicationStatusImprint());
   }
 
   private void assertAgencyIsNotDeleted(Agency agency) {

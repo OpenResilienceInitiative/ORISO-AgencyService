@@ -16,6 +16,8 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -75,6 +77,57 @@ class DepartmentDataProtectionServiceTest {
     when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 42L))
         .thenReturn(Optional.of(department));
     return department;
+  }
+
+  @Test
+  void publish_Should_writeThroughToReferencedLegalText_When_departmentReferencesOne() {
+    // ADR-014: once a department references a shared legal-text object, that object is the truth.
+    // The legacy per-department publish endpoint must therefore update the referenced object —
+    // writing the inline column would be silently ignored by the read path.
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    var referenced =
+        LegalText.builder()
+            .id(100L)
+            .kind(LegalTextKind.DPP)
+            .label("Geteilte DSE")
+            .content("{\"de\":\"<p>alt</p>\"}")
+            .publicationStatus(PublicationStatus.DRAFT)
+            .build();
+    department.setDpp(referenced);
+
+    var status =
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>neu</p>"), true);
+
+    assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
+    assertThat(referenced.getContent()).contains("neu");
+    assertThat(referenced.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+    assertThat(referenced.getUpdateDate()).isNotNull();
+    // the inline copy stays untouched — it is dead weight kept only for rollback
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getContentDpp()).isNull();
+  }
+
+  @Test
+  void read_Should_returnReferencedLegalText_When_departmentReferencesOne() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setContentDpp("{\"de\":\"<p>inline-alt</p>\"}");
+    department.setPublicationStatus(PublicationStatus.DRAFT);
+    department.setDpp(
+        LegalText.builder()
+            .id(100L)
+            .kind(LegalTextKind.DPP)
+            .label("Geteilte DSE")
+            .content("{\"de\":\"<p>geteilt</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED)
+            .build());
+
+    var view = service.getDepartmentDataPrivacy(7L, 42L);
+
+    assertThat(view.content()).isEqualTo("{\"de\":\"<p>geteilt</p>\"}");
+    assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
   }
 
   @Test

@@ -68,6 +68,9 @@
   <!-- Demo/initial-delivery data is opt-in. Enable with Liquibase context
        "demo-baseline" for demo environments or before customer-facing demo runs. -->
   <include file="db/changelog/changeset/0025_demo_baseline/0025_changeSet.xml" contextFilter="demo-baseline"/>
+  <!-- ADR-014: shared legal-text objects (legal_text table + department references + backfill
+       that merges byte-identical inline texts into one shared row per tenant/kind/status). -->
+  <include file="db/changelog/changeset/0026_legal_text/0026_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB

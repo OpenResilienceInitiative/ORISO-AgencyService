@@ -1,0 +1,37 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+    <!-- ADR-014 step 1: legal texts become first-class shared objects owned by a Träger. -->
+    <changeSet author="oriso" id="createLegalTextTable">
+        <sqlFile path="db/changelog/changeset/0026_legal_text/createLegalText.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0026_legal_text/createLegalText-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+
+    <!-- ADR-014 step 2: departments reference their legal texts (nullable = tenant fallback). -->
+    <changeSet author="oriso" id="addAgencyTopicLegalTextReferences">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+                WHERE TABLE_SCHEMA = 'agencyservice'
+                  AND TABLE_NAME = 'agency_topic'
+                  AND CONSTRAINT_NAME = 'fk_agency_topic_dpp'
+            </sqlCheck>
+        </preConditions>
+        <sqlFile path="db/changelog/changeset/0026_legal_text/addAgencyTopicLegalTextReferences.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0026_legal_text/addAgencyTopicLegalTextReferences-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+
+    <!-- ADR-014 step 3: lift inline department texts into shared objects, merging byte-identical
+         (tenant, content, status) texts into one row. Inline columns stay as rollback anchor. -->
+    <changeSet author="oriso" id="backfillLegalTextFromInline">
+        <sqlFile path="db/changelog/changeset/0026_legal_text/backfillLegalTextFromInline.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0026_legal_text/backfillLegalTextFromInline-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -2,6 +2,8 @@ package de.caritas.cob.agencyservice.api.repository.agencytopic;
 
 import de.caritas.cob.agencyservice.api.model.TopicDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import java.time.LocalDateTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,6 +16,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -75,6 +78,20 @@ public class AgencyTopic {
   @Column(name = "publication_status_imprint", nullable = false)
   private PublicationStatus publicationStatusImprint = PublicationStatus.DRAFT;
 
+  /**
+   * ADR-014: reference to the shared data privacy policy object. When set it wins over the inline
+   * {@link #contentDpp}; several departments may point at the same text. {@code null} = fall back
+   * to the inline column (pre-backfill rows) or, if that is empty too, to the tenant-level text.
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "dpp_id")
+  private LegalText dpp;
+
+  /** ADR-014: reference to the shared Impressum object, same semantics as {@link #dpp}. */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "imprint_id")
+  private LegalText imprint;
+
   @Transient TopicDTO topicData = new TopicDTO();
 
   /**
@@ -88,6 +105,47 @@ public class AgencyTopic {
     }
     if (publicationStatusImprint == null) {
       publicationStatusImprint = PublicationStatus.DRAFT;
+    }
+    validateLegalTextReferences();
+  }
+
+  @PreUpdate
+  void validateOnUpdate() {
+    validateLegalTextReferences();
+  }
+
+  /**
+   * ADR-014 invariants, enforced at the persistence boundary so no future write path can slip a
+   * bad assignment past the service-level guards: the DPP slot only accepts {@code
+   * LegalTextKind.DPP} objects, the imprint slot only {@code IMPRINT}, and a department must never
+   * reference another Träger's document (checked only when both tenant ids are known —
+   * single-tenant mode carries nulls).
+   */
+  private void validateLegalTextReferences() {
+    assertReferenceKind(dpp, LegalTextKind.DPP, "dpp");
+    assertReferenceKind(imprint, LegalTextKind.IMPRINT, "imprint");
+    assertReferenceTenant(dpp, "dpp");
+    assertReferenceTenant(imprint, "imprint");
+  }
+
+  private void assertReferenceKind(
+      LegalText reference, LegalTextKind expectedKind, String slot) {
+    if (reference != null && reference.getKind() != expectedKind) {
+      throw new IllegalStateException(
+          String.format(
+              "agency_topic.%s_id must reference a legal text of kind %s but got %s",
+              slot, expectedKind, reference.getKind()));
+    }
+  }
+
+  private void assertReferenceTenant(LegalText reference, String slot) {
+    Long referenceTenant = reference == null ? null : reference.getTenantId();
+    Long agencyTenant = agency == null ? null : agency.getTenantId();
+    if (referenceTenant != null && agencyTenant != null && !referenceTenant.equals(agencyTenant)) {
+      throw new IllegalStateException(
+          String.format(
+              "agency_topic.%s_id references a legal text of tenant %d but the agency belongs to tenant %d",
+              slot, referenceTenant, agencyTenant));
     }
   }
 }
