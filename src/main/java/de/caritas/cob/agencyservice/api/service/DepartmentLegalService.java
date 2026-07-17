@@ -45,8 +45,14 @@ public class DepartmentLegalService {
 
   /**
    * ADR-014 resolution order: a referenced shared legal-text object, once assigned, fully replaces
-   * the legacy inline column — including its DRAFT state. Only reference-less (pre-backfill) rows
-   * fall back to the inline content.
+   * the legacy inline column — including its DRAFT state. Only reference-less rows fall back to the
+   * inline content.
+   *
+   * <p><b>Unassign semantics (this release):</b> clearing {@code dpp_id}/{@code imprint_id} makes a
+   * department reference-less again, so it falls back to its own inline {@code content_dpp}/{@code
+   * content_imprint} — NOT to a tenant-level fallback document. The backfill deliberately keeps the
+   * inline columns for one release as this read-fallback and as the rollback anchor; they are not
+   * cleared on unassign. Tenant-level fallback is future work (see ADR-014 / #134).
    */
   private String resolveDpp(AgencyTopic department) {
     LegalText referenced = department.getDpp();
