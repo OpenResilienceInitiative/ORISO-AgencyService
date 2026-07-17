@@ -7,6 +7,15 @@ ADD COLUMN IF NOT EXISTS `dpp_id` bigint(21) NULL;
 ALTER TABLE `agencyservice`.`agency_topic`
 ADD COLUMN IF NOT EXISTS `imprint_id` bigint(21) NULL;
 
+-- Explicit, predictably-named indexes created before the FK constraints so InnoDB reuses them
+-- instead of auto-generating one per FK. countByDpp_Id / countByImprint_Id and the assignment
+-- joins would otherwise table-scan agency_topic at scale.
+ALTER TABLE `agencyservice`.`agency_topic`
+ADD INDEX IF NOT EXISTS `idx_agency_topic_dpp_id` (`dpp_id`);
+
+ALTER TABLE `agencyservice`.`agency_topic`
+ADD INDEX IF NOT EXISTS `idx_agency_topic_imprint_id` (`imprint_id`);
+
 ALTER TABLE `agencyservice`.`agency_topic`
 ADD CONSTRAINT `fk_agency_topic_dpp` FOREIGN KEY (`dpp_id`)
 REFERENCES `agencyservice`.`legal_text` (`id`) ON UPDATE CASCADE;
