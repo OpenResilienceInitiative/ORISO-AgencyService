@@ -46,6 +46,8 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
@@ -248,6 +250,52 @@ public class AgencyServiceTest {
     assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedImprint());
     // the existing topicIds contract is untouched
     assertEquals(List.of(1L, 2L), result.get(0).getTopicIds());
+  }
+
+  @Test
+  public void getListOfAgencies_Should_DeriveLegalPublicationFlagsFromReferencedLegalText_WhenDepartmentReferencesOne()
+      throws MissingConsultingTypeException {
+
+    // ADR-014 write-through only updates the referenced legal_text object; the inline columns are
+    // intentionally kept stale. The search flags must therefore resolve reference-first, exactly
+    // like DepartmentLegalService — otherwise a publish/draft-save would not show up here.
+    Agency agency = Agency.builder().id(100L).name("Zentrum").consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .build();
+    // referenced DPP is PUBLISHED while the stale inline copy says DRAFT → flag must be true
+    AgencyTopic publishedViaReference = AgencyTopic.builder().agency(agency).topicId(1L)
+        .contentDpp("{\"de\":\"<p>stale inline</p>\"}").publicationStatus(PublicationStatus.DRAFT)
+        .dpp(LegalText.builder().id(500L).kind(LegalTextKind.DPP).label("Geteilte DSE")
+            .content("{\"de\":\"<p>geteilt</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED).build())
+        .build();
+    // referenced imprint is DRAFT while the stale inline copy says PUBLISHED → flag must be false
+    AgencyTopic draftViaReference = AgencyTopic.builder().agency(agency).topicId(2L)
+        .contentImprint("{\"de\":\"<p>stale inline</p>\"}")
+        .publicationStatusImprint(PublicationStatus.PUBLISHED)
+        .imprint(LegalText.builder().id(501L).kind(LegalTextKind.IMPRINT)
+            .label("Geteiltes Impressum").content("{\"de\":\"<p>Entwurf</p>\"}")
+            .publicationStatus(PublicationStatus.DRAFT).build())
+        .build();
+    ReflectionTestUtils.setField(agency, "agencyTopics",
+        List.of(publishedViaReference, draftViaReference));
+
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(List.of(agency));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var result =
+        agencyService.getAgencies(Optional.of(VALID_POSTCODE), CONSULTING_TYPE_SUCHT,
+            Optional.empty());
+
+    assertEquals(1, result.size());
+    var byTopicId = result.get(0).getDepartments().stream()
+        .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
+    assertTrue(byTopicId.get(1L).getHasPublishedDpp());
+    assertEquals(Boolean.FALSE, byTopicId.get(1L).getHasPublishedImprint());
+    assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedDpp());
+    assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedImprint());
   }
 
   @Test
