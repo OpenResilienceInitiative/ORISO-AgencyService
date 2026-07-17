@@ -214,12 +214,19 @@ public class LegalTextAdminService {
 
   /** A department must never reference another Träger's document. */
   private void assertTextBelongsToAgencyTenant(LegalText text, Agency agency) {
-    Long textTenant = text.getTenantId();
     Long agencyTenant = agency == null ? null : agency.getTenantId();
-    if (textTenant != null && agencyTenant != null && !textTenant.equals(agencyTenant)) {
+    // Single-tenant / technical agencies (tenant null or 0) carry no cross-tenant risk.
+    if (isUnrestricted(agencyTenant)) {
+      return;
+    }
+    // A tenant-scoped agency may only reference a text of its own Träger. A null-tenant
+    // (global/orphan) or different-tenant text is rejected — a null tenant must not bypass the
+    // cross-tenant guard and leak into a specific Träger's department in multi-tenant mode.
+    Long textTenant = text.getTenantId();
+    if (!agencyTenant.equals(textTenant)) {
       throw new BadRequestException(
           String.format(
-              "Legal text %d belongs to tenant %d, not to the agency's tenant %d",
+              "Legal text %d belongs to tenant %s, not to the agency's tenant %d",
               text.getId(), textTenant, agencyTenant));
     }
   }

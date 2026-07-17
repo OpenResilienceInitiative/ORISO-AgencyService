@@ -299,6 +299,20 @@ class LegalTextAdminServiceTest {
   }
 
   @Test
+  void assign_Should_rejectNullTenantText_When_agencyIsTenantScoped() {
+    // review: a null-tenant (global/orphan) text must not bypass the cross-tenant guard and leak
+    // into a specific Träger's department in multi-tenant mode
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    departmentOfTenant(5L);
+    when(legalTextRepository.findById(4L))
+        .thenReturn(Optional.of(text(4L, null, LegalTextKind.DPP)));
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(() -> service.assignDepartmentLegalText(7L, 42L, LegalTextKind.DPP, 4L));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
   void assign_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
     when(authenticatedUser.getUserId()).thenReturn("admin-1");
