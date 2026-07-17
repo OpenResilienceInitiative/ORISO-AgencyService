@@ -63,10 +63,10 @@ public interface AgencyTenantAwareRepository extends JpaRepository<Agency, Long>
 
   Optional<Agency> findByIdAndDeleteDateNull(Long agencyId);
 
-  @EntityGraph(attributePaths = {"agencyTopics"})
+  @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})
   List<Agency> findByIdIn(List<Long> agencyIds);
 
-  @EntityGraph(attributePaths = {"agencyTopics"})
+  @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
 }
