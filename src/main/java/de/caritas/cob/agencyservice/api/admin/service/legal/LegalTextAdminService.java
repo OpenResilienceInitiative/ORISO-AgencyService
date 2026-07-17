@@ -1,14 +1,8 @@
 package de.caritas.cob.agencyservice.api.admin.service.legal;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.AgencyAccessDeniedException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
-import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
@@ -19,12 +13,9 @@ import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextRepository;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
-import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * ADR-014 legal-text library: tenant-scoped CRUD over the shared {@link LegalText} objects plus
  * the per-department assignment. A department may share a tenant-wide text, carry its own, or stay
- * unassigned (= tenant-level fallback document applies).
+ * unassigned (= it falls back to its own inline {@code content_dpp}/{@code content_imprint};
+ * tenant-level fallback is future work, ADR-014 / #136).
  *
  * <p>Sanitisation mirrors {@link DepartmentDataProtectionService} (the strict variant):
  * multilingual HTML is OWASP-sanitised per translation, {@code __meta}-suffixed keys carry
@@ -128,7 +120,8 @@ public class LegalTextAdminService {
 
   /**
    * Assigns a shared legal text to a department's DPP or imprint slot, or clears the slot when
-   * {@code legalTextId} is {@code null} (the tenant-level fallback document applies again).
+   * {@code legalTextId} is {@code null} (the department falls back to its own inline {@code
+   * content_dpp}/{@code content_imprint}; tenant-level fallback is future work, ADR-014 / #136).
    *
    * <p>Guards: the restricted-admin IDOR check and the cross-tenant agency guard mirror the
    * department publish endpoints; additionally the text's kind must match the slot and the text

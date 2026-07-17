@@ -34,7 +34,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * ADR-014 legal-text library: tenant-scoped CRUD over shared legal-text objects plus the
- * per-department assignment ("share this text" / "own text" / "unassign = tenant fallback").
+ * per-department assignment ("share this text" / "own text" / "unassign = inline content
+ * fallback").
  */
 @ExtendWith(MockitoExtension.class)
 class LegalTextAdminServiceTest {

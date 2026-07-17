@@ -365,8 +365,9 @@ public class AgencyAdminController implements AgencyadminApi {
   }
 
   /**
-   * Assigns a shared legal text to a department's DPP or imprint slot, or clears the slot
-   * (tenant-level fallback applies again). IDOR/tenant guards live in the service.
+   * Assigns a shared legal text to a department's DPP or imprint slot, or clears the slot (the
+   * department falls back to its own inline content_dpp/content_imprint; tenant-level fallback is
+   * future work, ADR-014 / #136). IDOR/tenant guards live in the service.
    */
   @Override
   public ResponseEntity<Void> assignDepartmentLegalText(

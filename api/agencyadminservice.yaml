@@ -449,7 +449,8 @@ paths:
       tags:
         - admin-agency-controller
       summary: 'Assign a shared legal text to a department''s DPP or imprint slot, or clear the
-      slot (null = the tenant-level fallback document applies). The text''s kind must match the
+      slot (null = department falls back to its own inline content, content_dpp/content_imprint;
+      tenant-level fallback is future work, ADR-014 / #136). The text''s kind must match the
       slot and the text must belong to the agency''s tenant. [Authorization: Role: agency-admin or
       restricted-agency-admin scoped to its own agencies]'
       operationId: assignDepartmentLegalText
@@ -1370,7 +1371,9 @@ components:
           type: integer
           format: int64
           nullable: true
-          description: Legal text to reference; null clears the slot (tenant fallback applies)
+          description: 'Legal text to reference; null clears the slot — the department falls back
+            to its own inline content (content_dpp/content_imprint). Tenant-level fallback is
+            future work (ADR-014 / #136).'
 
     DepartmentDataProtectionDTO:
       type: object
