@@ -53,7 +53,7 @@ class LegalTextAdminServiceTest {
         new LegalTextAdminService(
             legalTextRepository,
             agencyTopicRepository,
-            new InputSanitizer(),
+            new LegalContentSanitizer(new InputSanitizer()),
             authenticatedUser,
             userAdminService);
   }
