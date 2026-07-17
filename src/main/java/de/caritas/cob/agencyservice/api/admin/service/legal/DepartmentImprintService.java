@@ -34,24 +34,19 @@ import org.springframework.transaction.annotation.Transactional;
  * sanitised per translation, and (c) stored as a JSON language→HTML map in {@code
  * agency_topic.content_imprint} with its own draft/published lifecycle, independent of the DPP's.
  *
- * <p>One deviation from the DPP twin: {@code __meta}-suffixed keys (the platform-wide
- * translation-metadata convention) carry JSON, not HTML. They are passed through unsanitised —
- * running them through the HTML sanitizer would destroy the payload — but validated to be
- * well-formed JSON so no unsanitised free text can hide behind the suffix.
+ * <p>{@code __meta}-suffixed keys are handled by the shared {@link LegalContentSanitizer}: passed
+ * through unsanitised but validated against the strict metadata schema — the former lenient
+ * "parses as JSON" check allowed arbitrary unsanitised payloads behind the suffix.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DepartmentImprintService {
 
-  private static final String META_KEY_SUFFIX = "__meta";
-
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
-  private final @NonNull InputSanitizer inputSanitizer;
+  private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
-
-  private final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Sanitises and stores the department's imprint for the given agency × topic. When {@code
@@ -72,7 +67,7 @@ public class DepartmentImprintService {
 
     assertCallerTenantMatches(department.getAgency());
 
-    var sanitizedJson = toJson(sanitizeTranslations(content));
+    var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
     var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
     var now = LocalDateTime.now();
 
@@ -161,46 +156,5 @@ public class DepartmentImprintService {
   private Long resolveEffectiveTenantId() {
     Long tenantIdFromAuth = authenticatedUser.getTenantId();
     return tenantIdFromAuth != null ? tenantIdFromAuth : TenantContext.getCurrentTenant();
-  }
-
-  private Map<String, String> sanitizeTranslations(Map<String, String> content) {
-    if (content == null) {
-      return Map.of();
-    }
-    return content.entrySet().stream()
-        .filter(entry -> entry.getKey() != null)
-        .collect(
-            Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> sanitizeOrValidateValue(entry.getKey(), entry.getValue()),
-                (existing, replacement) -> replacement,
-                LinkedHashMap::new));
-  }
-
-  private String sanitizeOrValidateValue(String key, String value) {
-    var safeValue = value == null ? "" : value;
-    if (key.endsWith(META_KEY_SUFFIX)) {
-      assertValidJson(key, safeValue);
-      return safeValue;
-    }
-    return inputSanitizer.sanitizeAllowingFormattingAndLinks(safeValue);
-  }
-
-  private void assertValidJson(String key, String value) {
-    try {
-      objectMapper.readTree(value);
-    } catch (JsonProcessingException e) {
-      throw new BadRequestException(
-          String.format("Translation metadata key '%s' does not contain valid JSON", key));
-    }
-  }
-
-  private String toJson(Map<String, String> sanitized) {
-    try {
-      return objectMapper.writeValueAsString(sanitized);
-    } catch (JsonProcessingException e) {
-      throw new InternalServerErrorException(
-          "Could not serialize department imprint content", e);
-    }
   }
 }

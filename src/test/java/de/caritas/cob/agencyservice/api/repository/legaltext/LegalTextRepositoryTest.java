@@ -270,6 +270,33 @@ class LegalTextRepositoryTest {
   }
 
   @Test
+  void persist_Should_rejectNullTenantText_When_agencyIsTenantScoped() {
+    // defense-in-depth mirror of the service guard: a null-tenant (global/orphan) text must not
+    // slip into a tenant-scoped agency's department through some future write path either
+    var now = LocalDateTime.now();
+    Agency agency = persistAgency("Zentrum Null-Tenant-Guard");
+    agency.setTenantId(5L);
+    em.persistAndFlush(agency);
+    LegalText orphanText =
+        em.persistFlushFind(
+            LegalText.builder()
+                .tenantId(null)
+                .kind(LegalTextKind.DPP)
+                .label("Verwaiste DSE")
+                .content("{}")
+                .createDate(now)
+                .updateDate(now)
+                .build());
+    AgencyTopic department =
+        AgencyTopic.builder().agency(agency).topicId(53L).createDate(now).updateDate(now).build();
+    department.setDpp(orphanText);
+
+    assertThatExceptionOfType(RuntimeException.class)
+        .isThrownBy(() -> em.persistAndFlush(department))
+        .withStackTraceContaining("tenant");
+  }
+
+  @Test
   void departmentWithoutReferences_Should_loadWithNullDppAndImprint() {
     Agency agency = persistAgency("Zentrum ohne Texte");
     AgencyTopic department = persistDepartment(agency, 30L);

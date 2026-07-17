@@ -118,8 +118,10 @@ public class AgencyTopic {
    * ADR-014 invariants, enforced at the persistence boundary so no future write path can slip a
    * bad assignment past the service-level guards: the DPP slot only accepts {@code
    * LegalTextKind.DPP} objects, the imprint slot only {@code IMPRINT}, and a department must never
-   * reference another Träger's document (checked only when both tenant ids are known —
-   * single-tenant mode carries nulls).
+   * reference another Träger's document. Mirrors the service rule: a tenant-scoped agency (tenant
+   * not null/0) may only reference a text of its own tenant — a null-tenant (global/orphan) or
+   * different-tenant text is rejected; single-tenant / technical agencies (tenant null or 0) stay
+   * unrestricted.
    */
   private void validateLegalTextReferences() {
     assertReferenceKind(dpp, LegalTextKind.DPP, "dpp");
@@ -139,12 +141,19 @@ public class AgencyTopic {
   }
 
   private void assertReferenceTenant(LegalText reference, String slot) {
-    Long referenceTenant = reference == null ? null : reference.getTenantId();
+    if (reference == null) {
+      return;
+    }
     Long agencyTenant = agency == null ? null : agency.getTenantId();
-    if (referenceTenant != null && agencyTenant != null && !referenceTenant.equals(agencyTenant)) {
+    // Single-tenant / technical agencies (tenant null or 0) carry no cross-tenant risk.
+    if (agencyTenant == null || agencyTenant.equals(0L)) {
+      return;
+    }
+    Long referenceTenant = reference.getTenantId();
+    if (!agencyTenant.equals(referenceTenant)) {
       throw new IllegalStateException(
           String.format(
-              "agency_topic.%s_id references a legal text of tenant %d but the agency belongs to tenant %d",
+              "agency_topic.%s_id references a legal text of tenant %s but the agency belongs to tenant %d",
               slot, referenceTenant, agencyTenant));
     }
   }

@@ -47,7 +47,10 @@ class DepartmentDataProtectionServiceTest {
     // real sanitizer so we actually verify markup stripping, not a mock
     service =
         new DepartmentDataProtectionService(
-            agencyTopicRepository, new InputSanitizer(), authenticatedUser, userAdminService);
+            agencyTopicRepository,
+            new LegalContentSanitizer(new InputSanitizer()),
+            authenticatedUser,
+            userAdminService);
   }
 
   @AfterEach
