@@ -80,6 +80,68 @@ class AgencySettingsServiceTest {
   }
 
   @Test
+  void toSettings_Should_IgnoreUnknownProperties_When_StoredJsonContainsRetiredKeys() {
+    // Stored agency settings may still carry keys removed from the schema; a read must
+    // never fail because of them.
+    Settings result =
+        agencySettingsService.toSettings(
+            "{\"featureStatisticsEnabled\":true,\"someRetiredUnknownKey\":true}");
+
+    assertThat(result.getFeatureStatisticsEnabled()).isTrue();
+  }
+
+  @Test
+  void toSettings_Should_TranslateLegacyAttachmentUploadDisabled_ToMediaUploadOff() {
+    // ADR-015: legacy true = uploads were switched off -> whole upload family off.
+    Settings result =
+        agencySettingsService.toSettings("{\"featureAttachmentUploadDisabled\":true}");
+
+    assertThat(result.getFeatureMediaUploadEnabled()).isFalse();
+    assertThat(result.getFeatureMediaUploadAnonymousChatsEnabled()).isFalse();
+    assertThat(result.getFeatureMediaUploadOneOnOneChatsEnabled()).isFalse();
+    assertThat(result.getFeatureMediaUploadGroupChatsEnabled()).isFalse();
+    assertThat(result.getFeatureMediaUploadSupervisionChatsEnabled()).isFalse();
+    // other media families are not the legacy flag's concern
+    assertThat(result.getFeatureMediaInlineDisplayEnabled()).isNull();
+    assertThat(result.getFeatureMediaAiScanEnabled()).isNull();
+  }
+
+  @Test
+  void toSettings_Should_NotTouchMediaUpload_When_LegacyFlagIsFalseOrAbsent() {
+    Settings legacyFalse =
+        agencySettingsService.toSettings("{\"featureAttachmentUploadDisabled\":false}");
+    assertThat(legacyFalse.getFeatureMediaUploadEnabled()).isNull();
+
+    Settings legacyAbsent = agencySettingsService.toSettings("{}");
+    assertThat(legacyAbsent.getFeatureMediaUploadEnabled()).isNull();
+  }
+
+  @Test
+  void toSettings_Should_PreferExplicitMediaUploadValues_OverLegacyTranslation() {
+    Settings result =
+        agencySettingsService.toSettings(
+            "{\"featureAttachmentUploadDisabled\":true,"
+                + "\"featureMediaUploadEnabled\":true,"
+                + "\"featureMediaUploadGroupChatsEnabled\":false}");
+
+    assertThat(result.getFeatureMediaUploadEnabled()).isTrue();
+    assertThat(result.getFeatureMediaUploadGroupChatsEnabled()).isFalse();
+    // untouched variants still translate from the legacy flag
+    assertThat(result.getFeatureMediaUploadOneOnOneChatsEnabled()).isFalse();
+  }
+
+  @Test
+  void toSettingsJson_Should_NeverWriteTheRetiredLegacyKey() {
+    Settings settings =
+        agencySettingsService.toSettings("{\"featureAttachmentUploadDisabled\":true}");
+
+    String json = agencySettingsService.toSettingsJson(settings);
+
+    assertThat(json).doesNotContain("featureAttachmentUploadDisabled");
+    assertThat(json).contains("\"featureMediaUploadEnabled\":false");
+  }
+
+  @Test
   void toSettingsJson_Should_ReturnNull_When_SettingsIsNull() {
     assertThat(agencySettingsService.toSettingsJson(null)).isNull();
   }
