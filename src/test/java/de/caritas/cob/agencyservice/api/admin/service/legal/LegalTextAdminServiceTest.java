@@ -316,7 +316,7 @@ class LegalTextAdminServiceTest {
   @Test
   void assign_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
     when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(99L));
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)

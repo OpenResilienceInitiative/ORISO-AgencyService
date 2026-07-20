@@ -446,7 +446,8 @@ class AgencyAdminControllerIT {
     var extendedConsultingTypeResponseDTO = new ExtendedConsultingTypeResponseDTO();
     when(consultingTypeManager.getConsultingTypeSettings(anyInt()))
         .thenReturn(extendedConsultingTypeResponseDTO);
-    when(userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId())).thenReturn(
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
+    when(userAdminService.getAdminUserAgencyIds("userId")).thenReturn(
         Lists.newArrayList(1L));
 
     UpdateAgencyDTO agencyDTO = new UpdateAgencyDTO()
@@ -489,7 +490,8 @@ class AgencyAdminControllerIT {
     when(consultingTypeManager.getConsultingTypeSettings(anyInt()))
         .thenReturn(extendedConsultingTypeResponseDTO);
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId())).thenReturn(
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
+    when(userAdminService.getAdminUserAgencyIds("userId")).thenReturn(
         Lists.newArrayList(2L, 3L));
 
     UpdateAgencyDTO agencyDTO = new UpdateAgencyDTO()

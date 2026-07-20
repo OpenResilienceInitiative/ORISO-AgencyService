@@ -126,11 +126,11 @@ public class DepartmentDataProtectionService {
    */
   private void assertRestrictedAdminOwnsAgency(Long agencyId) {
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
-      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
+      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.requireUserId());
       if (adminAgencyIds == null || !adminAgencyIds.contains(agencyId)) {
         log.warn(
             "Admin user {} may not edit the data privacy policy of agency {}",
-            authenticatedUser.getUserId(),
+            authenticatedUser.requireUserId(),
             agencyId);
         throw new AgencyAccessDeniedException();
       }
@@ -152,7 +152,7 @@ public class DepartmentDataProtectionService {
     if (agency == null || !effectiveTenantId.equals(agency.getTenantId())) {
       log.warn(
           "Admin user {} (tenant {}) may not edit the data privacy policy of agency {} (tenant {})",
-          authenticatedUser.getUserId(),
+          authenticatedUser.requireUserId(),
           effectiveTenantId,
           agency == null ? null : agency.getId(),
           agency == null ? null : agency.getTenantId());
