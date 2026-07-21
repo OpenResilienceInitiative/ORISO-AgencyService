@@ -69,7 +69,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -86,7 +86,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin_AndSortByPostcodeAscending() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -105,7 +105,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin_AndSortByOffline() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -125,7 +125,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin_AndSortByPostcodeDescending() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -198,7 +198,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_NotFindAnyAgencies_WhenUserIsAgencyAdminButDoesntManageAnyAgencies() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList());

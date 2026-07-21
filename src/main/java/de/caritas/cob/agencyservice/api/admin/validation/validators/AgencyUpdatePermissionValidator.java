@@ -22,9 +22,11 @@ public class AgencyUpdatePermissionValidator implements ConcreteAgencyValidator 
 
   public void validate(ValidateAgencyDTO validateAgencyDto) {
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
-      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
+      var userId = authenticatedUser.requireUserId();
+      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(userId);
       if (!adminAgencyIds.contains(validateAgencyDto.getId())) {
-        log.warn("Admin user with id does not have permission to this agency: {}", authenticatedUser.getUserId(), validateAgencyDto.getId());
+        log.warn("Admin user with id does not have permission to this agency: {}", userId,
+            validateAgencyDto.getId());
         throw new AgencyAccessDeniedException();
       }
     }

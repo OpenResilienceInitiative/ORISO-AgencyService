@@ -173,7 +173,7 @@ class DepartmentDataProtectionServiceTest {
   @Test
   void publish_Should_allow_When_restrictedAdminOwnsTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
     when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(7L, 9L));
     existingDepartment();
 
@@ -187,7 +187,7 @@ class DepartmentDataProtectionServiceTest {
   @Test
   void publish_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
     when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(9L));
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)
@@ -228,7 +228,7 @@ class DepartmentDataProtectionServiceTest {
   @Test
   void getDepartmentDataPrivacy_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
     when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(9L));
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)

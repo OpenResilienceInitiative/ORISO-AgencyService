@@ -173,7 +173,7 @@ public class AgencyAdminSearchService {
   Predicate agencyAdminFilterPredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
     Predicate tenantScopePredicate = tenantScopePredicate(criteriaBuilder, root);
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
-      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
+      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.requireUserId());
       if (!adminAgencyIds.isEmpty()) {
         return criteriaBuilder.and(
             tenantScopePredicate, createPredicateForAgencyAdmin(criteriaBuilder, root, adminAgencyIds));
