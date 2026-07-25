@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -61,6 +62,26 @@ class OpenApiContractGateTest(unittest.TestCase):
         for contract, checkout in expected.items():
             self.assertIn(contract, workflow)
             self.assertIn(checkout, workflow)
+
+    def test_pull_request_uses_coordinated_provider_commits(self):
+        workflow = (ROOT / ".github/workflows/openapi-contracts.yml").read_text()
+        self.assertRegex(
+            workflow,
+            re.compile(
+                r"repository: OpenResilienceInitiative/ORISO-TenantService.*"
+                r"a213d5546e2cdbcbd1f641291661f11cbbca2cfc",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            workflow,
+            re.compile(
+                r"repository: OpenResilienceInitiative/ORISO-UserService.*"
+                r"688908ac876b61ce68594dc732acdd4dfcff5d75",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn("|| 'pre-dev'", workflow)
 
 
 if __name__ == "__main__":
