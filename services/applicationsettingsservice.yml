@@ -1,59 +1,76 @@
 openapi: 3.0.1
-
 info:
   title: Definition for Application Settings API
   description: This information will be replaced by the SpringFox config information
   version: 0.0.1
-
 paths:
   /settings:
     get:
       tags:
         - applicationsettings-controller
-      summary: 'Get all application settings'
+      summary: Get all application settings
       operationId: getApplicationSettings
       responses:
-        200:
+        '200':
           description: OK - successful operation
-
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationSettingsDTO'
-        204:
+        '204':
           description: NO CONTENT - no content found
-        400:
+        '400':
           description: BAD REQUEST - invalid/incomplete request or body object
-        401:
+        '401':
           description: UNAUTHORIZED - no/invalid Keycloak token
-        500:
+        '500':
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /settingsadmin:
     patch:
       tags:
         - applicationsettings-controller
-      summary: 'Patch application settings'
+      summary: Patch application settings
       operationId: patchApplicationSettings
       requestBody:
         content:
-          'application/json':
+          application/json:
             schema:
               $ref: '#/components/schemas/ApplicationSettingsPatchDTO'
       responses:
-        200:
+        '200':
           description: OK - successful operation
-
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationSettingsDTO'
-        204:
+        '204':
           description: NO CONTENT - no content found
-        400:
+        '400':
           description: BAD REQUEST - invalid/incomplete request or body object
-        401:
+        '401':
           description: UNAUTHORIZED - no/invalid Keycloak token
-        500:
+        '500':
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /settingsadmin/smtp-credentials:
+    get:
+      tags:
+        - applicationsettings-controller
+      summary: Get global SMTP credentials (super admin only)
+      operationId: getGlobalSmtpCredentials
+      responses:
+        '200':
+          description: OK - successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSettingsSmtpCredentialsDTO'
+        '204':
+          description: NO CONTENT - no content found
+        '401':
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        '403':
+          description: FORBIDDEN - insufficient permissions
+        '500':
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
 components:
   schemas:
@@ -70,6 +87,9 @@ components:
           allOf:
             - $ref: '#/components/schemas/FeatureToggleDTO'
         useTenantService:
+          allOf:
+            - $ref: '#/components/schemas/FeatureToggleDTO'
+        useConsultingTypesForAgencies:
           allOf:
             - $ref: '#/components/schemas/FeatureToggleDTO'
         enableWalkthrough:
@@ -102,12 +122,31 @@ components:
         documentationEnabled:
           allOf:
             - $ref: '#/components/schemas/FeatureToggleDTO'
+        globalFeatureSystemNotificationEmailsEnabled:
+          allOf:
+            - $ref: '#/components/schemas/FeatureToggleDTO'
+        globalSmtpEnabled:
+          allOf:
+            - $ref: '#/components/schemas/FeatureToggleDTO'
+        globalSmtpHost:
+          allOf:
+            - $ref: '#/components/schemas/SettingDTO'
+        globalSmtpPort:
+          allOf:
+            - $ref: '#/components/schemas/SettingDTO'
+        globalSmtpSecure:
+          allOf:
+            - $ref: '#/components/schemas/FeatureToggleDTO'
+        globalSmtpFrom:
+          allOf:
+            - $ref: '#/components/schemas/SettingDTO'
+        globalSmtpEmailThemeColor:
+          allOf:
+            - $ref: '#/components/schemas/SettingDTO'
         releaseToggles:
           type: object
           additionalProperties:
             type: object
-
-
     ApplicationSettingsPatchDTO:
       type: object
       properties:
@@ -115,7 +154,31 @@ components:
           type: boolean
         mainTenantSubdomainForSingleDomainMultitenancy:
           type: string
-    
+        globalFeatureSystemNotificationEmailsEnabled:
+          type: boolean
+        globalSmtpEnabled:
+          type: boolean
+        globalSmtpHost:
+          type: string
+        globalSmtpPort:
+          type: string
+        globalSmtpSecure:
+          type: boolean
+        globalSmtpUsername:
+          type: string
+        globalSmtpPassword:
+          type: string
+        globalSmtpFrom:
+          type: string
+        globalSmtpEmailThemeColor:
+          type: string
+    ApplicationSettingsSmtpCredentialsDTO:
+      type: object
+      properties:
+        globalSmtpUsername:
+          type: string
+        globalSmtpPassword:
+          type: string
     FeatureToggleDTO:
       type: object
       required:
