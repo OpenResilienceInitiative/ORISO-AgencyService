@@ -62,7 +62,14 @@ class RequiredCiContractTest(unittest.TestCase):
             quarantine = job_block(workflow, "legacy-integration-quarantine")
             self.assertIn("#185", quarantine)
             self.assertIn("2026-09-30", quarantine)
-            self.assertIn("continue-on-error: true", quarantine)
+            self.assertNotIn("continue-on-error:", quarantine)
+
+        action = (
+            ROOT / ".github/actions/maven-verify-burnin/action.yml"
+        ).read_text()
+        self.assertIn("id: legacy_verify", action)
+        self.assertIn("continue-on-error: true", action)
+        self.assertIn("steps.legacy_verify.outcome", action)
 
 
 if __name__ == "__main__":
