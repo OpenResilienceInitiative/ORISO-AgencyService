@@ -27,9 +27,10 @@ runs:
     id: legacy_verify
     shell: bash
     # -fae (fail-at-end) lets every module/execution run so the report set is
-    # complete. Only this known legacy step is non-blocking; report production
-    # and required integration checks remain hard failures.
-    continue-on-error: true
+    # complete. Maven's exit code is NOT suppressed here: the step goes red on
+    # failure and the calling job declares the quarantine with a job-level
+    # continue-on-error, so the non-blocking scope is visible in the workflow
+    # file instead of hidden inside this action.
     run: ./mvnw -B -fae verify
 
   - name: Record the quarantined Maven outcome

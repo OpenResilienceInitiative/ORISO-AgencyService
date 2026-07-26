@@ -38,10 +38,25 @@ class RequiredCiContractTest(unittest.TestCase):
 
         self.assertIn("name: required integration tests", integration)
         self.assertNotIn("continue-on-error:", integration)
-        self.assertIn("needs: [validate, required-integration-tests]", aggregate)
+        self.assertIn("needs: [validate, required-integration-tests, contract-tests]", aggregate)
         self.assertIn("if: always()", aggregate)
         self.assertIn("name: required PreDev CI", aggregate)
         self.assertIn("needs.required-integration-tests.result", aggregate)
+        self.assertIn("needs.contract-tests.result", aggregate)
+        # Reading a result into the environment is not the same as acting on
+        # it: the conclusion itself must consider every required job.
+        self.assertIn('"${CONTRACT_RESULT}" != success', aggregate)
+
+    def test_ci_contract_tests_are_executed_by_ci(self):
+        # These assertions are worthless unless something runs them. Without a
+        # job that invokes pytest, tests/ci is dead weight that can drift out
+        # of sync with the workflows it claims to protect.
+        workflow = (ROOT / ".github/workflows/ci-pull-request.yml").read_text()
+        contract = job_block(workflow, "contract-tests")
+
+        self.assertIn("pytest", contract)
+        self.assertIn("tests/ci", contract)
+        self.assertNotIn("continue-on-error:", contract)
 
     def test_publish_waits_for_required_integration_tests(self):
         workflow = (ROOT / ".github/workflows/ci-main.yml").read_text()
@@ -62,14 +77,24 @@ class RequiredCiContractTest(unittest.TestCase):
             quarantine = job_block(workflow, "legacy-integration-quarantine")
             self.assertIn("#185", quarantine)
             self.assertIn("2026-09-30", quarantine)
-            self.assertNotIn("continue-on-error:", quarantine)
+            # The tolerance is declared on the job, where a reader of the
+            # workflow can see it, rather than inside the shared action.
+            self.assertIn("continue-on-error: true", quarantine)
 
-        action = (
-            ROOT / ".github/actions/maven-verify-burnin/action.yml"
-        ).read_text()
+            expiry = job_block(workflow, "legacy-quarantine-expiry")
+            self.assertIn('QUARANTINE_EXPIRES: "2026-09-30"', expiry)
+            self.assertNotIn("continue-on-error:", expiry)
+
+    def test_shared_action_does_not_swallow_the_maven_failure(self):
+        # Moving continue-on-error from the job into the action would leave the
+        # workflow looking blocking while the quarantine job stayed green no
+        # matter what Maven did.
+        action = (ROOT / ".github/actions/maven-verify-burnin/action.yml").read_text()
+
         self.assertIn("id: legacy_verify", action)
-        self.assertIn("continue-on-error: true", action)
         self.assertIn("steps.legacy_verify.outcome", action)
+        self.assertNotIn("continue-on-error:", action)
+        self.assertNotIn("if ! ./mvnw", action)
 
 
 if __name__ == "__main__":
