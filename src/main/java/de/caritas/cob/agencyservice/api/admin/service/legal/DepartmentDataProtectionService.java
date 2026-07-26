@@ -14,6 +14,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -41,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
  * translation-metadata convention) carry JSON, not HTML: running them through the HTML sanitizer
  * would corrupt the payload (quotes become entities → invalid JSON), so they are passed through
  * unsanitised. Because this metadata is stored verbatim and later served publicly, it is validated
- * against a strict schema ({@link #assertValidJson}) rather than a mere parse check, so no
+ * against a strict schema (see {@link LegalContentSanitizer}) rather than a mere parse check, so no
  * unsanitised free text can hide behind the suffix.
  */
 @Service
@@ -49,16 +50,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DepartmentDataProtectionService {
 
-  private static final String META_KEY_SUFFIX = "__meta";
-
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
-  private final @NonNull InputSanitizer inputSanitizer;
+  private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
-
-  private final ObjectMapper objectMapper = new ObjectMapper();
-  private final ObjectReader metaJsonReader =
-      objectMapper.readerFor(JsonNode.class).with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   /**
    * Sanitises and stores the department's DPP for the given agency × topic. When {@code publish} is
@@ -79,13 +74,25 @@ public class DepartmentDataProtectionService {
 
     assertCallerTenantMatches(department.getAgency());
 
-    department.setContentDpp(toJson(sanitizeTranslations(content)));
-    department.setPublicationStatus(
-        publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
-    department.setUpdateDate(LocalDateTime.now());
+    var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
+    var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
+    var now = LocalDateTime.now();
+
+    LegalText referenced = department.getDpp();
+    if (referenced != null) {
+      // ADR-014: the referenced shared object is the truth — write through to it; the inline
+      // column stays untouched (the read path ignores it once a reference exists).
+      referenced.setContent(sanitizedJson);
+      referenced.setPublicationStatus(status);
+      referenced.setUpdateDate(now);
+    } else {
+      department.setContentDpp(sanitizedJson);
+      department.setPublicationStatus(status);
+    }
+    department.setUpdateDate(now);
     agencyTopicRepository.save(department);
 
-    return department.getPublicationStatus();
+    return status;
   }
 
   /**
@@ -104,6 +111,11 @@ public class DepartmentDataProtectionService {
 
     assertCallerTenantMatches(department.getAgency());
 
+    LegalText referenced = department.getDpp();
+    if (referenced != null) {
+      return new DepartmentDataProtectionView(
+          referenced.getContent(), referenced.getPublicationStatus());
+    }
     return new DepartmentDataProtectionView(
         department.getContentDpp(), department.getPublicationStatus());
   }
@@ -114,11 +126,11 @@ public class DepartmentDataProtectionService {
    */
   private void assertRestrictedAdminOwnsAgency(Long agencyId) {
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
-      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
+      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.requireUserId());
       if (adminAgencyIds == null || !adminAgencyIds.contains(agencyId)) {
         log.warn(
             "Admin user {} may not edit the data privacy policy of agency {}",
-            authenticatedUser.getUserId(),
+            authenticatedUser.requireUserId(),
             agencyId);
         throw new AgencyAccessDeniedException();
       }
@@ -140,7 +152,7 @@ public class DepartmentDataProtectionService {
     if (agency == null || !effectiveTenantId.equals(agency.getTenantId())) {
       log.warn(
           "Admin user {} (tenant {}) may not edit the data privacy policy of agency {} (tenant {})",
-          authenticatedUser.getUserId(),
+          authenticatedUser.requireUserId(),
           effectiveTenantId,
           agency == null ? null : agency.getId(),
           agency == null ? null : agency.getTenantId());
@@ -151,97 +163,5 @@ public class DepartmentDataProtectionService {
   private Long resolveEffectiveTenantId() {
     Long tenantIdFromAuth = authenticatedUser.getTenantId();
     return tenantIdFromAuth != null ? tenantIdFromAuth : TenantContext.getCurrentTenant();
-  }
-
-  private Map<String, String> sanitizeTranslations(Map<String, String> content) {
-    if (content == null) {
-      return Map.of();
-    }
-    return content.entrySet().stream()
-        .filter(entry -> entry.getKey() != null)
-        .collect(
-            Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> sanitizeOrValidateValue(entry.getKey(), entry.getValue()),
-                (existing, replacement) -> replacement,
-                LinkedHashMap::new));
-  }
-
-  /**
-   * {@code __meta}-suffixed keys carry translation metadata as JSON and are stored verbatim after a
-   * strict validation; every other key is OWASP HTML-sanitised.
-   */
-  private String sanitizeOrValidateValue(String key, String value) {
-    var safeValue = value == null ? "" : value;
-    if (key.endsWith(META_KEY_SUFFIX)) {
-      assertValidJson(key, safeValue);
-      return safeValue;
-    }
-    return inputSanitizer.sanitizeAllowingFormattingAndLinks(safeValue);
-  }
-
-  /**
-   * Strictly validates a {@code __meta} translation-metadata payload. Because the value is stored
-   * unsanitised and later served publicly, a mere "parses without error" check is not enough: the
-   * value must be a non-blank JSON object holding only {@code mt} (boolean), {@code src} (string)
-   * and {@code at} (string), with {@code src}/{@code at} non-blank. Blanks, scalars, arrays,
-   * trailing tokens and any unknown field are rejected with a 400.
-   */
-  private void assertValidJson(String key, String value) {
-    if (value == null || value.isBlank()) {
-      throw invalidMeta(key);
-    }
-    final JsonNode node;
-    try {
-      node = metaJsonReader.readValue(value);
-    } catch (JsonProcessingException e) {
-      throw invalidMeta(key);
-    }
-    if (node == null || !node.isObject()) {
-      throw invalidMeta(key);
-    }
-    int knownFields = 0;
-    if (node.has("mt")) {
-      requireBoolean(key, node.get("mt"));
-      knownFields++;
-    }
-    if (node.has("src")) {
-      requireNonBlankText(key, node.get("src"));
-      knownFields++;
-    }
-    if (node.has("at")) {
-      requireNonBlankText(key, node.get("at"));
-      knownFields++;
-    }
-    // any remaining property is an unknown field and must be rejected
-    if (node.size() != knownFields) {
-      throw invalidMeta(key);
-    }
-  }
-
-  private void requireBoolean(String key, JsonNode value) {
-    if (value == null || !value.isBoolean()) {
-      throw invalidMeta(key);
-    }
-  }
-
-  private void requireNonBlankText(String key, JsonNode value) {
-    if (value == null || !value.isTextual() || value.asText().isBlank()) {
-      throw invalidMeta(key);
-    }
-  }
-
-  private BadRequestException invalidMeta(String key) {
-    return new BadRequestException(
-        String.format("Translation metadata key '%s' does not contain valid JSON", key));
-  }
-
-  private String toJson(Map<String, String> sanitized) {
-    try {
-      return objectMapper.writeValueAsString(sanitized);
-    } catch (JsonProcessingException e) {
-      throw new InternalServerErrorException(
-          "Could not serialize department data privacy policy content", e);
-    }
   }
 }

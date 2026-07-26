@@ -11,6 +11,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -33,24 +34,19 @@ import org.springframework.transaction.annotation.Transactional;
  * sanitised per translation, and (c) stored as a JSON language→HTML map in {@code
  * agency_topic.content_imprint} with its own draft/published lifecycle, independent of the DPP's.
  *
- * <p>One deviation from the DPP twin: {@code __meta}-suffixed keys (the platform-wide
- * translation-metadata convention) carry JSON, not HTML. They are passed through unsanitised —
- * running them through the HTML sanitizer would destroy the payload — but validated to be
- * well-formed JSON so no unsanitised free text can hide behind the suffix.
+ * <p>{@code __meta}-suffixed keys are handled by the shared {@link LegalContentSanitizer}: passed
+ * through unsanitised but validated against the strict metadata schema — the former lenient
+ * "parses as JSON" check allowed arbitrary unsanitised payloads behind the suffix.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DepartmentImprintService {
 
-  private static final String META_KEY_SUFFIX = "__meta";
-
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
-  private final @NonNull InputSanitizer inputSanitizer;
+  private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
-
-  private final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Sanitises and stores the department's imprint for the given agency × topic. When {@code
@@ -71,13 +67,25 @@ public class DepartmentImprintService {
 
     assertCallerTenantMatches(department.getAgency());
 
-    department.setContentImprint(toJson(sanitizeTranslations(content)));
-    department.setPublicationStatusImprint(
-        publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
-    department.setUpdateDate(LocalDateTime.now());
+    var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
+    var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
+    var now = LocalDateTime.now();
+
+    LegalText referenced = department.getImprint();
+    if (referenced != null) {
+      // ADR-014: the referenced shared object is the truth — write through to it; the inline
+      // column stays untouched (the read path ignores it once a reference exists).
+      referenced.setContent(sanitizedJson);
+      referenced.setPublicationStatus(status);
+      referenced.setUpdateDate(now);
+    } else {
+      department.setContentImprint(sanitizedJson);
+      department.setPublicationStatusImprint(status);
+    }
+    department.setUpdateDate(now);
     agencyTopicRepository.save(department);
 
-    return department.getPublicationStatusImprint();
+    return status;
   }
 
   /**
@@ -96,6 +104,11 @@ public class DepartmentImprintService {
 
     assertCallerTenantMatches(department.getAgency());
 
+    LegalText referenced = department.getImprint();
+    if (referenced != null) {
+      return new DepartmentImprintView(
+          referenced.getContent(), referenced.getPublicationStatus());
+    }
     return new DepartmentImprintView(
         department.getContentImprint(), department.getPublicationStatusImprint());
   }
@@ -106,11 +119,11 @@ public class DepartmentImprintService {
    */
   private void assertRestrictedAdminOwnsAgency(Long agencyId) {
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
-      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
+      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.requireUserId());
       if (adminAgencyIds == null || !adminAgencyIds.contains(agencyId)) {
         log.warn(
             "Admin user {} may not edit the imprint of agency {}",
-            authenticatedUser.getUserId(),
+            authenticatedUser.requireUserId(),
             agencyId);
         throw new AgencyAccessDeniedException();
       }
@@ -132,7 +145,7 @@ public class DepartmentImprintService {
     if (agency == null || !effectiveTenantId.equals(agency.getTenantId())) {
       log.warn(
           "Admin user {} (tenant {}) may not edit the imprint of agency {} (tenant {})",
-          authenticatedUser.getUserId(),
+          authenticatedUser.requireUserId(),
           effectiveTenantId,
           agency == null ? null : agency.getId(),
           agency == null ? null : agency.getTenantId());
@@ -143,46 +156,5 @@ public class DepartmentImprintService {
   private Long resolveEffectiveTenantId() {
     Long tenantIdFromAuth = authenticatedUser.getTenantId();
     return tenantIdFromAuth != null ? tenantIdFromAuth : TenantContext.getCurrentTenant();
-  }
-
-  private Map<String, String> sanitizeTranslations(Map<String, String> content) {
-    if (content == null) {
-      return Map.of();
-    }
-    return content.entrySet().stream()
-        .filter(entry -> entry.getKey() != null)
-        .collect(
-            Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> sanitizeOrValidateValue(entry.getKey(), entry.getValue()),
-                (existing, replacement) -> replacement,
-                LinkedHashMap::new));
-  }
-
-  private String sanitizeOrValidateValue(String key, String value) {
-    var safeValue = value == null ? "" : value;
-    if (key.endsWith(META_KEY_SUFFIX)) {
-      assertValidJson(key, safeValue);
-      return safeValue;
-    }
-    return inputSanitizer.sanitizeAllowingFormattingAndLinks(safeValue);
-  }
-
-  private void assertValidJson(String key, String value) {
-    try {
-      objectMapper.readTree(value);
-    } catch (JsonProcessingException e) {
-      throw new BadRequestException(
-          String.format("Translation metadata key '%s' does not contain valid JSON", key));
-    }
-  }
-
-  private String toJson(Map<String, String> sanitized) {
-    try {
-      return objectMapper.writeValueAsString(sanitized);
-    } catch (JsonProcessingException e) {
-      throw new InternalServerErrorException(
-          "Could not serialize department imprint content", e);
-    }
   }
 }

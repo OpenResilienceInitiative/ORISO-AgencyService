@@ -69,7 +69,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -86,7 +86,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin_AndSortByPostcodeAscending() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -105,7 +105,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin_AndSortByOffline() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -125,7 +125,7 @@ class AgencyAdminSearchServiceIT {
   void searchAgency_Should_FindOnlyAgenciesManagedByTheAdmin_WhenUserIsAgencyAdmin_AndSortByPostcodeDescending() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList(2L, 3L));
@@ -141,10 +141,64 @@ class AgencyAdminSearchServiceIT {
   }
 
   @Test
+  void searchAgency_Should_SortByIdAscending() {
+    // given, when
+    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20,
+        new Sort().field(FieldEnum.ID).order(Sort.OrderEnum.ASC));
+
+    // then
+    assertThat(agencySearchResult.getEmbedded()).hasSize(20);
+    List<Long> collect = agencySearchResult.getEmbedded().stream()
+        .map(p -> p.getEmbedded().getId()).collect(Collectors.toList());
+    assertThat(collect).isSorted();
+  }
+
+  @Test
+  void searchAgency_Should_SortByIdDescending() {
+    // given, when
+    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20,
+        new Sort().field(FieldEnum.ID).order(Sort.OrderEnum.DESC));
+
+    // then
+    assertThat(agencySearchResult.getEmbedded()).hasSize(20);
+    List<Long> collect = agencySearchResult.getEmbedded().stream()
+        .map(p -> p.getEmbedded().getId()).collect(Collectors.toList());
+    assertThat(collect).isSortedAccordingTo(Comparator.reverseOrder());
+  }
+
+  @Test
+  void searchAgency_Should_SortByCreateDateAscending() {
+    // given, when
+    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20,
+        new Sort().field(FieldEnum.CREATE_DATE).order(Sort.OrderEnum.ASC));
+
+    // then
+    assertThat(agencySearchResult.getEmbedded()).hasSize(20);
+    List<String> collect = agencySearchResult.getEmbedded().stream()
+        .filter(result -> result.getEmbedded().getCreateDate() != null)
+        .map(p -> p.getEmbedded().getCreateDate()).collect(Collectors.toList());
+    assertThat(collect).isSorted();
+  }
+
+  @Test
+  void searchAgency_Should_SortByCreateDateDescending() {
+    // given, when
+    var agencySearchResult = agencyAdminSearchService.searchAgencies("", 1, 20,
+        new Sort().field(FieldEnum.CREATE_DATE).order(Sort.OrderEnum.DESC));
+
+    // then
+    assertThat(agencySearchResult.getEmbedded()).hasSize(20);
+    List<String> collect = agencySearchResult.getEmbedded().stream()
+        .filter(result -> result.getEmbedded().getCreateDate() != null)
+        .map(p -> p.getEmbedded().getCreateDate()).collect(Collectors.toList());
+    assertThat(collect).isSortedAccordingTo(Comparator.reverseOrder());
+  }
+
+  @Test
   void searchAgency_Should_NotFindAnyAgencies_WhenUserIsAgencyAdminButDoesntManageAnyAgencies() {
     // given
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
     when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(new HttpHeaders());
     when(userAdminServiceApiControllerFactory.createControllerApi()).thenReturn(adminUserControllerApi);
     when(adminUserControllerApi.getAdminAgencies("userId")).thenReturn(Lists.newArrayList());

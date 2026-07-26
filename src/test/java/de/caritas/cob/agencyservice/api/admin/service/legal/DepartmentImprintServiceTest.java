@@ -16,6 +16,8 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -45,7 +47,10 @@ class DepartmentImprintServiceTest {
     // real sanitizer so we actually verify markup stripping, not a mock
     service =
         new DepartmentImprintService(
-            agencyTopicRepository, new InputSanitizer(), authenticatedUser, userAdminService);
+            agencyTopicRepository,
+            new LegalContentSanitizer(new InputSanitizer()),
+            authenticatedUser,
+            userAdminService);
   }
 
   @AfterEach
@@ -75,6 +80,53 @@ class DepartmentImprintServiceTest {
     when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 42L))
         .thenReturn(Optional.of(department));
     return department;
+  }
+
+  @Test
+  void publish_Should_writeThroughToReferencedLegalText_When_departmentReferencesOne() {
+    // ADR-014: the referenced shared Impressum object is the truth; the legacy per-department
+    // endpoint writes through to it instead of the ignored inline column.
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    var referenced =
+        LegalText.builder()
+            .id(101L)
+            .kind(LegalTextKind.IMPRINT)
+            .label("Geteiltes Impressum")
+            .content("{\"de\":\"<p>alt</p>\"}")
+            .publicationStatus(PublicationStatus.DRAFT)
+            .build();
+    department.setImprint(referenced);
+
+    var status = service.publishDepartmentImprint(7L, 42L, Map.of("de", "<p>neu</p>"), true);
+
+    assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
+    assertThat(referenced.getContent()).contains("neu");
+    assertThat(referenced.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getContentImprint()).isNull();
+  }
+
+  @Test
+  void read_Should_returnReferencedLegalText_When_departmentReferencesOne() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setContentImprint("{\"de\":\"<p>inline-alt</p>\"}");
+    department.setPublicationStatusImprint(PublicationStatus.DRAFT);
+    department.setImprint(
+        LegalText.builder()
+            .id(101L)
+            .kind(LegalTextKind.IMPRINT)
+            .label("Geteiltes Impressum")
+            .content("{\"de\":\"<p>geteilt</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED)
+            .build());
+
+    var view = service.getDepartmentImprint(7L, 42L);
+
+    assertThat(view.content()).isEqualTo("{\"de\":\"<p>geteilt</p>\"}");
+    assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
   }
 
   @Test
@@ -132,7 +184,7 @@ class DepartmentImprintServiceTest {
   @Test
   void publish_Should_allow_When_restrictedAdminOwnsTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
     when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(7L, 9L));
     existingDepartment();
 
@@ -145,7 +197,7 @@ class DepartmentImprintServiceTest {
   @Test
   void publish_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
     when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(9L));
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)
@@ -210,8 +262,9 @@ class DepartmentImprintServiceTest {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
     // translation-metadata convention: __meta-suffixed keys carry JSON, not HTML - sanitising
-    // them would destroy the payload, so they are passed through JSON-validated instead
-    var metaJson = "{\"source\":\"machine\",\"reviewed\":false}";
+    // them would destroy the payload; they pass through after the STRICT schema validation
+    // (shared LegalContentSanitizer — the former lenient parse-only check is gone)
+    var metaJson = "{\"mt\":true,\"src\":\"de\",\"at\":\"2026-07-16T10:00:00Z\"}";
 
     service.publishDepartmentImprint(
         7L, 42L, Map.of("de", "<p>Impressum</p>", "de__meta", metaJson), true);
@@ -219,7 +272,25 @@ class DepartmentImprintServiceTest {
     var stored = department.getContentImprint();
     assertThat(stored).contains("\"de__meta\":");
     // the JSON payload survives verbatim (an HTML sanitizer would have escaped the quotes away)
-    assertThat(stored).contains("machine").contains("reviewed");
+    assertThat(stored).contains("mt").contains("src");
+  }
+
+  @Test
+  void publish_Should_rejectMetaWithUnknownFields() {
+    // the imprint path used to accept arbitrary JSON behind the __meta suffix — with the shared
+    // strict validation, unknown fields are rejected like on the DPP path
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentImprint(
+                    7L,
+                    42L,
+                    Map.of("de__meta", "{\"source\":\"machine\",\"reviewed\":false}"),
+                    true));
+    verify(agencyTopicRepository, never()).save(any());
   }
 
   @Test
@@ -251,7 +322,7 @@ class DepartmentImprintServiceTest {
   @Test
   void getDepartmentImprint_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("admin-1");
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
     when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(9L));
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)

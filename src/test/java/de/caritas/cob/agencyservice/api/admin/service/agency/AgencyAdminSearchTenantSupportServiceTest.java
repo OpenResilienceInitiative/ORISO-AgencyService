@@ -157,7 +157,7 @@ class AgencyAdminSearchTenantSupportServiceTest {
     stubTenantIdPath();
     TenantContext.setCurrentTenant(1L);
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn(USER_ID);
+    when(authenticatedUser.requireUserId()).thenReturn(USER_ID);
     when(authenticatedUser.getTenantId()).thenReturn(null);
     when(userAdminService.getAdminUserAgencyIds(USER_ID)).thenReturn(List.of(100L));
 
@@ -185,7 +185,7 @@ class AgencyAdminSearchTenantSupportServiceTest {
     stubTenantIdPath();
     TenantContext.setCurrentTenant(1L);
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn(USER_ID);
+    when(authenticatedUser.requireUserId()).thenReturn(USER_ID);
     when(authenticatedUser.getTenantId()).thenReturn(1L);
     when(userAdminService.getAdminUserAgencyIds(USER_ID)).thenReturn(Collections.emptyList());
 

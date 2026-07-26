@@ -11,6 +11,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.Agency
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionView;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionContentDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionDTO;
@@ -34,6 +35,7 @@ class AgencyAdminControllerDepartmentDppTest {
   @Mock private AgencyAdminControlsFacade agencyAdminControlsFacade;
   @Mock private DepartmentDataProtectionService departmentDataProtectionService;
   @Mock private DepartmentImprintService departmentImprintService;
+  @Mock private LegalTextAdminService legalTextAdminService;
 
   @InjectMocks private AgencyAdminController controller;
 

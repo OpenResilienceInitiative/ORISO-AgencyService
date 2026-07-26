@@ -46,12 +46,12 @@ class AgencyUpdatePermissionValidatorTest {
     // given
     when(validateAgencyDto.getId()).thenReturn(AGENCY_ID);
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
-    when(userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId())).thenReturn(Lists.newArrayList(AGENCY_ID, 2L));
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
+    when(userAdminService.getAdminUserAgencyIds("userId")).thenReturn(Lists.newArrayList(AGENCY_ID, 2L));
     // when
     agencyUpdatePermissionValidator.validate(validateAgencyDto);
     // then
-    Mockito.verify(userAdminService).getAdminUserAgencyIds(authenticatedUser.getUserId());
+    Mockito.verify(userAdminService).getAdminUserAgencyIds("userId");
   }
 
   @Test
@@ -59,8 +59,8 @@ class AgencyUpdatePermissionValidatorTest {
     // given
     when(validateAgencyDto.getId()).thenReturn(AGENCY_ID);
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
-    when(authenticatedUser.getUserId()).thenReturn("userId");
-    when(userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId())).thenReturn(Lists.newArrayList(2L, 3L));
+    when(authenticatedUser.requireUserId()).thenReturn("userId");
+    when(userAdminService.getAdminUserAgencyIds("userId")).thenReturn(Lists.newArrayList(2L, 3L));
     // when, then
     assertThrows(AgencyAccessDeniedException.class, () -> agencyUpdatePermissionValidator.validate(validateAgencyDto));
   }

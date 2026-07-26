@@ -22,6 +22,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
@@ -496,15 +497,33 @@ public class AgencyService {
    * plus whether its own legal texts (ADR-003) are published. Uses the already-loaded {@code
    * agencyTopics} association (the same one {@code topicIds} is built from), so no additional
    * query is issued per agency or topic.
+   *
+   * <p>ADR-014: like {@link DepartmentLegalService}, a referenced shared legal-text object fully
+   * replaces the inline column — the flags must follow the same resolution order, otherwise the
+   * registration search would report stale inline state after a write-through publish/draft-save.
    */
   private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic) {
     return new AgencyDepartmentDTO()
         .topicId(agencyTopic.getTopicId())
-        .hasPublishedDpp(
-            hasPublishedContent(agencyTopic.getContentDpp(), agencyTopic.getPublicationStatus()))
-        .hasPublishedImprint(
-            hasPublishedContent(
-                agencyTopic.getContentImprint(), agencyTopic.getPublicationStatusImprint()));
+        .hasPublishedDpp(hasPublishedDpp(agencyTopic))
+        .hasPublishedImprint(hasPublishedImprint(agencyTopic));
+  }
+
+  private boolean hasPublishedDpp(AgencyTopic agencyTopic) {
+    LegalText referenced = agencyTopic.getDpp();
+    if (referenced != null) {
+      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return hasPublishedContent(agencyTopic.getContentDpp(), agencyTopic.getPublicationStatus());
+  }
+
+  private boolean hasPublishedImprint(AgencyTopic agencyTopic) {
+    LegalText referenced = agencyTopic.getImprint();
+    if (referenced != null) {
+      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return hasPublishedContent(
+        agencyTopic.getContentImprint(), agencyTopic.getPublicationStatusImprint());
   }
 
   private boolean hasPublishedContent(String content, PublicationStatus status) {

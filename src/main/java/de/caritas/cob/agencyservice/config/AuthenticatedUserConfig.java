@@ -45,7 +45,7 @@ public class AuthenticatedUserConfig {
     Map<String, Object> claimMap = authenticationToken.getToken().getClaims();
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
-    authenticatedUser.setUserId(getUserAttribute(claimMap, CLAIM_NAME_USER_ID));
+    authenticatedUser.setUserId(getOptionalUserAttribute(claimMap, CLAIM_NAME_USER_ID));
     authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
     authenticatedUser.setTenantId(getTenantId(claimMap));
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
@@ -79,6 +79,11 @@ public class AuthenticatedUserConfig {
       throw new KeycloakException("Keycloak user attribute '" + claimValue + "' not found.");
     }
     return claimMap.get(claimValue).toString();
+  }
+
+  private String getOptionalUserAttribute(Map<String, Object> claimMap, String claimValue) {
+    Object value = claimMap.get(claimValue);
+    return value == null ? null : value.toString();
   }
 
   private Long getTenantId(Map<String, Object> claimMap) {

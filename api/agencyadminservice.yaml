@@ -344,6 +344,151 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/legaltexts:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: 'List the caller tenant''s shared legal texts of one kind, each with its department
+      usage count ("used by N departments", ADR-014). Library CRUD is full-admin only: a shared
+      text applies tenant-wide. [Authorization: Role: agency-admin]'
+      operationId: getLegalTexts
+      parameters:
+        - name: kind
+          in: query
+          description: Which library to list (data privacy policies or imprints)
+          required: true
+          schema:
+            type: string
+            enum: [ DPP, IMPRINT ]
+      responses:
+        200:
+          description: OK - the tenant's legal texts of that kind
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LegalTextAdminDTO'
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+    post:
+      tags:
+        - admin-agency-controller
+      summary: 'Create a shared legal text owned by the caller''s tenant (ADR-014).
+      [Authorization: Role: agency-admin — full admins only, see GET]'
+      operationId: createLegalText
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/CreateLegalTextDTO'
+        required: true
+      responses:
+        200:
+          description: OK - legal text stored
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/LegalTextAdminDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request (e.g. blank label)
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/legaltexts/{legalTextId}:
+    put:
+      tags:
+        - admin-agency-controller
+      summary: 'Update a shared legal text (label, multilingual content, optionally publication
+      status — omitted publish keeps the current status). Changes apply to every department
+      referencing the text. [Authorization: Role: agency-admin — full admins only, scoped to the
+      owning tenant]'
+      operationId: updateLegalText
+      parameters:
+        - name: legalTextId
+          in: path
+          description: Legal text id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/UpdateLegalTextDTO'
+        required: true
+      responses:
+        200:
+          description: OK - legal text updated
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/LegalTextAdminDTO'
+        400:
+          description: BAD REQUEST - invalid request, or caller may not edit this tenant's text
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - legal text not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/legaltext-assignment:
+    put:
+      tags:
+        - admin-agency-controller
+      summary: 'Assign a shared legal text to a department''s DPP or imprint slot, or clear the
+      slot (null = department falls back to its own inline content, content_dpp/content_imprint;
+      tenant-level fallback is future work, ADR-014 / #136). The text''s kind must match the
+      slot and the text must belong to the agency''s tenant. [Authorization: Role: agency-admin or
+      restricted-agency-admin scoped to its own agencies]'
+      operationId: assignDepartmentLegalText
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/LegalTextAssignmentDTO'
+        required: true
+      responses:
+        204:
+          description: NO CONTENT - assignment stored
+        400:
+          description: BAD REQUEST - kind mismatch, cross-tenant text, or caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department or legal text not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/agencies/{agencyId}/topics/{topicId}/imprint:
     get:
       tags:
@@ -1123,20 +1268,112 @@ components:
       properties:
         field:
           type: string
-          example: 'name|description|postcode|city|teamAgency|offline'
+          example: 'id|name|description|postcode|city|teamAgency|offline|createDate'
           enum:
+            - 'id'
             - 'name'
             - 'description'
             - 'postCode'
             - 'city'
             - 'teamAgency'
             - 'offline'
+            - 'createDate'
         order:
           type: string
           example: 'ASC|DESC'
           enum:
             - 'ASC'
             - 'DESC'
+
+    LegalTextAdminDTO:
+      type: object
+      required:
+        - id
+        - kind
+        - label
+        - publicationStatus
+        - usageCount
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        label:
+          type: string
+          description: Admin-facing name shown in the legal-text library
+        content:
+          type: string
+          nullable: true
+          description: Stored multilingual content as a JSON language->HTML map string
+        publicationStatus:
+          type: string
+          enum: [ DRAFT, PUBLISHED ]
+        usageCount:
+          type: integer
+          format: int64
+          description: How many departments currently reference this text
+
+    CreateLegalTextDTO:
+      type: object
+      required:
+        - kind
+        - label
+        - content
+      properties:
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        label:
+          type: string
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML text (multilingual map).
+            Keys with the __meta suffix carry JSON translation metadata instead of HTML.
+          additionalProperties:
+            type: string
+        publish:
+          type: boolean
+          description: 'true = mark PUBLISHED; false/absent = keep as DRAFT'
+          default: false
+
+    UpdateLegalTextDTO:
+      type: object
+      required:
+        - label
+        - content
+      properties:
+        label:
+          type: string
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML text (multilingual map).
+            Keys with the __meta suffix carry JSON translation metadata instead of HTML.
+          additionalProperties:
+            type: string
+        publish:
+          type: boolean
+          nullable: true
+          description: 'true = PUBLISHED, false = DRAFT; omitted/null = keep the current
+            publication status (a label/content-only update never unpublishes)'
+
+    LegalTextAssignmentDTO:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+          description: Which slot of the department to assign
+        legalTextId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 'Legal text to reference; null clears the slot — the department falls back
+            to its own inline content (content_dpp/content_imprint). Tenant-level fallback is
+            future work (ADR-014 / #136).'
 
     DepartmentDataProtectionDTO:
       type: object

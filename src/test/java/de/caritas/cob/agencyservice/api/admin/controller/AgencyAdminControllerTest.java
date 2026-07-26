@@ -170,6 +170,33 @@ public class AgencyAdminControllerTest {
   }
 
   @Test
+  public void searchAgencies_Should_bindUpperCasedSortFieldsSentByAdminFrontend()
+      throws Exception {
+    // The admin frontend upper-cases sort fields (field=POSTCODE, field=CREATEDATE),
+    // while the generated FieldEnum constants are POST_CODE and CREATE_DATE.
+    for (var fieldParam : java.util.List.of(
+        "POSTCODE", "CREATEDATE", "ID", "NAME", "CITY", "OFFLINE",
+        "postCode", "createDate")) {
+      this.mvc
+          .perform(get(AGENCY_SEARCH_PATH)
+              .param(PAGE_PARAM, "1").param(PER_PAGE_PARAM, "10")
+              .param("field", fieldParam).param("order", "ASC"))
+          .andExpect(status().isOk());
+    }
+
+    var sortCaptor = org.mockito.ArgumentCaptor.forClass(
+        de.caritas.cob.agencyservice.api.model.Sort.class);
+    Mockito.verify(this.agencyAdminFullResponseDTO, Mockito.times(8))
+        .searchAgencies(any(), eq(1), eq(10), sortCaptor.capture());
+    var boundFields = sortCaptor.getAllValues().stream()
+        .map(s -> s == null || s.getField() == null ? null : s.getField().name())
+        .toList();
+    org.assertj.core.api.Assertions.assertThat(boundFields).containsExactly(
+        "POST_CODE", "CREATE_DATE", "ID", "NAME", "CITY", "OFFLINE",
+        "POST_CODE", "CREATE_DATE");
+  }
+
+  @Test
   @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void createAgency_Should_returnCreated_When_AgencyDtoIsGiven() throws Exception {
 
