@@ -34,3 +34,7 @@ wrapper
 log
 /agencyservice.tar
 *.jar
+
+# Python bytecode from local pytest runs — never belongs in the tree.
+__pycache__/
+*.py[cod]
