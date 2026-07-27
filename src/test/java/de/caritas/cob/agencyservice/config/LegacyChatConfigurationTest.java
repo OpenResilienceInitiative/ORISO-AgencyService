@@ -63,4 +63,13 @@ class LegacyChatConfigurationTest {
       }
     }
   }
+
+  @Test
+  void configEnvExampleMustNotContainRocketChatConfiguration() throws IOException {
+    var content = Files.readString(Path.of("config.env.example"));
+
+    assertFalse(
+        content.toLowerCase().contains("rocket"),
+        "config.env.example still contains legacy Rocket.Chat configuration");
+  }
 }
