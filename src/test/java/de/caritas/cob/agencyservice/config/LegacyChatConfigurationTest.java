@@ -1,6 +1,7 @@
 package de.caritas.cob.agencyservice.config;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.Test;
 class LegacyChatConfigurationTest {
 
   private static final List<String> PROFILES = List.of("dev", "prod", "staging", "testing");
+  private static final List<String> LEGACY_CHAT_KEYS =
+      List.of("rocket.chat", "rocket_chat", "rocketchat", "rocket.technical", "rocket_technical");
 
   @Test
   void releaseWorkflowMustPublishImmutableMultiPlatformImagesWithEvidence() throws IOException {
@@ -55,21 +58,27 @@ class LegacyChatConfigurationTest {
     for (String profile : PROFILES) {
       var resource = "/application-" + profile + ".properties";
       try (var stream = getClass().getResourceAsStream(resource)) {
+        assertNotNull(stream, () -> "Missing required application profile " + resource);
         var content = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
 
         assertFalse(
-            content.toLowerCase().contains("rocket"),
+            containsLegacyChatKey(content),
             () -> resource + " still contains legacy Rocket.Chat configuration");
       }
     }
   }
 
   @Test
-  void configEnvExampleMustNotContainRocketChatConfiguration() throws IOException {
+  void exampleEnvironmentMustNotProvisionRocketChatSecrets() throws IOException {
     var content = Files.readString(Path.of("config.env.example"));
 
     assertFalse(
-        content.toLowerCase().contains("rocket"),
-        "config.env.example still contains legacy Rocket.Chat configuration");
+        containsLegacyChatKey(content),
+        "config.env.example still provisions legacy Rocket.Chat configuration");
+  }
+
+  private static boolean containsLegacyChatKey(String content) {
+    var lowerCaseContent = content.toLowerCase();
+    return LEGACY_CHAT_KEYS.stream().anyMatch(lowerCaseContent::contains);
   }
 }
