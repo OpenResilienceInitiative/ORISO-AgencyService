@@ -101,7 +101,7 @@ jobs:
   required-ci:
     name: required PreDev CI
     if: always()
-    needs: [validate, required-integration-tests, contract-tests]
+    needs: [validate, required-integration-tests, contract-tests, legacy-quarantine-expiry]
     runs-on: ubuntu-latest
 
     steps:
@@ -110,14 +110,15 @@ jobs:
         VALIDATE_RESULT: ${{ needs.validate.result }}
         CONTRACT_RESULT: ${{ needs.contract-tests.result }}
         INTEGRATION_RESULT: ${{ needs.required-integration-tests.result }}
+        EXPIRY_RESULT: ${{ needs.legacy-quarantine-expiry.result }}
       run: |
         conclusion=success
         if [[ "${VALIDATE_RESULT}" != success || "${INTEGRATION_RESULT}" != success \
-           || "${CONTRACT_RESULT}" != success ]]; then
+           || "${CONTRACT_RESULT}" != success || "${EXPIRY_RESULT}" != success ]]; then
           conclusion=failure
         fi
         if [[ "${conclusion}" != success ]]; then
-          echo "::error::Required CI failed: validate=${VALIDATE_RESULT}, integration=${INTEGRATION_RESULT}, contract=${CONTRACT_RESULT}"
+          echo "::error::Required CI failed: validate=${VALIDATE_RESULT}, integration=${INTEGRATION_RESULT}, contract=${CONTRACT_RESULT}, quarantine-expiry=${EXPIRY_RESULT}"
           exit 1
         fi
 

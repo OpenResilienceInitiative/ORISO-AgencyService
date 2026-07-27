@@ -38,14 +38,24 @@ class RequiredCiContractTest(unittest.TestCase):
 
         self.assertIn("name: required integration tests", integration)
         self.assertNotIn("continue-on-error:", integration)
-        self.assertIn("needs: [validate, required-integration-tests, contract-tests]", aggregate)
+        self.assertIn(
+            "needs: [validate, required-integration-tests, contract-tests,"
+            " legacy-quarantine-expiry]",
+            aggregate,
+        )
         self.assertIn("if: always()", aggregate)
         self.assertIn("name: required PreDev CI", aggregate)
         self.assertIn("needs.required-integration-tests.result", aggregate)
         self.assertIn("needs.contract-tests.result", aggregate)
+        self.assertIn("needs.legacy-quarantine-expiry.result", aggregate)
         # Reading a result into the environment is not the same as acting on
         # it: the conclusion itself must consider every required job.
         self.assertIn('"${CONTRACT_RESULT}" != success', aggregate)
+        # The aggregate is the only check branch protection requires, so a job
+        # outside it cannot block anything. Without this, the quarantine expiry
+        # would turn the workflow run red on 2026-10-01 while the required
+        # conclusion stayed green and merges kept flowing.
+        self.assertIn('"${EXPIRY_RESULT}" != success', aggregate)
 
     def test_ci_contract_tests_are_executed_by_ci(self):
         # These assertions are worthless unless something runs them. Without a
