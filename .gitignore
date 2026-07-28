@@ -34,3 +34,6 @@ wrapper
 log
 /agencyservice.tar
 *.jar
+
+__pycache__/
+*.py[cod]

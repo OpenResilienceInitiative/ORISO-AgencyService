@@ -25,8 +25,9 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Returns the list of agencies by search query parameter. [Authorization: Role:
-      agency-admin]'
+      summary: >-
+        Returns the list of agencies by search query parameter.
+        [Authorization: Role: agency-admin]
       operationId: searchAgencies
       parameters:
         - name: q
@@ -228,10 +229,11 @@ paths:
     post:
       tags:
         - admin-agency-controller
-      summary: 'Change an agency from team-agency to default and vice-versa and switch the
-      associated consultant accounts to team consultant or default consultant. Ongoing team
-      counselings change to 1:1 when converting agency to default status. 1:1 counselings remain
-      single counselings when swapping the agency to team-agency. [Authorization: Role: user-admin]'
+      summary: >-
+        Change an agency from team-agency to default and vice-versa and switch the
+        associated consultant accounts to team consultant or default consultant. Ongoing team
+        counselings change to 1:1 when converting agency to default status. 1:1 counselings remain
+        single counselings when swapping the agency to team-agency. [Authorization: Role: user-admin]
       operationId: changeAgencyType
       parameters:
         - name: agencyId
@@ -262,9 +264,10 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Read a department''s (Fachbereich = agency x topic) own data privacy policy (DSE) to
-      prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
-      its own agencies]'
+      summary: >-
+        Read a department's (Fachbereich = agency x topic) own data privacy policy (DSE) to
+        prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+        its own agencies]
       operationId: getDepartmentDataProtection
       parameters:
         - name: agencyId
@@ -301,9 +304,10 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Publish or draft-save a department''s (Fachbereich = agency x topic) own data
-      privacy policy (DSE). [Authorization: Role: agency-admin or restricted-agency-admin scoped to
-      its own agencies]'
+      summary: >-
+        Publish or draft-save a department's (Fachbereich = agency x topic) own data
+        privacy policy (DSE). [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+        its own agencies]
       operationId: publishDepartmentDataProtection
       parameters:
         - name: agencyId
@@ -348,9 +352,10 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'List the caller tenant''s shared legal texts of one kind, each with its department
-      usage count ("used by N departments", ADR-014). Library CRUD is full-admin only: a shared
-      text applies tenant-wide. [Authorization: Role: agency-admin]'
+      summary: >-
+        List the caller tenant's shared legal texts of one kind, each with its department
+        usage count ("used by N departments", ADR-014). Library CRUD is full-admin only: a shared
+        text applies tenant-wide. [Authorization: Role: agency-admin]
       operationId: getLegalTexts
       parameters:
         - name: kind
@@ -378,8 +383,9 @@ paths:
     post:
       tags:
         - admin-agency-controller
-      summary: 'Create a shared legal text owned by the caller''s tenant (ADR-014).
-      [Authorization: Role: agency-admin — full admins only, see GET]'
+      summary: >-
+        Create a shared legal text owned by the caller's tenant (ADR-014).
+        [Authorization: Role: agency-admin — full admins only, see GET]
       operationId: createLegalText
       requestBody:
         content:
@@ -407,10 +413,11 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Update a shared legal text (label, multilingual content, optionally publication
-      status — omitted publish keeps the current status). Changes apply to every department
-      referencing the text. [Authorization: Role: agency-admin — full admins only, scoped to the
-      owning tenant]'
+      summary: >-
+        Update a shared legal text (label, multilingual content, optionally publication
+        status — omitted publish keeps the current status). Changes apply to every department
+        referencing the text. [Authorization: Role: agency-admin — full admins only, scoped to the
+        owning tenant]
       operationId: updateLegalText
       parameters:
         - name: legalTextId
@@ -448,11 +455,12 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Assign a shared legal text to a department''s DPP or imprint slot, or clear the
-      slot (null = department falls back to its own inline content, content_dpp/content_imprint;
-      tenant-level fallback is future work, ADR-014 / #136). The text''s kind must match the
-      slot and the text must belong to the agency''s tenant. [Authorization: Role: agency-admin or
-      restricted-agency-admin scoped to its own agencies]'
+      summary: >-
+        Assign a shared legal text to a department's DPP or imprint slot, or clear the
+        slot (null = department falls back to its own inline content, content_dpp/content_imprint;
+        tenant-level fallback is future work, ADR-014 / #136). The text's kind must match the
+        slot and the text must belong to the agency's tenant. [Authorization: Role: agency-admin or
+        restricted-agency-admin scoped to its own agencies]
       operationId: assignDepartmentLegalText
       parameters:
         - name: agencyId
@@ -493,9 +501,10 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Read a department''s (Fachbereich = agency x topic) own imprint (Impressum) to
-      prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
-      its own agencies]'
+      summary: >-
+        Read a department's (Fachbereich = agency x topic) own imprint (Impressum) to
+        prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+        its own agencies]
       operationId: getDepartmentImprint
       parameters:
         - name: agencyId
@@ -532,9 +541,10 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Publish or draft-save a department''s (Fachbereich = agency x topic) own imprint
-      (Impressum). [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own
-      agencies]'
+      summary: >-
+        Publish or draft-save a department's (Fachbereich = agency x topic) own imprint
+        (Impressum). [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own
+        agencies]
       operationId: publishDepartmentImprint
       parameters:
         - name: agencyId
@@ -826,7 +836,6 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 9223372036854775807
           example: 684
         name:
           type: string
@@ -1205,7 +1214,6 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 9223372036854775807
           example: 684
           description: "The agency id of the related postcoderanges"
         postcodeRanges:
@@ -1355,8 +1363,9 @@ components:
         publish:
           type: boolean
           nullable: true
-          description: 'true = PUBLISHED, false = DRAFT; omitted/null = keep the current
-            publication status (a label/content-only update never unpublishes)'
+          description: >-
+            true = PUBLISHED, false = DRAFT; omitted/null = keep the current
+            publication status (a label/content-only update never unpublishes)
 
     LegalTextAssignmentDTO:
       type: object
@@ -1371,9 +1380,10 @@ components:
           type: integer
           format: int64
           nullable: true
-          description: 'Legal text to reference; null clears the slot — the department falls back
+          description: >-
+            Legal text to reference; null clears the slot — the department falls back
             to its own inline content (content_dpp/content_imprint). Tenant-level fallback is
-            future work (ADR-014 / #136).'
+            future work (ADR-014 / #136).
 
     DepartmentDataProtectionDTO:
       type: object

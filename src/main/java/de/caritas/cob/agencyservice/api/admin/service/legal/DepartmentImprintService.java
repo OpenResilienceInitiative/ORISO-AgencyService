@@ -69,20 +69,18 @@ public class DepartmentImprintService {
 
     var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
     var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
-    var now = LocalDateTime.now();
 
-    LegalText referenced = department.getImprint();
-    if (referenced != null) {
-      // ADR-014: the referenced shared object is the truth — write through to it; the inline
-      // column stays untouched (the read path ignores it once a reference exists).
-      referenced.setContent(sanitizedJson);
-      referenced.setPublicationStatus(status);
-      referenced.setUpdateDate(now);
-    } else {
-      department.setContentImprint(sanitizedJson);
-      department.setPublicationStatusImprint(status);
+    // ADR-014 amendment 2026-07-28: never write through to the referenced shared object. The 0026
+    // backfill merged byte-identical departments onto one row, so writing through would silently
+    // republish every sibling Fachbereich. Publishing means "this department leaves the shared
+    // text": the reference is dropped and the text becomes the department's own. A draft keeps the
+    // reference, so the public still resolves the inherited text until the admin publishes.
+    if (publish) {
+      department.setImprint(null);
     }
-    department.setUpdateDate(now);
+    department.setContentImprint(sanitizedJson);
+    department.setPublicationStatusImprint(status);
+    department.setUpdateDate(LocalDateTime.now());
     agencyTopicRepository.save(department);
 
     return status;
@@ -105,12 +103,25 @@ public class DepartmentImprintService {
     assertCallerTenantMatches(department.getAgency());
 
     LegalText referenced = department.getImprint();
-    if (referenced != null) {
+    if (referenced != null && !hasPendingDraft(department, referenced)) {
       return new DepartmentImprintView(
           referenced.getContent(), referenced.getPublicationStatus());
     }
     return new DepartmentImprintView(
         department.getContentImprint(), department.getPublicationStatusImprint());
+  }
+
+  /**
+   * Tells an admin's unpublished draft apart from a {@code 0026} backfill leftover, both of which
+   * appear as inline content next to a live reference. Mirrors {@code
+   * DepartmentDataProtectionService#hasPendingDraft}: the backfill copied the text verbatim, so a
+   * leftover is byte-identical to what it references and keeps resolving through the reference.
+   */
+  private boolean hasPendingDraft(AgencyTopic department, LegalText referenced) {
+    var draft = department.getContentImprint();
+    return draft != null
+        && department.getPublicationStatusImprint() == PublicationStatus.DRAFT
+        && !draft.equals(referenced.getContent());
   }
 
   /**

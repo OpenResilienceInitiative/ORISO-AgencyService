@@ -9,10 +9,10 @@ import de.caritas.cob.agencyservice.filter.HttpTenantFilter;
 import de.caritas.cob.agencyservice.filter.StatelessCsrfFilter;
 import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
-import org.keycloak.adapters.springsecurity.KeycloakConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -27,7 +27,7 @@ import org.springframework.security.web.csrf.CsrfFilter;
 /**
  * Provides the Keycloak/Spring Security configuration.
  */
-@KeycloakConfiguration
+@Configuration
 @EnableMethodSecurity(
     prePostEnabled = true)
 @EnableWebSecurity
