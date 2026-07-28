@@ -1,19 +1,23 @@
 package de.caritas.cob.agencyservice.api.repository.agencyidreservation;
 
+import de.caritas.cob.agencyservice.api.repository.TenantUnaware;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * Repository for {@link AgencyIdReservation} plus the free-ID navigation queries of the shared
- * allocation contract (TEN-INV-U2).
+ * Repository for {@link AgencyIdReservation} plus the taken-ID queries of the shared allocation
+ * contract (TEN-INV-U2).
  *
  * <p>An agency ID counts as taken when it is ASSIGNED (a row in {@code agency}, including
  * soft-deleted ones — IDs are never re-issued) or RESERVED (a row in
  * {@code agency_id_reservation}). The queries are plain native SQL over both tables so they work
  * identically on MariaDB and the H2 testing profile, and they deliberately bypass the Hibernate
- * tenant filter: the agency ID space is global.
+ * tenant filter: the agency ID space is global. The repository is additionally marked
+ * {@link TenantUnaware} so the TenantAspect never enables the tenant filter as a side effect of
+ * allocation calls.
  */
+@TenantUnaware
 public interface AgencyIdReservationRepository extends JpaRepository<AgencyIdReservation, Long> {
 
   String TAKEN_SUCCESSORS =
@@ -57,5 +61,12 @@ public interface AgencyIdReservationRepository extends JpaRepository<AgencyIdRes
       nativeQuery = true)
   Long findNextFreeIdBelow(@Param("fromId") long fromId);
 
-  long deleteByAgencyId(Long agencyId);
+  /**
+   * Native check whether an agency row (any tenant, including soft-deleted agencies) already
+   * occupies the given ID. Deliberately native SQL so the Hibernate tenant filter of a
+   * tenant-scoped agency admin can never hide another tenant's agency from an allocation
+   * decision — the assignment check must be authoritative for the global agency ID space.
+   */
+  @Query(value = "SELECT COUNT(*) FROM agency WHERE id = :agencyId", nativeQuery = true)
+  long countAssignedAgencyRows(@Param("agencyId") long agencyId);
 }

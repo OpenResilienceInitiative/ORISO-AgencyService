@@ -1,6 +1,5 @@
 package de.caritas.cob.agencyservice.api.admin.service;
 
-import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_ID_NOT_AVAILABLE;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_DEFAULT_AGENCY;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_TEAM_AGENCY;
 import static de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO.AgencyTypeEnum.TEAM_AGENCY;
@@ -42,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Service class to handle agency admin requests.
@@ -66,6 +66,7 @@ public class AgencyAdminService {
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
   private final @NonNull AgencySettingsService agencySettingsService;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
+  private final @NonNull TransactionOperations agencyCreationTransaction;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -133,8 +134,7 @@ public class AgencyAdminService {
     Agency agency = fromAgencyDTO(agencyDTO);
     setTenantIdOnCreate(agencyDTO, agency);
 
-    var savedAgency = agencyRepository.save(agency);
-    rejectCreationOnReservedId(savedAgency);
+    var savedAgency = saveWithReservationGuard(agency);
     agencyService.provisionMatrixCredentials(savedAgency);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(savedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(savedAgency);
@@ -144,18 +144,20 @@ public class AgencyAdminService {
 
   /**
    * TEN-INV-U2 allocation contract: an agency ID reserved by an open invite must never be handed
-   * out to another agency. The ID sequence knows nothing about reservations, so if it generates a
-   * reserved ID the row is removed again and the creation fails with a conflict. Invite
-   * consumption flows release/consume their reservation before creating the agency, so they pass
-   * this guard.
+   * out to another agency. The ID sequence knows nothing about reservations, so the agency
+   * insert and the reservation guard share one transaction: the guard inserts (and removes
+   * again) a reservation row for the generated ID, letting the primary key of
+   * {@code agency_id_reservation} arbitrate creation-vs-reservation races at the database level
+   * instead of relying on a check-then-act sequence. A conflict rolls the agency row back —
+   * no compensation logic involved. Invite consumption flows release/consume their reservation
+   * before creating the agency, so they pass this guard.
    */
-  private void rejectCreationOnReservedId(Agency savedAgency) {
-    if (agencyIdAllocationService.isReserved(savedAgency.getId())) {
-      agencyRepository.delete(savedAgency);
-      log.warn("Agency creation generated ID {} which is reserved by an open invite",
-          savedAgency.getId());
-      throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
-    }
+  private Agency saveWithReservationGuard(Agency agency) {
+    return agencyCreationTransaction.execute(status -> {
+      var savedAgency = agencyRepository.save(agency);
+      agencyIdAllocationService.guardAssignmentAgainstOpenReservations(savedAgency.getId());
+      return savedAgency;
+    });
   }
 
   private void setTenantIdOnCreate(AgencyDTO agencyDTO, Agency agency) {

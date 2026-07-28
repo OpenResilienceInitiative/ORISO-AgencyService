@@ -5,7 +5,6 @@ import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatu
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
-import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencyidreservation.AgencyIdReservation;
 import de.caritas.cob.agencyservice.api.repository.agencyidreservation.AgencyIdReservationRepository;
 import de.caritas.cob.agencyservice.api.service.TenantService;
@@ -13,9 +12,11 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClientException;
@@ -29,11 +30,18 @@ import org.springframework.web.client.RestClientException;
  * <ul>
  *   <li>An ID is FREE, RESERVED (held by an open invite) or ASSIGNED (a real agency row,
  *       including soft-deleted agencies — IDs are never re-issued).
+ *   <li>The agency ID space is global: every assignment check runs as native SQL (see
+ *       {@link AgencyIdReservationRepository#countAssignedAgencyRows(long)}), so the Hibernate
+ *       tenant filter of a tenant-scoped agency admin can never hide another tenant's agency and
+ *       report a taken ID as FREE.
  *   <li>AUTO reservation assigns the smallest currently free ID.
  *   <li>Concurrency safety comes from the database, not from application-level checks: the
  *       reserved ID is the primary key of {@code agency_id_reservation}, every reservation
- *       attempt runs in its own transaction, and a lost race surfaces as a constraint violation
- *       which is mapped to a conflict (manual mode) or retried with the next candidate (AUTO).
+ *       attempt runs in its own transaction and inserts <em>before</em> it checks for an
+ *       assigned agency (write-then-read, so an agency row committed mid-flight is always
+ *       seen), and agency creation runs {@link #guardAssignmentAgainstOpenReservations(long)}
+ *       inside its own insert transaction so the primary key arbitrates
+ *       creation-vs-reservation races in both directions.
  * </ul>
  *
  * <p>This service reserves <strong>agency IDs only — never tenant IDs</strong>. A tenant ID
@@ -47,16 +55,16 @@ public class AgencyIdAllocationService {
   private static final int MAX_AUTO_ATTEMPTS = 5;
 
   private final AgencyIdReservationRepository reservationRepository;
-  private final AgencyRepository agencyRepository;
   private final TenantService tenantService;
+  private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate reservationAttemptTransaction;
 
   public AgencyIdAllocationService(AgencyIdReservationRepository reservationRepository,
-      AgencyRepository agencyRepository, TenantService tenantService,
+      TenantService tenantService, JdbcTemplate jdbcTemplate,
       PlatformTransactionManager transactionManager) {
     this.reservationRepository = reservationRepository;
-    this.agencyRepository = agencyRepository;
     this.tenantService = tenantService;
+    this.jdbcTemplate = jdbcTemplate;
     // each reservation attempt commits (or fails) on its own, so a unique-key collision of one
     // attempt can never poison an enclosing transaction and AUTO mode can simply retry
     this.reservationAttemptTransaction = new TransactionTemplate(transactionManager);
@@ -66,7 +74,7 @@ public class AgencyIdAllocationService {
 
   /** Returns the authoritative state of the given agency ID. */
   public AgencyIdStatus checkAvailability(long agencyId) {
-    if (agencyRepository.existsById(agencyId)) {
+    if (isAssigned(agencyId)) {
       return AgencyIdStatus.ASSIGNED;
     }
     if (reservationRepository.existsById(agencyId)) {
@@ -112,28 +120,56 @@ public class AgencyIdAllocationService {
 
   /**
    * Consumes a reservation because the real agency is being created with that ID. Participates
-   * in the caller's transaction so entity creation and reservation consumption are atomic.
+   * in the caller's transaction so entity creation and reservation consumption are atomic. The
+   * delete runs as plain JDBC so it is effective immediately — a subsequent
+   * {@link #guardAssignmentAgainstOpenReservations(long)} in the same transaction must not
+   * collide with a delete that is still pending in the persistence context.
    *
    * @return whether an open reservation existed and was consumed
    */
   @Transactional
   public boolean consumeReservation(long agencyId) {
-    return reservationRepository.deleteByAgencyId(agencyId) > 0;
+    return jdbcTemplate.update(
+        "DELETE FROM agency_id_reservation WHERE agency_id = ?", agencyId) > 0;
   }
 
-  /** Returns whether the given agency ID is currently reserved by an open invite. */
-  public boolean isReserved(long agencyId) {
-    return reservationRepository.existsById(agencyId);
+  /**
+   * Database-level guard for agency creation: must run inside the transaction that inserts the
+   * agency row, directly after the ID has been generated. It inserts a reservation row for the
+   * fresh ID — letting the primary key of {@code agency_id_reservation} arbitrate against every
+   * concurrent reservation attempt — and removes it again right away; the row lock is held until
+   * the surrounding creation transaction commits. If an open reservation already holds the ID,
+   * the insert collides and the whole creation transaction rolls back with a conflict, so an ID
+   * can never end up ASSIGNED and RESERVED at the same time.
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void guardAssignmentAgainstOpenReservations(long agencyId) {
+    try {
+      // plain JDBC on the surrounding transaction's connection: arbitration must not force an
+      // entity flush of the caller's persistence context, and native SQL keeps the guard
+      // independent of the Hibernate tenant filter
+      jdbcTemplate.update(
+          "INSERT INTO agency_id_reservation (agency_id, create_date)"
+              + " VALUES (?, CURRENT_TIMESTAMP)",
+          agencyId);
+    } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
+      log.warn("Agency creation generated ID {} which is reserved by an open invite", agencyId);
+      throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
+    }
+    jdbcTemplate.update("DELETE FROM agency_id_reservation WHERE agency_id = ?", agencyId);
   }
 
   private Long reserveSpecificId(long agencyId, Long tenantId) {
     try {
       return reservationAttemptTransaction.execute(status -> {
-        if (agencyRepository.existsById(agencyId)) {
-          throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
-        }
+        // write first, check afterwards: the primary-key insert is the arbitration point, so an
+        // agency row committed while this attempt is in flight is always visible to the check
+        // below (write-then-read instead of check-then-act)
         reservationRepository.saveAndFlush(
             AgencyIdReservation.newReservation(agencyId, tenantId));
+        if (isAssigned(agencyId)) {
+          throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
+        }
         return agencyId;
       });
     } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
@@ -147,11 +183,14 @@ public class AgencyIdAllocationService {
       var candidate = reservationRepository.findSmallestFreeId();
       try {
         var reservedId = reservationAttemptTransaction.execute(status -> {
-          if (agencyRepository.existsById(candidate)) {
-            return null; // lost a race against a concurrent agency creation, recompute
-          }
           reservationRepository.saveAndFlush(
               AgencyIdReservation.newReservation(candidate, tenantId));
+          if (isAssigned(candidate)) {
+            // lost a race against a concurrent agency creation: roll the insert back and
+            // recompute the smallest free ID
+            status.setRollbackOnly();
+            return null;
+          }
           return candidate;
         });
         if (reservedId != null) {
@@ -163,6 +202,14 @@ public class AgencyIdAllocationService {
     }
     log.warn("Could not auto-reserve an agency ID within {} attempts", MAX_AUTO_ATTEMPTS);
     throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
+  }
+
+  /**
+   * Tenant-filter-proof assignment check: native SQL over the global agency ID space, so it sees
+   * every tenant's agencies regardless of the caller's tenant scope.
+   */
+  private boolean isAssigned(long agencyId) {
+    return reservationRepository.countAssignedAgencyRows(agencyId) > 0;
   }
 
   private void validateTenant(Long tenantId) {

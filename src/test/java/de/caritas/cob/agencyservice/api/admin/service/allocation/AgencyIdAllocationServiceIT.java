@@ -29,8 +29,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClientException;
 
 /**
@@ -57,6 +60,8 @@ class AgencyIdAllocationServiceIT {
   @Autowired private AgencyIdReservationRepository reservationRepository;
 
   @Autowired private JdbcTemplate jdbcTemplate;
+
+  @Autowired private PlatformTransactionManager transactionManager;
 
   @MockitoBean private TenantService tenantService;
 
@@ -209,6 +214,88 @@ class AgencyIdAllocationServiceIT {
     assertThat(successes).containsExactly(21L);
     assertThat(conflicts).hasSize(1);
     assertThat(conflicts.get(0)).isInstanceOf(ConflictException.class);
+  }
+
+  /* --- creation-vs-reservation bridge (guardAssignmentAgainstOpenReservations) --- */
+
+  @Test
+  void guardAssignment_Should_throwConflictAndKeepReservation_When_idIsReservedByOpenInvite() {
+    allocationService.reserve(21L, null);
+    var creationTransaction = new TransactionTemplate(transactionManager);
+
+    assertThatThrownBy(() -> creationTransaction.execute(status -> {
+      seedAgencies(21, 21);
+      allocationService.guardAssignmentAgainstOpenReservations(21L);
+      return null;
+    })).isInstanceOf(ConflictException.class);
+
+    // the creation transaction rolled back, the open reservation survives untouched
+    assertThat(allocationService.checkAvailability(21L)).isEqualTo(AgencyIdStatus.RESERVED);
+  }
+
+  @Test
+  void guardAssignment_Should_leaveNoReservationBehind_When_idIsFree() {
+    var creationTransaction = new TransactionTemplate(transactionManager);
+
+    creationTransaction.execute(status -> {
+      seedAgencies(21, 21);
+      allocationService.guardAssignmentAgainstOpenReservations(21L);
+      return null;
+    });
+
+    assertThat(allocationService.checkAvailability(21L)).isEqualTo(AgencyIdStatus.ASSIGNED);
+    assertThat(reservationRepository.existsById(21L)).isFalse();
+  }
+
+  @Test
+  void guardAssignment_Should_rejectUsageOutsideOfCreationTransaction() {
+    // MANDATORY propagation: outside the creating transaction the guard row would commit on its
+    // own and arbitrate nothing, so standalone usage is a programming error
+    assertThatThrownBy(() -> allocationService.guardAssignmentAgainstOpenReservations(21L))
+        .isInstanceOf(IllegalTransactionStateException.class);
+  }
+
+  /**
+   * Reserve-vs-createAgency race (TOCTOU review finding): a manual reservation runs while an
+   * agency creation for the very same ID is mid-transaction (row inserted + guard held, not yet
+   * committed). The primary key of agency_id_reservation arbitrates: the reservation must lose
+   * with a conflict — regardless of whether it collides with the guard row directly or passes
+   * the lock and then sees the committed agency row — and the ID must never end up ASSIGNED and
+   * RESERVED at the same time.
+   */
+  @Test
+  void reserve_Should_conflict_When_creationOfTheSameIdIsInFlight() throws Exception {
+    var creationTransaction = new TransactionTemplate(transactionManager);
+    var guardHeld = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> creation = executor.submit(() -> creationTransaction.execute(status -> {
+        seedAgencies(21, 21);
+        allocationService.guardAssignmentAgainstOpenReservations(21L);
+        guardHeld.countDown();
+        try {
+          // hold the creation transaction open while the reservation attempt runs into it
+          Thread.sleep(750);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        return null;
+      }));
+      assertThat(guardHeld.await(30, TimeUnit.SECONDS)).isTrue();
+
+      Future<Long> reservation = executor.submit(() -> allocationService.reserve(21L, null));
+
+      assertThatThrownBy(() -> reservation.get(30, TimeUnit.SECONDS))
+          .hasCauseInstanceOf(ConflictException.class);
+      creation.get(30, TimeUnit.SECONDS);
+    } finally {
+      executor.shutdownNow();
+      executor.awaitTermination(10, TimeUnit.SECONDS);
+    }
+
+    // invariant: assigned, and no reservation row survived the lost race
+    assertThat(allocationService.checkAvailability(21L)).isEqualTo(AgencyIdStatus.ASSIGNED);
+    assertThat(reservationRepository.existsById(21L)).isFalse();
   }
 
   private List<Long> runInParallel(ReservationCall first, ReservationCall second)
