@@ -82,38 +82,63 @@ class DepartmentImprintServiceTest {
     return department;
   }
 
+  private LegalText sharedImprint() {
+    return LegalText.builder()
+        .id(101L)
+        .kind(LegalTextKind.IMPRINT)
+        .label("Geteiltes Impressum")
+        .content("{\"de\":\"<p>alt</p>\"}")
+        .publicationStatus(PublicationStatus.PUBLISHED)
+        .build();
+  }
+
   @Test
-  void publish_Should_writeThroughToReferencedLegalText_When_departmentReferencesOne() {
-    // ADR-014: the referenced shared Impressum object is the truth; the legacy per-department
-    // endpoint writes through to it instead of the ignored inline column.
+  void publish_Should_breakSharedLink_And_storeOwnText_When_departmentReferencesOne() {
+    // ADR-014 amendment 2026-07-28: publishing under one Fachbereich leaves the shared Impressum
+    // rather than rewriting it for every sibling department that the 0026 backfill merged onto the
+    // same row.
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
-    var referenced =
-        LegalText.builder()
-            .id(101L)
-            .kind(LegalTextKind.IMPRINT)
-            .label("Geteiltes Impressum")
-            .content("{\"de\":\"<p>alt</p>\"}")
-            .publicationStatus(PublicationStatus.DRAFT)
-            .build();
+    var referenced = sharedImprint();
     department.setImprint(referenced);
 
     var status = service.publishDepartmentImprint(7L, 42L, Map.of("de", "<p>neu</p>"), true);
 
     assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
-    assertThat(referenced.getContent()).contains("neu");
-    assertThat(referenced.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+
     var saved = ArgumentCaptor.forClass(AgencyTopic.class);
     verify(agencyTopicRepository).save(saved.capture());
-    assertThat(saved.getValue().getContentImprint()).isNull();
+    assertThat(saved.getValue().getImprint()).as("shared link must be broken").isNull();
+    assertThat(saved.getValue().getContentImprint()).contains("neu");
+    assertThat(saved.getValue().getPublicationStatusImprint())
+        .isEqualTo(PublicationStatus.PUBLISHED);
+    assertThat(referenced.getContent()).isEqualTo("{\"de\":\"<p>alt</p>\"}");
+    assertThat(referenced.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
   }
 
   @Test
-  void read_Should_returnReferencedLegalText_When_departmentReferencesOne() {
+  void draftSave_Should_keepSharedLink_And_parkDraftInline_When_departmentReferencesOne() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
-    department.setContentImprint("{\"de\":\"<p>inline-alt</p>\"}");
-    department.setPublicationStatusImprint(PublicationStatus.DRAFT);
+    var referenced = sharedImprint();
+    department.setImprint(referenced);
+
+    var status = service.publishDepartmentImprint(7L, 42L, Map.of("de", "<p>entwurf</p>"), false);
+
+    assertThat(status).isEqualTo(PublicationStatus.DRAFT);
+
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getImprint()).as("draft must not unshare").isSameAs(referenced);
+    assertThat(saved.getValue().getContentImprint()).contains("entwurf");
+    assertThat(saved.getValue().getPublicationStatusImprint()).isEqualTo(PublicationStatus.DRAFT);
+    assertThat(referenced.getContent()).isEqualTo("{\"de\":\"<p>alt</p>\"}");
+  }
+
+  @Test
+  void read_Should_returnReferencedLegalText_When_departmentReferencesOne_AndHasNoPendingDraft() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
     department.setImprint(
         LegalText.builder()
             .id(101L)
@@ -127,6 +152,27 @@ class DepartmentImprintServiceTest {
 
     assertThat(view.content()).isEqualTo("{\"de\":\"<p>geteilt</p>\"}");
     assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+  }
+
+  @Test
+  void read_Should_returnPendingDraft_When_departmentHasDraftAlongsideReference() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setContentImprint("{\"de\":\"<p>entwurf</p>\"}");
+    department.setPublicationStatusImprint(PublicationStatus.DRAFT);
+    department.setImprint(
+        LegalText.builder()
+            .id(101L)
+            .kind(LegalTextKind.IMPRINT)
+            .label("Geteiltes Impressum")
+            .content("{\"de\":\"<p>geteilt</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED)
+            .build());
+
+    var view = service.getDepartmentImprint(7L, 42L);
+
+    assertThat(view.content()).isEqualTo("{\"de\":\"<p>entwurf</p>\"}");
+    assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.DRAFT);
   }
 
   @Test
