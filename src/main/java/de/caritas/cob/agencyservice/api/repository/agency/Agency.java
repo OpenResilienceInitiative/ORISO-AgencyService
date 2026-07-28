@@ -151,7 +151,11 @@ public class Agency implements TenantAware {
   @Column(name = "update_date", nullable = false)
   private LocalDateTime updateDate;
 
-  @Column(name = "data_protection_responsible_entity", nullable = false)
+  // Changeset 0016 declares this column NULL. nullable=false here contradicted the migration
+  // and only ever became real DDL on the create-drop test schema, where it rejected inserts
+  // production accepts. Same reasoning as the neighbouring DPO contact field below — that one
+  // was corrected, this one was missed (#204).
+  @Column(name = "data_protection_responsible_entity")
   @Enumerated(EnumType.STRING)
   private DataProtectionResponsibleEntity dataProtectionResponsibleEntity;
 

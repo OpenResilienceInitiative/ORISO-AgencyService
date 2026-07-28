@@ -41,6 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
 @TestPropertySource(properties = "multitenancy.enabled=true")
 @TestPropertySource(properties = "feature.topics.enabled=true")
 @Transactional
+// AgencyDatabase.sql first: setTenants.sql only UPDATEs agency rows, so without the seed it
+// silently updated nothing and every lookup in the base fixture failed (#204).
+@Sql(value = "/database/AgencyDatabase.sql", executionPhase = ExecutionPhase.BEFORE_TEST_METHOD)
 @Sql(value = "/setTenants.sql", executionPhase = ExecutionPhase.BEFORE_TEST_METHOD)
 public class AgencyAdminServiceTenantAwareIT extends AgencyAdminServiceITBase {
 
