@@ -19,6 +19,8 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundExceptio
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
@@ -32,6 +34,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import lombok.NonNull;
@@ -63,6 +67,7 @@ public class AgencyAdminService {
   private final @NonNull DataProtectionConverter dataProtectionConverter;
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
   private final @NonNull AgencySettingsService agencySettingsService;
+  private final @NonNull LegalContentSanitizer legalContentSanitizer;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -252,6 +257,31 @@ public class AgencyAdminService {
     }
   }
 
+  private Map<String, String> legalContent(
+      UpdateAgencyDTO updateAgencyDTO,
+      Function<AgencyLegalContentDTO, Map<String, String>> kind) {
+    var content = updateAgencyDTO.getContent();
+    return content == null ? null : kind.apply(content);
+  }
+
+  /**
+   * Absent means untouched — the same rule {@link AgencyTopicMergeService} applies to topics, and
+   * for the same reason: an update about a phone number must not be able to wipe a legally
+   * required document.
+   *
+   * <p>An <em>empty</em> map counts as absent, not as "clear it". The generated request model
+   * initialises both maps to empty ones, so a client that sends only the imprint is
+   * indistinguishable from one that sends an empty privacy policy — treating empty as a deletion
+   * would hand exactly the silent-wipe defect this epic removes back to every partial update.
+   * Emptying a text is therefore expressed by sending the language key with empty content
+   * ({@code {"de": ""}}), which is what an emptied editor produces anyway.
+   */
+  private String resolveLegalTextForUpdate(String storedContent, Map<String, String> sentContent) {
+    return sentContent == null || sentContent.isEmpty()
+        ? storedContent
+        : legalContentSanitizer.sanitizeToJson(sentContent);
+  }
+
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
     if (updateAgencyDTO.getSettings() != null) {
       return agencySettingsService.toSettingsJson(updateAgencyDTO.getSettings());
@@ -285,7 +315,14 @@ public class AgencyAdminService {
         .agencyLogo(updateAgencyDTO.getAgencyLogo())
         .matrixUserId(agency.getMatrixUserId())
         .matrixPassword(agency.getMatrixPassword())
-        .settings(resolveSettingsForUpdate(agency, updateAgencyDTO));
+        .settings(resolveSettingsForUpdate(agency, updateAgencyDTO))
+        .contentDpp(
+            resolveLegalTextForUpdate(
+                agency.getContentDpp(), legalContent(updateAgencyDTO, AgencyLegalContentDTO::getPrivacy)))
+        .contentImprint(
+            resolveLegalTextForUpdate(
+                agency.getContentImprint(),
+                legalContent(updateAgencyDTO, AgencyLegalContentDTO::getImpressum)));
 
     dataProtectionConverter.convertToEntity(updateAgencyDTO.getDataProtection(), agencyBuilder);
 

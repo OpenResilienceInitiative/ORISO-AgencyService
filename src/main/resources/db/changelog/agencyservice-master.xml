@@ -71,6 +71,9 @@
   <!-- ADR-014: shared legal-text objects (legal_text table + department references + backfill
        that merges byte-identical inline texts into one shared row per tenant/kind/status). -->
   <include file="db/changelog/changeset/0026_legal_text/0026_changeSet.xml"/>
+  <!-- ADR-014: agency-wide legal texts — the middle level of tenant → agency → department that
+       the ADR assumed but the schema never had (#222). Additive and nullable. -->
+  <include file="db/changelog/changeset/0027_agency_legal_text/0027_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB
