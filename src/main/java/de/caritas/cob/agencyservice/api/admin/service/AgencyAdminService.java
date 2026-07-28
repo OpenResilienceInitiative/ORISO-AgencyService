@@ -1,5 +1,6 @@
 package de.caritas.cob.agencyservice.api.admin.service;
 
+import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_ID_NOT_AVAILABLE;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_DEFAULT_AGENCY;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_TEAM_AGENCY;
 import static de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO.AgencyTypeEnum.TEAM_AGENCY;
@@ -9,6 +10,7 @@ import static org.apache.commons.lang3.Validate.notNull;
 import com.google.common.base.Joiner;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
@@ -63,6 +65,7 @@ public class AgencyAdminService {
   private final @NonNull DataProtectionConverter dataProtectionConverter;
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
   private final @NonNull AgencySettingsService agencySettingsService;
+  private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -131,11 +134,28 @@ public class AgencyAdminService {
     setTenantIdOnCreate(agencyDTO, agency);
 
     var savedAgency = agencyRepository.save(agency);
+    rejectCreationOnReservedId(savedAgency);
     agencyService.provisionMatrixCredentials(savedAgency);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(savedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(savedAgency);
     return new AgencyAdminFullResponseDTOBuilder(savedAgency)
         .fromAgency();
+  }
+
+  /**
+   * TEN-INV-U2 allocation contract: an agency ID reserved by an open invite must never be handed
+   * out to another agency. The ID sequence knows nothing about reservations, so if it generates a
+   * reserved ID the row is removed again and the creation fails with a conflict. Invite
+   * consumption flows release/consume their reservation before creating the agency, so they pass
+   * this guard.
+   */
+  private void rejectCreationOnReservedId(Agency savedAgency) {
+    if (agencyIdAllocationService.isReserved(savedAgency.getId())) {
+      agencyRepository.delete(savedAgency);
+      log.warn("Agency creation generated ID {} which is reserved by an open invite",
+          savedAgency.getId());
+      throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
+    }
   }
 
   private void setTenantIdOnCreate(AgencyDTO agencyDTO, Agency agency) {

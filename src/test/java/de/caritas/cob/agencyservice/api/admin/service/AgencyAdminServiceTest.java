@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
@@ -90,6 +91,9 @@ class AgencyAdminServiceTest {
   DataProtectionConverter dataProtectionConverter;
 
   @Mock
+  AgencyIdAllocationService agencyIdAllocationService;
+
+  @Mock
   AppointmentService appointmentService;
 
   @Mock
@@ -158,6 +162,26 @@ class AgencyAdminServiceTest {
         is("RELATIVE_COUNSELLING,SELF_COUNSELLING,PARENTAL_COUNSELLING"));
     verify(dataProtectionConverter).convertToEntity(Mockito.any(DataProtectionDTO.class),
         Mockito.any(Agency.AgencyBuilder.class));
+  }
+
+  @Test
+  void createAgency_Should_ThrowConflictAndRollBackRow_When_GeneratedIdIsReservedByOpenInvite() {
+    // given: the sequence hands out an ID that an open invite has reserved (TEN-INV-U2 —
+    // assigned or reserved IDs must never be re-issued)
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setDataProtectionOfficerContactData(null);
+    clearDataProtection(agency);
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+
+    when(agencyRepository.save(any())).thenReturn(agency);
+    when(agencyIdAllocationService.isReserved(agency.getId())).thenReturn(true);
+
+    // when, then
+    assertThrows(ConflictException.class, () -> agencyAdminService.createAgency(agencyDTO));
+    verify(agencyRepository).delete(agency);
   }
 
   @Test

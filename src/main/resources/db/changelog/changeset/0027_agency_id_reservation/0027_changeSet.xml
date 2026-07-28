@@ -1,0 +1,14 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+    <!-- TEN-INV-U2 (ORISO-Admin#569): agency ID allocation contract. An open invite keeps its
+         agency ID reserved here; the primary key makes double reservation impossible at the
+         database level. -->
+    <changeSet author="oriso" id="createAgencyIdReservationTable">
+        <sqlFile path="db/changelog/changeset/0027_agency_id_reservation/createAgencyIdReservation.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0027_agency_id_reservation/createAgencyIdReservation-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
