@@ -9,6 +9,7 @@ import static org.apache.commons.lang3.Validate.notNull;
 import com.google.common.base.Joiner;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
@@ -44,6 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Service class to handle agency admin requests.
@@ -67,6 +69,8 @@ public class AgencyAdminService {
   private final @NonNull DataProtectionConverter dataProtectionConverter;
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
   private final @NonNull AgencySettingsService agencySettingsService;
+  private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
+  private final @NonNull TransactionOperations agencyCreationTransaction;
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
 
   @Autowired(required = false)
@@ -135,12 +139,30 @@ public class AgencyAdminService {
     Agency agency = fromAgencyDTO(agencyDTO);
     setTenantIdOnCreate(agencyDTO, agency);
 
-    var savedAgency = agencyRepository.save(agency);
+    var savedAgency = saveWithReservationGuard(agency);
     agencyService.provisionMatrixCredentials(savedAgency);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(savedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(savedAgency);
     return new AgencyAdminFullResponseDTOBuilder(savedAgency)
         .fromAgency();
+  }
+
+  /**
+   * TEN-INV-U2 allocation contract: an agency ID reserved by an open invite must never be handed
+   * out to another agency. The ID sequence knows nothing about reservations, so the agency
+   * insert and the reservation guard share one transaction: the guard inserts (and removes
+   * again) a reservation row for the generated ID, letting the primary key of
+   * {@code agency_id_reservation} arbitrate creation-vs-reservation races at the database level
+   * instead of relying on a check-then-act sequence. A conflict rolls the agency row back —
+   * no compensation logic involved. Invite consumption flows release/consume their reservation
+   * before creating the agency, so they pass this guard.
+   */
+  private Agency saveWithReservationGuard(Agency agency) {
+    return agencyCreationTransaction.execute(status -> {
+      var savedAgency = agencyRepository.save(agency);
+      agencyIdAllocationService.guardAssignmentAgainstOpenReservations(savedAgency.getId());
+      return savedAgency;
+    });
   }
 
   private void setTenantIdOnCreate(AgencyDTO agencyDTO, Agency agency) {

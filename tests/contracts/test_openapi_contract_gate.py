@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 import unittest
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,6 +64,15 @@ class OpenApiContractGateTest(unittest.TestCase):
         for contract, checkout in expected.items():
             self.assertIn(contract, workflow)
             self.assertIn(checkout, workflow)
+
+    def test_topic_string_contracts_do_not_claim_incompatible_formats(self):
+        contract = yaml.safe_load((ROOT / "services/topicservice.yaml").read_text())
+        schemas = contract["components"]["schemas"]
+
+        for schema_name in ("WelcomeMessage", "FallBackUrl"):
+            with self.subTest(schema=schema_name):
+                self.assertEqual("string", schemas[schema_name]["type"])
+                self.assertNotIn("format", schemas[schema_name])
 
     def test_pull_request_uses_coordinated_provider_commits(self):
         workflow = (ROOT / ".github/workflows/openapi-contracts.yml").read_text()

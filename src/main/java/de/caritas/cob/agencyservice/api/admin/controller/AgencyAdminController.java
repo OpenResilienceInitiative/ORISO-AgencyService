@@ -6,12 +6,19 @@ import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyA
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdStepDirection;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
+import de.caritas.cob.agencyservice.api.model.AgencyIdAvailabilityResponseDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyIdReservationRequestDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyIdResponseDTO;
 import de.caritas.cob.agencyservice.api.model.CreateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAdminDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAssignmentDTO;
@@ -60,6 +67,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
   private final @NonNull DepartmentImprintService departmentImprintService;
   private final @NonNull LegalTextAdminService legalTextAdminService;
+  private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   /**
    * Creates the root hal based navigation entity.
@@ -117,6 +125,81 @@ public class AgencyAdminController implements AgencyadminApi {
         .createAgency(agencyDTO);
 
     return new ResponseEntity<>(agencyAdminFullResponseDTO, HttpStatus.CREATED);
+  }
+
+  /**
+   * Entry point to check the allocation state of one agency ID (TEN-INV-U2).
+   *
+   * @param agencyId agency ID to check (required)
+   * @return the authoritative {@link AgencyIdAvailabilityResponseDTO}
+   */
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  public ResponseEntity<AgencyIdAvailabilityResponseDTO> getAgencyIdAvailability(
+      @PathVariable Long agencyId) {
+    var status = agencyIdAllocationService.checkAvailability(agencyId);
+    var response = new AgencyIdAvailabilityResponseDTO()
+        .agencyId(agencyId)
+        .status(AgencyIdAvailabilityResponseDTO.StatusEnum.valueOf(status.name()));
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Entry point for free-ID navigation backing the Admin stepper (TEN-INV-U2). Skips assigned
+   * and reserved agency IDs.
+   *
+   * @param fromId the agency ID to step from, exclusive (required)
+   * @param direction UP or DOWN (required)
+   * @return the next free agency ID, or 404 when none exists in that direction
+   */
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  public ResponseEntity<AgencyIdResponseDTO> getNextFreeAgencyId(Long fromId, String direction) {
+    var nextFreeId = agencyIdAllocationService
+        .nextFreeId(fromId, parseDirection(direction))
+        .orElseThrow(NotFoundException::new);
+    return ResponseEntity.ok(new AgencyIdResponseDTO().agencyId(nextFreeId));
+  }
+
+  private AgencyIdStepDirection parseDirection(String direction) {
+    try {
+      return AgencyIdStepDirection.valueOf(direction);
+    } catch (IllegalArgumentException e) {
+      throw new BadRequestException("direction must be UP or DOWN");
+    }
+  }
+
+  /**
+   * Entry point to reserve an agency ID for an open invite (TEN-INV-U2). AUTO mode (no agencyId
+   * in the body) reserves the smallest currently free ID atomically; manual mode reserves exactly
+   * the requested ID or answers 409. Reserves agency IDs only — a supplied tenant ID is validated
+   * against TenantService, never reserved here (tenant IDs live in TenantService, U1).
+   *
+   * @param agencyIdReservationRequestDTO (required)
+   * @return the reserved agency ID
+   */
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  public ResponseEntity<AgencyIdResponseDTO> reserveAgencyId(
+      AgencyIdReservationRequestDTO agencyIdReservationRequestDTO) {
+    var reservedId = agencyIdAllocationService.reserve(
+        agencyIdReservationRequestDTO.getAgencyId(),
+        agencyIdReservationRequestDTO.getTenantId());
+    return new ResponseEntity<>(new AgencyIdResponseDTO().agencyId(reservedId),
+        HttpStatus.CREATED);
+  }
+
+  /**
+   * Entry point to release an open agency ID reservation, e.g. when an unconsumed invite is
+   * revoked (TEN-INV-U2).
+   *
+   * @param agencyId the reserved agency ID (required)
+   */
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  public ResponseEntity<Void> releaseAgencyIdReservation(@PathVariable Long agencyId) {
+    agencyIdAllocationService.release(agencyId);
+    return ResponseEntity.noContent().build();
   }
 
   /**
