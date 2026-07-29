@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.repository.agencyidreservation.AgencyIdReservationRepository;
 import de.caritas.cob.agencyservice.api.service.TenantService;
@@ -25,6 +26,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -34,6 +37,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 
 /**
@@ -170,11 +174,33 @@ class AgencyIdAllocationServiceIT {
   @Test
   void reserve_Should_rejectRequest_When_tenantDoesNotExist() {
     when(tenantService.getRestrictedTenantDataByTenantId(UNKNOWN_TENANT_ID))
-        .thenThrow(new RestClientException("404 tenant not found"));
+        .thenThrow(HttpClientErrorException.NotFound.create(
+            HttpStatus.NOT_FOUND, "Not Found", HttpHeaders.EMPTY, new byte[0], null));
 
     assertThatThrownBy(() -> allocationService.reserve(21L, UNKNOWN_TENANT_ID))
         .isInstanceOf(BadRequestException.class);
     assertThat(reservationRepository.existsById(21L)).isFalse();
+  }
+
+  @Test
+  void reserve_Should_signalServerError_When_tenantServiceIsUnavailable() {
+    // a TenantService outage is not tenant nonexistence: it must surface as a 500-class
+    // error, never as 400 "tenant does not exist" (verify finding, analogous to U1)
+    when(tenantService.getRestrictedTenantDataByTenantId(EXISTING_TENANT_ID))
+        .thenThrow(new RestClientException("connection refused"));
+
+    assertThatThrownBy(() -> allocationService.reserve(21L, EXISTING_TENANT_ID))
+        .isInstanceOf(InternalServerErrorException.class);
+    assertThat(reservationRepository.existsById(21L)).isFalse();
+  }
+
+  @Test
+  void reserve_Should_rejectRequest_When_requestedIdIsNotPositive() {
+    assertThatThrownBy(() -> allocationService.reserve(0L, null))
+        .isInstanceOf(BadRequestException.class);
+    assertThatThrownBy(() -> allocationService.reserve(-7L, null))
+        .isInstanceOf(BadRequestException.class);
+    assertThat(reservationRepository.count()).isZero();
   }
 
   @Test

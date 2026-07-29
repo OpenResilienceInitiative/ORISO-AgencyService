@@ -4,6 +4,7 @@ import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatu
 
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.repository.agencyidreservation.AgencyIdReservation;
 import de.caritas.cob.agencyservice.api.repository.agencyidreservation.AgencyIdReservationRepository;
@@ -19,6 +20,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 
 /**
@@ -104,13 +106,23 @@ public class AgencyIdAllocationService {
    * @return the reserved agency ID
    */
   public Long reserve(Long requestedAgencyId, Long tenantId) {
+    if (requestedAgencyId != null && requestedAgencyId < 1) {
+      throw new BadRequestException("agencyId must be a positive number");
+    }
     validateTenant(tenantId);
     return requestedAgencyId != null
         ? reserveSpecificId(requestedAgencyId, tenantId)
         : reserveSmallestFreeId(tenantId);
   }
 
-  /** Releases an open reservation, making the ID assignable again. */
+  /**
+   * Releases an open reservation, making the ID assignable again.
+   *
+   * <p>Known limitations, deferred to the invite-wiring chunks (U3/U6, parent
+   * OpenResilienceInitiative/ORISO-Admin#569): there is no per-tenant ownership check (any
+   * agency admin may release any reservation) and no TTL, so an abandoned reservation blocks
+   * its ID until released. Both need the invite linkage that does not exist yet in this repo.
+   */
   @Transactional
   public void release(long agencyId) {
     var reservation = reservationRepository.findById(agencyId)
@@ -218,15 +230,22 @@ public class AgencyIdAllocationService {
     }
     try {
       // Existence check only: agency invites carry a tenant, but tenant IDs are reserved in
-      // TenantService (U1), never here. TenantService's restricted endpoint does not expose an
-      // active flag yet; once U1 lands, this seam is the single place to tighten the check.
+      // TenantService (U1), never here. An inactive-tenant check is currently unimplementable:
+      // the consumed RestrictedTenantDTO (services/tenantservice.yaml) exposes no active/status
+      // field. Once the TenantService contract exposes it, this seam is the single place to
+      // tighten the check.
       var tenant = tenantService.getRestrictedTenantDataByTenantId(tenantId);
       if (tenant == null || tenant.getId() == null) {
         throw new BadRequestException("Tenant " + tenantId + " does not exist");
       }
+    } catch (HttpClientErrorException.NotFound e) {
+      // only a definite 404 from TenantService means nonexistence
+      throw new BadRequestException("Tenant " + tenantId + " does not exist");
     } catch (RestClientException e) {
-      throw new BadRequestException(
-          "Tenant " + tenantId + " does not exist or cannot be validated");
+      // any other client failure (outage, 5xx, timeout) is an infrastructure problem — never
+      // report it as tenant nonexistence (fail closed, but with the honest status class)
+      throw new InternalServerErrorException(
+          "Tenant " + tenantId + " could not be validated against TenantService", e);
     }
   }
 }
