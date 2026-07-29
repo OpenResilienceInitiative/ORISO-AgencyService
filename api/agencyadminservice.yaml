@@ -961,7 +961,6 @@ components:
         agencyId:
           type: integer
           format: int64
-          minimum: 1
           description: The manually picked agency ID to reserve. Omit for AUTO mode (smallest free ID).
           example: 21
         tenantId:
