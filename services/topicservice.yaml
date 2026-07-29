@@ -276,11 +276,9 @@ components:
       format: int32
     WelcomeMessage:
       type: string
-      format: int32
       maxLength: 200
     FallBackUrl:
       type: string
-      format: url
       maxLength: 200
     TopicDTO:
       type: object

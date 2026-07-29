@@ -1096,12 +1096,38 @@ components:
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'
+        content:
+          $ref: '#/components/schemas/AgencyLegalContentDTO'
         agencyLogo:
           type: string
           example: "base64 encoded image"
         settings:
           $ref: '#/components/schemas/Settings'
           description: Agency settings including platform-level agencyAdminControls
+
+    AgencyLegalContentDTO:
+      type: object
+      description: >
+        ADR-014 middle level of the chain tenant -> agency -> department. The Beratungsstelle's own
+        legal texts, each a language -> HTML map. Every Fachbereich inherits these until it
+        publishes its own. There is no draft state here: what is stored is what is in force.
+
+        On update, omitting this object — or sending either member as an empty map — keeps the
+        stored text, so an update about something else can never wipe a legal document. To empty a
+        text, send the language key with empty content (`{"de": ""}`).
+      properties:
+        privacy:
+          type: object
+          description: Data privacy policy per language code.
+          additionalProperties:
+            type: string
+          example: { "de": "<p>Datenschutzerklärung</p>" }
+        impressum:
+          type: object
+          description: Imprint per language code.
+          additionalProperties:
+            type: string
+          example: { "de": "<p>Impressum</p>" }
 
     DataProtectionDTO:
         type: object
@@ -1335,6 +1361,8 @@ components:
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'
+        content:
+          $ref: '#/components/schemas/AgencyLegalContentDTO'
         agencyLogo:
           type: string
           example: "base64 encoded image"

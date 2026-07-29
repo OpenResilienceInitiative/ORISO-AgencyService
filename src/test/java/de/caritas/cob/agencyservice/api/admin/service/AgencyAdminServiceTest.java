@@ -28,7 +28,9 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConvert
 import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminResponseDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
 import de.caritas.cob.agencyservice.api.model.DataProtectionContactDTO;
 import de.caritas.cob.agencyservice.api.model.DataProtectionDTO;
@@ -47,6 +49,7 @@ import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.jeasy.random.EasyRandom;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +83,9 @@ class AgencyAdminServiceTest {
 
   @Mock
   AgencyTopicMergeService mergeService;
+
+  @Mock
+  LegalContentSanitizer legalContentSanitizer;
 
   @Mock
   AgencyTopicRepository agencyTopicRepository;
@@ -375,6 +381,125 @@ class AgencyAdminServiceTest {
     verify(this.userAdminService).adaptRelatedConsultantsForChange(AGENCY_ID,
         requestDTO.getAgencyType().getValue());
     verify(this.agencyRepository).save(any());
+  }
+
+  @Test
+  void updateAgency_Should_storeAgencyWideLegalTexts_SanitizedNotVerbatim() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+    when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>DSE</p><script>x</script>")))
+        .thenReturn("{\"de\":\"<p>DSE</p>\"}");
+    when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>Impressum</p>")))
+        .thenReturn("{\"de\":\"<p>Impressum</p>\"}");
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(
+        new AgencyLegalContentDTO()
+            .privacy(Map.of("de", "<p>DSE</p><script>x</script>"))
+            .impressum(Map.of("de", "<p>Impressum</p>")));
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    // Admin-authored HTML must take the same sanitisation path as the department texts.
+    assertEquals("{\"de\":\"<p>DSE</p>\"}", agencyArgumentCaptor.getValue().getContentDpp());
+    assertEquals(
+        "{\"de\":\"<p>Impressum</p>\"}", agencyArgumentCaptor.getValue().getContentImprint());
+  }
+
+  @Test
+  void updateAgency_Should_keepStoredLegalTexts_When_updateCarriesNoContent() {
+    // The defect class this epic exists to remove: an update about something else — a phone
+    // number, an opening hour — must never wipe a legally required document.
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setContentDpp("{\"de\":\"<p>bestehende DSE</p>\"}");
+    agency.setContentImprint("{\"de\":\"<p>bestehendes Impressum</p>\"}");
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals(
+        "{\"de\":\"<p>bestehende DSE</p>\"}", agencyArgumentCaptor.getValue().getContentDpp());
+    assertEquals(
+        "{\"de\":\"<p>bestehendes Impressum</p>\"}",
+        agencyArgumentCaptor.getValue().getContentImprint());
+  }
+
+  @Test
+  void updateAgency_Should_keepTheOtherText_When_onlyOneKindIsSent() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setContentImprint("{\"de\":\"<p>bestehendes Impressum</p>\"}");
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+    when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>neue DSE</p>")))
+        .thenReturn("{\"de\":\"<p>neue DSE</p>\"}");
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(
+        new AgencyLegalContentDTO().privacy(Map.of("de", "<p>neue DSE</p>")));
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("{\"de\":\"<p>neue DSE</p>\"}", agencyArgumentCaptor.getValue().getContentDpp());
+    assertEquals(
+        "{\"de\":\"<p>bestehendes Impressum</p>\"}",
+        agencyArgumentCaptor.getValue().getContentImprint());
+  }
+
+  @Test
+  void updateAgency_Should_keepStoredLegalText_When_anEmptyMapIsSent() {
+    // The generated request model initialises both maps to empty ones, so "I sent no privacy
+    // policy" and "I sent an empty privacy policy" arrive identically. Treating that as a deletion
+    // would hand the silent-wipe defect back to every partial update.
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setContentDpp("{\"de\":\"<p>bestehende DSE</p>\"}");
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(new AgencyLegalContentDTO().privacy(Map.of()));
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals(
+        "{\"de\":\"<p>bestehende DSE</p>\"}", agencyArgumentCaptor.getValue().getContentDpp());
+  }
+
+  @Test
+  void updateAgency_Should_emptyLegalText_When_theLanguageKeyCarriesEmptyContent() {
+    // Deliberate removal stays possible — it just has to name the language, which is exactly what
+    // an emptied editor sends.
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setContentDpp("{\"de\":\"<p>bestehende DSE</p>\"}");
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+    when(legalContentSanitizer.sanitizeToJson(Map.of("de", ""))).thenReturn("{\"de\":\"\"}");
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(new AgencyLegalContentDTO().privacy(Map.of("de", "")));
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("{\"de\":\"\"}", agencyArgumentCaptor.getValue().getContentDpp());
   }
 
   @Test

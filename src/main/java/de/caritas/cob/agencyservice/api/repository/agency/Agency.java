@@ -200,6 +200,22 @@ public class Agency implements TenantAware {
   @JdbcTypeCode(Types.LONGVARCHAR)
   private String settings;
 
+  /**
+   * ADR-014 middle level of the chain tenant → agency → department: the Beratungsstelle's own data
+   * privacy policy as a JSON language→HTML map, inherited by every Fachbereich that has not
+   * published one of its own. Unlike a department text this has no draft state — an imprint names
+   * the responsible entity and the Beratungsstelle is always its own, so what is stored is what is
+   * in force.
+   */
+  @Column(name = "content_dpp", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
+  private String contentDpp;
+
+  /** Agency-wide imprint; see {@link #contentDpp}. */
+  @Column(name = "content_imprint", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
+  private String contentImprint;
+
   @Transient
   public boolean hasAnyDemographicsAttributes() {
     return getAgeTo() != null || getAgeFrom() != null || getGenders() != null;
