@@ -28,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
@@ -91,6 +92,9 @@ public class AgencyAdminControllerAuthorizationIT {
 
   @MockitoBean
   private AgencyValidator agencyValidator;
+
+  @MockitoBean
+  private AgencyIdAllocationService agencyIdAllocationService;
 
   @Before
   public void setUpJwtDecoder() {
@@ -206,6 +210,59 @@ public class AgencyAdminControllerAuthorizationIT {
 
     verify(this.agencyValidator, times(1)).validate(Mockito.any(AgencyDTO.class));
     verify(this.agencyAdminService, times(1)).createAgency(Mockito.any());
+  }
+
+  @Test
+  public void reserveAgencyId_Should_ReturnUnauthorizedAndCallNoMethods_When_noKeycloakAuthorizationIsPresent()
+      throws Exception {
+
+    mvc.perform(post("/agencyadmin/agencyids/reservations")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}")
+        .cookie(CSRF_COOKIE)
+        .header(CSRF_HEADER, CSRF_VALUE))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoMoreInteractions(this.agencyIdAllocationService);
+  }
+
+  @Test
+  public void reserveAgencyId_Should_ReturnCreatedAndCallAllocationService_When_agencyAdminAuthority()
+      throws Exception {
+
+    when(this.agencyIdAllocationService.reserve(Mockito.any(), Mockito.any())).thenReturn(21L);
+
+    mvc.perform(post("/agencyadmin/agencyids/reservations")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}")
+        .header("Authorization", BEARER_AUTHORIZATION))
+        .andExpect(status().isCreated());
+
+    verify(this.agencyIdAllocationService, times(1)).reserve(Mockito.any(), Mockito.any());
+  }
+
+  @Test
+  public void getAgencyIdAvailability_Should_ReturnUnauthorizedAndCallNoMethods_When_noKeycloakAuthorizationIsPresent()
+      throws Exception {
+
+    mvc.perform(get("/agencyadmin/agencyids/21/availability")
+        .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoMoreInteractions(this.agencyIdAllocationService);
+  }
+
+  @Test
+  public void releaseAgencyIdReservation_Should_ReturnUnauthorizedAndCallNoMethods_When_noKeycloakAuthorizationIsPresent()
+      throws Exception {
+
+    mvc.perform(delete("/agencyadmin/agencyids/reservations/21")
+        .contentType(MediaType.APPLICATION_JSON)
+        .cookie(CSRF_COOKIE)
+        .header(CSRF_HEADER, CSRF_VALUE))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoMoreInteractions(this.agencyIdAllocationService);
   }
 
   @Test

@@ -723,6 +723,10 @@
               <skipTests>false</skipTests>
               <includes>
                 <include>**/*Test.java</include>
+                <!-- the agency ID allocation contract (TEN-INV-U2) is concurrency-critical and
+                     its proof must ride on a blocking check, not only on the continue-on-error
+                     burn-in job that runs the full *IT.* suite -->
+                <include>**/api/admin/service/allocation/*IT.java</include>
               </includes>
             </configuration>
           </execution>

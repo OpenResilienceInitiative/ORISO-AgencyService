@@ -121,4 +121,43 @@ class AgencyAdminFullResponseDTOBuilderTest {
     assertThat(agencyLinks.getPostcodeRanges().getHref()).isEqualTo(String.format("/agencyadmin/postcoderanges/%s", this.agency.getId()));
   }
 
+  @Test
+  void fromAgency_Should_exposeAgencyWideLegalTexts_AsLanguageMaps() {
+    // Shirloin's finding on ORISO-Admin#562: without this the admin editor could never read back
+    // what it had just saved and silently fell through to the tenant text forever.
+    this.agency.setContentDpp("{\"de\":\"<p>DSE</p>\",\"en\":\"<p>Privacy</p>\"}");
+    this.agency.setContentImprint("{\"de\":\"<p>Impressum</p>\"}");
+
+    var content = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency().getEmbedded()
+        .getContent();
+
+    assertThat(content).isNotNull();
+    assertThat(content.getPrivacy()).containsEntry("de", "<p>DSE</p>")
+        .containsEntry("en", "<p>Privacy</p>");
+    assertThat(content.getImpressum()).containsEntry("de", "<p>Impressum</p>");
+  }
+
+  @Test
+  void fromAgency_Should_omitContent_When_theAgencyAuthoredNoLegalText() {
+    this.agency.setContentDpp(null);
+    this.agency.setContentImprint("   ");
+
+    var result = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency();
+
+    assertNull(result.getEmbedded().getContent());
+  }
+
+  @Test
+  void fromAgency_Should_reportUnreadableContentAsAbsent_RatherThanFailTheWholeRead() {
+    // A legal text must never be able to take the admin's agency page down with it.
+    this.agency.setContentDpp("not json at all");
+    this.agency.setContentImprint("{\"de\":\"<p>Impressum</p>\"}");
+
+    var content = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency().getEmbedded()
+        .getContent();
+
+    assertNull(content.getPrivacy());
+    assertThat(content.getImpressum()).containsEntry("de", "<p>Impressum</p>");
+  }
+
 }

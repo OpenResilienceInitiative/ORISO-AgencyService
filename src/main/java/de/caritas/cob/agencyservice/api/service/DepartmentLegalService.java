@@ -50,26 +50,41 @@ public class DepartmentLegalService {
    *
    * <p><b>Unassign semantics (this release):</b> clearing {@code dpp_id}/{@code imprint_id} makes a
    * department reference-less again, so it falls back to its own inline {@code content_dpp}/{@code
-   * content_imprint} — NOT to a tenant-level fallback document. The backfill deliberately keeps the
-   * inline columns for one release as this read-fallback and as the rollback anchor; they are not
-   * cleared on unassign. Tenant-level fallback is future work (see ADR-014 / #134).
+   * content_imprint}. The backfill deliberately keeps the inline columns for one release as this
+   * read-fallback and as the rollback anchor; they are not cleared on unassign.
+   *
+   * <p>Whatever the department resolves to, an unpublished or absent result then inherits the
+   * agency-wide text (#222) — the middle level of the chain tenant → agency → department. The
+   * tenant remains the last fallback and is still resolved client-side (see ADR-014 / #134).
    */
   private String resolveDpp(AgencyTopic department) {
     LegalText referenced = department.getDpp();
-    if (referenced != null) {
-      return publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return publishedContentOrNull(
-        department.getContentDpp(), department.getPublicationStatus());
+    var own =
+        referenced != null
+            ? publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus())
+            : publishedContentOrNull(department.getContentDpp(), department.getPublicationStatus());
+    return own != null ? own : agencyWideOrNull(department.getAgency().getContentDpp());
   }
 
   private String resolveImprint(AgencyTopic department) {
     LegalText referenced = department.getImprint();
-    if (referenced != null) {
-      return publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return publishedContentOrNull(
-        department.getContentImprint(), department.getPublicationStatusImprint());
+    var own =
+        referenced != null
+            ? publishedContentOrNull(referenced.getContent(), referenced.getPublicationStatus())
+            : publishedContentOrNull(
+                department.getContentImprint(), department.getPublicationStatusImprint());
+    return own != null ? own : agencyWideOrNull(department.getAgency().getContentImprint());
+  }
+
+  /**
+   * The inherited middle level of the ADR-014 chain tenant → agency → department. It carries no
+   * publication status of its own: a Beratungsstelle's stored text is the text in force, so any
+   * department that has not published its own keeps showing it. That is deliberate — a department
+   * still drafting must not blank out a legally required document, so a DRAFT falls through to
+   * here rather than resolving to nothing.
+   */
+  private String agencyWideOrNull(String agencyWideContent) {
+    return agencyWideContent == null || agencyWideContent.isBlank() ? null : agencyWideContent;
   }
 
   private void assertAgencyIsNotDeleted(Agency agency) {

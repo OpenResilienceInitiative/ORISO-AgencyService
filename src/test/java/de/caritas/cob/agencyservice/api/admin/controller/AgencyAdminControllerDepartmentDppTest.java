@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsFacade;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
@@ -36,6 +37,7 @@ class AgencyAdminControllerDepartmentDppTest {
   @Mock private DepartmentDataProtectionService departmentDataProtectionService;
   @Mock private DepartmentImprintService departmentImprintService;
   @Mock private LegalTextAdminService legalTextAdminService;
+  @Mock private AgencyIdAllocationService agencyIdAllocationService;
 
   @InjectMocks private AgencyAdminController controller;
 

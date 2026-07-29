@@ -45,6 +45,8 @@ create table AGENCY
     MATRIX_USER_ID varchar(255) null default null,
     MATRIX_PASSWORD varchar(255) null default null,
     SETTINGS longtext null default null,
+    CONTENT_DPP longtext null default null,
+    CONTENT_IMPRINT longtext null default null,
     primary key (ID)
 );
 CREATE SEQUENCE SEQUENCE_AGENCY
