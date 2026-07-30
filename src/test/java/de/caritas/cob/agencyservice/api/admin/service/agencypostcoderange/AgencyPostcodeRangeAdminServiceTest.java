@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.util.ReflectionTestUtils.setField;
 
@@ -66,6 +67,10 @@ class AgencyPostcodeRangeAdminServiceTest {
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(1L);
 
     verify(this.agencyPostcodeRangeRepository, times(1)).deleteAllByAgencyId(1L);
+    // The offline status is controlled explicitly via agency update, so deleting the
+    // last postcode range must not reach the agency at all (#66). Without this the
+    // test name promised an assertion it never made.
+    verifyNoInteractions(this.agencyAdminService);
   }
 
   @Test
