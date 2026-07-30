@@ -5,6 +5,8 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
@@ -35,14 +37,22 @@ public class AgencyServiceITBase {
   @MockitoBean
   private TopicEnrichmentService topicEnrichmentService;
 
+  @Autowired
+  private PlatformTransactionManager transactionManager;
+
   public void getAgencies_Should_returnMatchingAgencies_When_postcodeAndConsultingTypeIsGiven()
       throws MissingConsultingTypeException {
 
     when(consultingTypeManager.getConsultingTypeSettings(CONSULTING_TYPE_PREGNANCY)).thenReturn(CONSULTING_TYPE_SETTINGS_PREGNANCY);
     String postCode = "88662";
 
-    List<FullAgencyResponseDTO> resultAgencies = agencyService
-        .getAgencies(Optional.of(postCode), CONSULTING_TYPE_PREGNANCY, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+    // The response mapping walks Agency.agencyTopics lazily. A real request has an open
+    // session for the whole request (open-in-view); a plain test method does not, so without
+    // this boundary the call dies with LazyInitializationException (#205).
+    List<FullAgencyResponseDTO> resultAgencies = new TransactionTemplate(transactionManager)
+        .execute(status -> agencyService.getAgencies(Optional.of(postCode),
+            CONSULTING_TYPE_PREGNANCY, Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty()));
 
     assertThat(resultAgencies, hasSize(1));
     FullAgencyResponseDTO resultAgency = resultAgencies.get(0);
@@ -77,11 +87,15 @@ public class AgencyServiceITBase {
     String postCode = "45501";
     Integer topicId = 1;
 
-    List<FullAgencyResponseDTO> resultAgencies = agencyService.getAgencies(postCode, topicId);
+    // Same lazy agencyTopics mapping as above — needs a session boundary (#205).
+    List<FullAgencyResponseDTO> resultAgencies = new TransactionTemplate(transactionManager)
+        .execute(status -> agencyService.getAgencies(postCode, topicId));
 
     assertThat(resultAgencies, hasSize(1));
     FullAgencyResponseDTO resultAgency = resultAgencies.get(0);
-    assertThat(resultAgency.getId(), is(14352L));
+    // 14352 is the AGENCY_POSTCODE_RANGE id covering 45501-45600; the agency it belongs to is
+    // 1735. The old expectation asserted the range id against an agency id (#205).
+    assertThat(resultAgency.getId(), is(1735L));
   }
 
 }

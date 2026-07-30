@@ -31,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureTestDatabase(replace = Replace.ANY)
 @DirtiesContext(classMode = ClassMode.BEFORE_CLASS)
 @TestPropertySource(properties = "multitenancy.enabled=true")
+// AgencyDatabase.sql first: setTenants.sql only UPDATEs agency rows, so without the seed it
+// silently updated nothing and every read in the base fixture came back empty (#205).
+@Sql(value = "/database/AgencyDatabase.sql", executionPhase = ExecutionPhase.BEFORE_TEST_METHOD)
 @Sql(value = "/setTenants.sql", executionPhase = ExecutionPhase.BEFORE_TEST_METHOD)
 @Transactional(propagation = Propagation.NEVER)
 public class AgencyServiceTenantAwareIT extends AgencyServiceITBase {
