@@ -6,6 +6,8 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
@@ -18,14 +20,28 @@ import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import jakarta.persistence.EntityManager;
 import java.util.Optional;
+import org.junit.Before;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 public class AgencyAdminServiceITBase {
 
+  /**
+   * A real admin request carries a tenantId claim, which {@code AuthenticatedUserConfig} copies
+   * onto {@link AuthenticatedUser}. The mock returns null unless told otherwise, and
+   * {@code AgencyAdminService.setTenantIdOnCreate} then fails every create with
+   * "The validated object is null" — a fixture artifact, not the behaviour under test (#204).
+   */
+  protected static final Long AUTHENTICATED_TENANT_ID = 1L;
+
   @Autowired protected AgencyAdminService agencyAdminService;
   @Autowired protected AgencyRepository agencyRepository;
   @MockitoBean protected AuthenticatedUser authenticatedUser;
+
+  @Before
+  public void givenAuthenticatedUserHasTenant() {
+    lenient().when(authenticatedUser.getTenantId()).thenReturn(AUTHENTICATED_TENANT_ID);
+  }
 
   public void saveAgency_Should_PersistsAgency() {
 
