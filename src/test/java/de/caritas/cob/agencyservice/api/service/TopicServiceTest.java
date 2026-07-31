@@ -2,12 +2,10 @@ package de.caritas.cob.agencyservice.api.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
+import de.caritas.cob.agencyservice.api.service.securityheader.AccessTokenSupplier;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
-import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.config.apiclient.TopicServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.topicservice.generated.ApiClient;
 import de.caritas.cob.agencyservice.topicservice.generated.web.TopicControllerApi;
@@ -56,10 +54,7 @@ class TopicServiceTest {
   TopicControllerApi topicControllerApi;
 
   @Mock
-  SecurityHeaderSupplier securityHeaderSupplier;
-
-  @Mock
-  AuthenticatedUser authenticatedUser;
+  AccessTokenSupplier accessTokenSupplier;
 
   @Spy
   TenantHeaderSupplier tenantHeaderSupplier;
@@ -71,7 +66,7 @@ class TopicServiceTest {
   void wireControllerApi() {
     when(topicServiceApiControllerFactory.createControllerApi()).thenReturn(topicControllerApi);
     when(topicControllerApi.getApiClient()).thenReturn(apiClient);
-    when(authenticatedUser.getAccessToken()).thenReturn(ACCESS_TOKEN);
+    when(accessTokenSupplier.getAccessToken()).thenReturn(ACCESS_TOKEN);
   }
 
   @AfterEach
@@ -130,21 +125,6 @@ class TopicServiceTest {
     topicService.getAllTopics();
 
     assertThat(defaultHeaders().get("tenantId")).isNull();
-  }
-
-  /**
-   * {@link SecurityHeaderSupplier} is injected into {@link TopicService} but never used in
-   * {@code addDefaultHeaders()} — this call uses the Keycloak bearer token directly, not the CSRF
-   * header set. This test documents that the dependency is dead so a future cleanup that removes it
-   * has a guard proving no behaviour change. See the cleanup note on issue #75.
-   */
-  @Test
-  void getAllTopics_Should_NotUseSecurityHeaderSupplier() {
-    when(topicControllerApi.getAllTopics()).thenReturn(List.of());
-
-    topicService.getAllTopics();
-
-    verifyNoInteractions(securityHeaderSupplier);
   }
 
   @SuppressWarnings("unchecked")

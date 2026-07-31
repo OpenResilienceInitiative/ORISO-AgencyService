@@ -1,7 +1,6 @@
 package de.caritas.cob.agencyservice.api.service;
 
-import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
-import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
+import de.caritas.cob.agencyservice.api.service.securityheader.AccessTokenSupplier;
 import de.caritas.cob.agencyservice.config.CacheManagerConfig;
 import de.caritas.cob.agencyservice.config.apiclient.TopicServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.topicservice.generated.web.TopicControllerApi;
@@ -19,9 +18,8 @@ import de.caritas.cob.agencyservice.topicservice.generated.ApiClient;
 public class TopicService {
 
   private final @NonNull TopicServiceApiControllerFactory topicServiceApiControllerFactory;
-  private final @NonNull SecurityHeaderSupplier securityHeaderSupplier;
   private final @NonNull TenantHeaderSupplier tenantHeaderSupplier;
-  private final @NonNull AuthenticatedUser authenticatedUser;
+  private final @NonNull AccessTokenSupplier accessTokenSupplier;
 
   @Cacheable(cacheNames = CacheManagerConfig.TOPICS_CACHE)
   public List<TopicDTO> getAllTopics() {
@@ -33,7 +31,7 @@ public class TopicService {
   private void addDefaultHeaders(ApiClient apiClient) {
     // Send only Keycloak auth header for internal service calls
     var headers = new HttpHeaders();
-    headers.add("Authorization", "Bearer " + authenticatedUser.getAccessToken());
+    headers.add("Authorization", "Bearer " + accessTokenSupplier.getAccessToken());
     tenantHeaderSupplier.addTenantHeader(headers);
     headers.forEach((key, value) -> apiClient.addDefaultHeader(key, value.iterator().next()));
   }
