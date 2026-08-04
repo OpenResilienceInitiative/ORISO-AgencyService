@@ -21,7 +21,9 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerEr
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidPostcodeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
+import de.caritas.cob.agencyservice.api.service.DepartmentLegalService;
 import de.caritas.cob.agencyservice.api.service.LogService;
+import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverter;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverterProperties;
@@ -54,6 +56,15 @@ public class ResponseEntityExceptionHandlerIT {
 
   @MockitoBean
   private AgencyService agencyService;
+
+  // AgencyController takes three @NonNull collaborators. Without these two the context
+  // never loads, every test here errors, and the exception-to-status assertions below
+  // are never reached (#203).
+  @MockitoBean
+  private TopicEnrichmentService topicEnrichmentService;
+
+  @MockitoBean
+  private DepartmentLegalService departmentLegalService;
 
   @MockitoBean
   private LinkDiscoverers linkDiscoverers;
