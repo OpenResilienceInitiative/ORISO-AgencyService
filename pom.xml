@@ -32,7 +32,7 @@
     <jakarta.ws.rs-api.version>3.1.0</jakarta.ws.rs-api.version>
     <commons-lang3.version>3.11</commons-lang3.version>
     <liquibase-maven-plugin.version>4.23.2</liquibase-maven-plugin.version>
-    <h2.version>1.4.200</h2.version>
+    <h2.version>2.2.220</h2.version>
     <powermock-module-junit4.version>2.0.9</powermock-module-junit4.version>
     <easy-random-core.version>5.0.0</easy-random-core.version>
     <spring-boot-autoconfigure.version>4.0.7</spring-boot-autoconfigure.version>
