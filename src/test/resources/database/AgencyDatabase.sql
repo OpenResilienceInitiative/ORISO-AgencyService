@@ -1,11 +1,15 @@
 DROP TABLE IF EXISTS AGENCY_POSTCODE_RANGE;
 DROP TABLE IF EXISTS AGENCY_TOPIC;
+DROP TABLE IF EXISTS LEGAL_TEXT;
 DROP TABLE IF EXISTS AGENCY;
+DROP TABLE IF EXISTS AGENCY_ADMIN_CONTROL;
 DROP TABLE IF EXISTS DIOCESE;
 
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_POSTCODE_RANGE;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_TOPIC;
+DROP SEQUENCE IF EXISTS SEQUENCE_LEGAL_TEXT;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY;
+DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_ADMIN_CONTROL;
 
 create table AGENCY
 (
@@ -15,6 +19,13 @@ create table AGENCY
     DESCRIPTION     varchar(2600) null     default null,
     POSTCODE        varchar(5)    null     default null,
     CITY            varchar(100)  null     default null,
+    STREET          varchar(255)  null     default null,
+    HOUSE_NUMBER    varchar(20)   null     default null,
+    FLOOR_BUILDING  varchar(100)  null     default null,
+    COUNTRY         varchar(100)  null     default null,
+    PHONE           varchar(30)   null     default null,
+    PHONE_SECONDARY varchar(30)   null     default null,
+    EMAIL           varchar(255)  null     default null,
     IS_TEAM_AGENCY  tinyint       not null default 0,
     CONSULTING_TYPE int       null     default 0,
     IS_OFFLINE      tinyint       not null default 0,
@@ -33,6 +44,11 @@ create table AGENCY
     DATA_PROTECTION_OFFICER_CONTACT longtext null default null,
     DATA_PROTECTION_ALTERNATIVE_CONTACT longtext null default null,
     AGENCY_LOGO longtext null default null,
+    MATRIX_USER_ID varchar(255) null default null,
+    MATRIX_PASSWORD varchar(255) null default null,
+    SETTINGS longtext null default null,
+    CONTENT_DPP longtext null default null,
+    CONTENT_IMPRINT longtext null default null,
     primary key (ID)
 );
 CREATE SEQUENCE SEQUENCE_AGENCY
@@ -55,6 +71,24 @@ CREATE SEQUENCE SEQUENCE_AGENCY_POSTCODE_RANGE
     START WITH 100000
     INCREMENT BY 1;
 
+-- ADR-014 (Liquibase changeset 0026_legal_text): legal texts are first-class shared
+-- objects owned by a Träger, referenced by departments instead of being inlined.
+create table LEGAL_TEXT
+(
+    ID                 bigint      not null,
+    TENANT_ID          bigint      null,
+    KIND               varchar(20) not null,
+    LABEL              varchar(255) not null,
+    CONTENT            longtext    null,
+    PUBLICATION_STATUS varchar(20) not null default 'DRAFT',
+    CREATE_DATE        timestamp,
+    UPDATE_DATE        timestamp,
+    primary key (ID)
+);
+CREATE SEQUENCE SEQUENCE_LEGAL_TEXT
+    START WITH 100000
+    INCREMENT BY 1;
+
 create table AGENCY_TOPIC
 (
     ID            bigint     not null,
@@ -62,11 +96,30 @@ create table AGENCY_TOPIC
     TOPIC_ID      bigint     not null,
     CREATE_DATE   timestamp,
     UPDATE_DATE   timestamp,
+    CONTENT_DPP   longtext   null,
+    PUBLICATION_STATUS varchar(20) not null default 'DRAFT',
+    CONTENT_IMPRINT longtext null,
+    PUBLICATION_STATUS_IMPRINT varchar(20) not null default 'DRAFT',
+    DPP_ID        bigint     null,
+    IMPRINT_ID    bigint     null,
     primary key (ID),
-    foreign key (AGENCY_ID) references AGENCY (ID)
+    foreign key (AGENCY_ID) references AGENCY (ID),
+    foreign key (DPP_ID) references LEGAL_TEXT (ID),
+    foreign key (IMPRINT_ID) references LEGAL_TEXT (ID)
 );
 CREATE SEQUENCE SEQUENCE_AGENCY_TOPIC
     START WITH 100000
+    INCREMENT BY 1;
+
+create table AGENCY_ADMIN_CONTROL
+(
+    ID          bigint    not null,
+    CONTROLS    text      not null,
+    UPDATE_DATE timestamp not null,
+    primary key (ID)
+);
+CREATE SEQUENCE SEQUENCE_AGENCY_ADMIN_CONTROL
+    START WITH 0
     INCREMENT BY 1;
 
 INSERT INTO AGENCY (ID, TENANT_ID, NAME, DESCRIPTION, POSTCODE, CITY, IS_TEAM_AGENCY, CONSULTING_TYPE, IS_OFFLINE, URL, IS_EXTERNAL, ID_OLD, CREATE_DATE, UPDATE_DATE, DELETE_DATE, COUNSELLING_RELATIONS)

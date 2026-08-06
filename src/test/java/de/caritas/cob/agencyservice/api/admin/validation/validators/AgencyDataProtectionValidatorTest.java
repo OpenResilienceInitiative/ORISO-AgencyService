@@ -6,7 +6,7 @@ import de.caritas.cob.agencyservice.api.model.DataProtectionDTO.DataProtectionRe
 import de.caritas.cob.agencyservice.api.service.ApplicationSettingsService;
 import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
-import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.SettingDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings;
 import org.junit.jupiter.api.Test;
@@ -103,7 +103,7 @@ class AgencyDataProtectionValidatorTest {
   private void givenSingleDomainWithValue(String domain) {
     Mockito.when(applicationSettingsService.getApplicationSettings()).thenReturn(
         new ApplicationSettingsDTO().mainTenantSubdomainForSingleDomainMultitenancy(
-            new ApplicationSettingsDTOMainTenantSubdomainForSingleDomainMultitenancy().value(
+            new SettingDTO().value(
                 domain)));
   }
 }

@@ -1,0 +1,19 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+    <!-- ADR-003 dev mode: make agency.data_protection_officer_contact explicitly NULLABLE so
+         testing/dev can create agencies without a DPO contact. "Required" is enforced at the
+         application layer (agency.department.require-dpo-contact, default true in prod). The
+         precondition MARK_RANs on any database where the column is missing, so the changeset is
+         safe on partially-migrated schemas. Additive and idempotent. -->
+    <changeSet author="oriso" id="makeDataProtectionOfficerContactNullable">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="agency" columnName="data_protection_officer_contact"/>
+        </preConditions>
+        <sqlFile path="db/changelog/changeset/0024_agency_dpo_contact_nullable/makeDataProtectionOfficerContactNullable.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0024_agency_dpo_contact_nullable/makeDataProtectionOfficerContactNullable-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

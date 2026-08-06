@@ -11,11 +11,23 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidOfflineSt
 import de.caritas.cob.agencyservice.api.model.DataProtectionContactDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionPlaceHolderType;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
 @Slf4j
 public class AgencyDataProtectionValidationService {
+
+  /**
+   * ADR-003 "dev mode" switch. The data protection officer contact is a legal imprint/DPP
+   * requirement (ADR-003) and stays MANDATORY in production, so this defaults to {@code true}. It
+   * is set to {@code false} in the {@code testing} (and local/dev) profiles so tests and dev flows
+   * can create an agency without a fully populated DPO contact — the DB column itself is nullable
+   * (changeset 0016/0024). Decided in #oriso-codereview: "brauchen einen dev modus, sonst koennen
+   * wir nichts testen".
+   */
+  @Value("${agency.department.require-dpo-contact:true}")
+  private boolean requireDataProtectionOfficerContact;
 
   public void validate(ValidateAgencyDTO validateAgencyDto) {
     validateThatDataProtectionDtoExists(validateAgencyDto);
@@ -35,6 +47,11 @@ public class AgencyDataProtectionValidationService {
   }
 
   private void validateIfDataProtectionOfficer(ValidateAgencyDTO validateAgencyDto) {
+    if (!requireDataProtectionOfficerContact) {
+      // ADR-003 dev mode: requirement relaxed (testing/dev profiles) so agencies can be created
+      // without a complete DPO contact. Production keeps requireDataProtectionOfficerContact=true.
+      return;
+    }
     if (DATA_PROTECTION_OFFICER.equals(
         validateAgencyDto.getDataProtectionDTO().getDataProtectionResponsibleEntity())
         && areFieldsEmpty(

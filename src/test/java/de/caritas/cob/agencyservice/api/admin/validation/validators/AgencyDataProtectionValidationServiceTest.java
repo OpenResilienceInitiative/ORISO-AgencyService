@@ -11,16 +11,27 @@ import de.caritas.cob.agencyservice.api.model.DataProtectionDTO.DataProtectionRe
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Content;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import org.assertj.core.api.Fail;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class AgencyDataProtectionValidationServiceTest {
 
   @InjectMocks
   AgencyDataProtectionValidationService agencyDataProtectionValidator;
+
+  @BeforeEach
+  void enforceProductionRequirement() {
+    // Default to the production behaviour (ADR-003 requirement ON) so the existing officer/
+    // responsible checks are exercised. Mockito's @InjectMocks leaves the @Value boolean at its
+    // JVM default (false); set it explicitly. The dev-mode relaxation is covered separately.
+    ReflectionTestUtils.setField(
+        agencyDataProtectionValidator, "requireDataProtectionOfficerContact", true);
+  }
 
   @Test
   void validate_Should_NotValidate_When_DataProtectionOfficerIsNotSet() {
@@ -128,6 +139,40 @@ class AgencyDataProtectionValidationServiceTest {
     } catch (Exception e) {
       // then
       Fail.fail("Should not throw exception");
+    }
+  }
+
+  @Test
+  void validate_Should_RejectMissingOfficerContact_When_RequirementEnforced() {
+    // given: ADR-003 production behaviour — requirement ON (set in @BeforeEach)
+    ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
+            DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
+
+    // when / then: a missing DPO contact is rejected in production
+    try {
+      agencyDataProtectionValidator.validate(agencyToValidate);
+      Fail.fail("Should throw when the DPO contact requirement is enforced");
+    } catch (InvalidOfflineStatusException e) {
+      assertThat(e.getHttpStatusExceptionReason())
+          .isEqualTo(HttpStatusExceptionReason.DATA_PROTECTION_OFFICER_IS_EMPTY);
+    }
+  }
+
+  @Test
+  void validate_Should_AllowMissingOfficerContact_When_DevModeRelaxesRequirement() {
+    // given: ADR-003 dev mode — requirement OFF (testing/dev profiles)
+    ReflectionTestUtils.setField(
+        agencyDataProtectionValidator, "requireDataProtectionOfficerContact", false);
+    ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
+            DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
+
+    // when / then: no exception even though the DPO contact is missing
+    try {
+      agencyDataProtectionValidator.validate(agencyToValidate);
+    } catch (Exception e) {
+      Fail.fail("Dev mode should relax the DPO contact requirement");
     }
   }
 }

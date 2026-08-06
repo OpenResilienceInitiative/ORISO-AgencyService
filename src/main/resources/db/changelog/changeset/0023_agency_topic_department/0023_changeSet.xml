@@ -1,0 +1,40 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+    <!-- ADR-003 step 1: remove duplicate (agency_id, topic_id) rows keeping the lowest id per
+         pair. ORISO is pre-prod with no real users, so duplicates are deleted, not back-filled.
+         Safe no-op on empty or already-clean databases. Data deletion is irreversible, so the
+         rollback is intentionally empty. -->
+    <changeSet author="oriso" id="dedupAgencyTopicDepartments">
+        <sqlFile path="db/changelog/changeset/0023_agency_topic_department/dedupAgencyTopic.sql" stripComments="true"/>
+        <rollback/>
+    </changeSet>
+
+    <!-- ADR-003 step 2: department = unique (agency_id, topic_id). The precondition makes the
+         changeset re-runnable against databases where the constraint was already added manually
+         (MARK_RAN instead of failing). -->
+    <changeSet author="oriso" id="addAgencyTopicUniqueConstraint">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+                WHERE TABLE_SCHEMA = 'agencyservice'
+                  AND TABLE_NAME = 'agency_topic'
+                  AND CONSTRAINT_NAME = 'uq_agency_topic'
+            </sqlCheck>
+        </preConditions>
+        <sqlFile path="db/changelog/changeset/0023_agency_topic_department/addAgencyTopicUniqueConstraint.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0023_agency_topic_department/addAgencyTopicUniqueConstraint-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+
+    <!-- ADR-003 step 3: the department's own imprint (Impressum), mirroring the existing
+         content_dpp / publication_status pair from 0021. -->
+    <changeSet author="oriso" id="addAgencyTopicImprint">
+        <sqlFile path="db/changelog/changeset/0023_agency_topic_department/addAgencyTopicImprint.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0023_agency_topic_department/addAgencyTopicImprint-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

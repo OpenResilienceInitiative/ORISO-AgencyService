@@ -11,9 +11,9 @@ import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -28,7 +28,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MatrixProvisioningService {
 
@@ -40,6 +39,13 @@ public class MatrixProvisioningService {
   private final @NonNull RestTemplate restTemplate;
 
   private final SecureRandom secureRandom = new SecureRandom();
+
+  public MatrixProvisioningService(
+      @NonNull MatrixConfig matrixConfig,
+      @NonNull @Qualifier("matrixRestTemplate") RestTemplate restTemplate) {
+    this.matrixConfig = matrixConfig;
+    this.restTemplate = restTemplate;
+  }
 
   public Optional<MatrixCredentials> ensureAgencyAccount(String baseUsername, String displayName) {
     try {
@@ -120,7 +126,7 @@ public class MatrixProvisioningService {
             ex.getResponseBodyAsString());
       }
     } catch (ResponseStatusException ex) {
-      if (isUserAlreadyExisting(ex.getStatusCode(), null)) {
+      if (isUserAlreadyExisting(ex.getStatusCode(), ex.getReason())) {
         String userId = String.format("@%s:%s", username, matrixConfig.getServerName());
         if (resetExistingUserPassword(userId, password)) {
           log.info("Matrix user {} already existed. Password rotated.", username);
@@ -164,7 +170,7 @@ public class MatrixProvisioningService {
     }
     if (status != null && status.value() == HttpStatus.BAD_REQUEST.value()) {
       if (responseBody == null) {
-        return true;
+        return false;
       }
       return responseBody.contains("M_USER_IN_USE");
     }
@@ -193,7 +199,7 @@ public class MatrixProvisioningService {
       body.put("logout_devices", Boolean.FALSE);
 
       String resetPasswordUrl =
-          UriComponentsBuilder.fromHttpUrl(matrixConfig.getApiUrl(ENDPOINT_RESET_PASSWORD))
+          UriComponentsBuilder.fromUriString(matrixConfig.getApiUrl(ENDPOINT_RESET_PASSWORD))
               .pathSegment(userId)
               .toUriString();
 
@@ -270,5 +276,4 @@ public class MatrixProvisioningService {
     String password;
   }
 }
-
 

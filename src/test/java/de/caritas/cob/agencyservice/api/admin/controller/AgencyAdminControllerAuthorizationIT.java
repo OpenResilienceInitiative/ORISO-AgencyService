@@ -14,10 +14,11 @@ import static de.caritas.cob.agencyservice.testHelper.TestConstants.VALID_POSTCO
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
@@ -34,24 +36,35 @@ import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
 import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import jakarta.servlet.http.Cookie;
+import java.util.List;
+import java.util.Map;
 import org.jeasy.random.EasyRandom;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @RunWith(SpringRunner.class)
-@TestPropertySource(properties = "spring.profiles.active=testing")
+@TestPropertySource(properties = {
+    "spring.profiles.active=testing",
+    "csrf.header.property=csrfHeader",
+    "csrf.cookie.property=csrfCookie"
+})
 @SpringBootTest
 @AutoConfigureMockMvc
 @AutoConfigureTestDatabase(replace = Replace.ANY)
@@ -60,21 +73,39 @@ public class AgencyAdminControllerAuthorizationIT {
   private static final String CSRF_HEADER = "csrfHeader";
   private static final String CSRF_VALUE = "test";
   private static final Cookie CSRF_COOKIE = new Cookie("csrfCookie", CSRF_VALUE);
+  private static final String BEARER_AUTHORIZATION = "Bearer test-token";
 
   @Autowired
   private MockMvc mvc;
 
-  @MockBean
+  @MockitoBean
+  private JwtDecoder jwtDecoder;
+
+  @MockitoBean
   private AgencyAdminSearchService agencyAdminFullResponseDTO;
 
-  @MockBean
+  @MockitoBean
   private AgencyPostcodeRangeAdminService agencyPostCodeRangeAdminService;
 
-  @MockBean
+  @MockitoBean
   private AgencyAdminService agencyAdminService;
 
-  @MockBean
+  @MockitoBean
   private AgencyValidator agencyValidator;
+
+  @MockitoBean
+  private AgencyIdAllocationService agencyIdAllocationService;
+
+  @Before
+  public void setUpJwtDecoder() {
+    Jwt agencyAdminJwt =
+        Jwt.withTokenValue("test-token")
+            .header("alg", "none")
+            .claim("sub", "agency-admin")
+            .claim("realm_access", Map.of("roles", List.of("agency-admin")))
+            .build();
+    when(jwtDecoder.decode(any(String.class))).thenReturn(agencyAdminJwt);
+  }
 
   @Test
   public void searchAgencies_Should_ReturnUnauthorizedAndCallNoMethods_When_noKeycloakAuthorizationIsPresent()
@@ -89,15 +120,13 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void searchAgencies_Should_ReturnOkAndCallAgencyAdminSearchService_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(get(AGENCY_SEARCH_PATH)
         .param(PAGE_PARAM, "0")
         .param(PER_PAGE_PARAM, "1")
-        .cookie(CSRF_COOKIE)
-        .header(CSRF_HEADER, CSRF_VALUE))
+        .header("Authorization", BEARER_AUTHORIZATION))
         .andExpect(status().isOk());
 
     verify(this.agencyAdminFullResponseDTO, times(1)).searchAgencies(any(), anyInt(), any(), any());
@@ -116,13 +145,10 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void getAgencyPostCodeRanges_Should_ReturnOkAndCallAgencyPostCodeRangeAdminService_When_agencyAdminAuthority()
       throws Exception {
 
-    mvc.perform(get(AGENCY_POSTCODE_RANGE_PATH)
-        .cookie(CSRF_COOKIE)
-        .header(CSRF_HEADER, CSRF_VALUE))
+    mvc.perform(get(AGENCY_POSTCODE_RANGE_PATH).header("Authorization", BEARER_AUTHORIZATION))
         .andExpect(status().isOk());
 
     verify(this.agencyPostCodeRangeAdminService, times(1)).findPostcodeRangesForAgency(anyLong());
@@ -143,19 +169,100 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  public void createAgency_Should_ReturnForbiddenAndCallNoMethods_When_csrfTokenIsMissingAndNoBearerHeader()
+      throws Exception {
+
+    mvc.perform(post(CREATE_AGENCY_PATH)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(VALID_AGENCY_DTO)
+        .with(agencyAdminCookieAuth()))
+        .andExpect(status().isForbidden());
+
+    verifyNoMoreInteractions(this.agencyAdminService);
+    verifyNoMoreInteractions(this.agencyValidator);
+  }
+
+  @Test
+  public void createAgency_Should_ReturnCreatedAndCallAgencyAdminServiceAndAgencyValidator_When_bearerPresentWithoutCsrf()
+      throws Exception {
+
+    mvc.perform(post(CREATE_AGENCY_PATH)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(VALID_AGENCY_DTO)
+        .header("Authorization", BEARER_AUTHORIZATION))
+        .andExpect(status().isCreated());
+
+    verify(this.agencyValidator, times(1)).validate(Mockito.any(AgencyDTO.class));
+    verify(this.agencyAdminService, times(1)).createAgency(Mockito.any());
+  }
+
+  @Test
   public void createAgency_Should_ReturnCreatedAndCallAgencyAdminServiceAndAgencyValidator_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(post(CREATE_AGENCY_PATH)
         .contentType(MediaType.APPLICATION_JSON)
         .content(VALID_AGENCY_DTO)
+        .with(agencyAdminCookieAuth())
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isCreated());
 
     verify(this.agencyValidator, times(1)).validate(Mockito.any(AgencyDTO.class));
     verify(this.agencyAdminService, times(1)).createAgency(Mockito.any());
+  }
+
+  @Test
+  public void reserveAgencyId_Should_ReturnUnauthorizedAndCallNoMethods_When_noKeycloakAuthorizationIsPresent()
+      throws Exception {
+
+    mvc.perform(post("/agencyadmin/agencyids/reservations")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}")
+        .cookie(CSRF_COOKIE)
+        .header(CSRF_HEADER, CSRF_VALUE))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoMoreInteractions(this.agencyIdAllocationService);
+  }
+
+  @Test
+  public void reserveAgencyId_Should_ReturnCreatedAndCallAllocationService_When_agencyAdminAuthority()
+      throws Exception {
+
+    when(this.agencyIdAllocationService.reserve(Mockito.any(), Mockito.any())).thenReturn(21L);
+
+    mvc.perform(post("/agencyadmin/agencyids/reservations")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{}")
+        .header("Authorization", BEARER_AUTHORIZATION))
+        .andExpect(status().isCreated());
+
+    verify(this.agencyIdAllocationService, times(1)).reserve(Mockito.any(), Mockito.any());
+  }
+
+  @Test
+  public void getAgencyIdAvailability_Should_ReturnUnauthorizedAndCallNoMethods_When_noKeycloakAuthorizationIsPresent()
+      throws Exception {
+
+    mvc.perform(get("/agencyadmin/agencyids/21/availability")
+        .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoMoreInteractions(this.agencyIdAllocationService);
+  }
+
+  @Test
+  public void releaseAgencyIdReservation_Should_ReturnUnauthorizedAndCallNoMethods_When_noKeycloakAuthorizationIsPresent()
+      throws Exception {
+
+    mvc.perform(delete("/agencyadmin/agencyids/reservations/21")
+        .contentType(MediaType.APPLICATION_JSON)
+        .cookie(CSRF_COOKIE)
+        .header(CSRF_HEADER, CSRF_VALUE))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoMoreInteractions(this.agencyIdAllocationService);
   }
 
   @Test
@@ -173,13 +280,28 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  public void updateAgency_Should_ReturnOkAndCallAgencyAdminServiceAndAgencyValidator_When_bearerPresentWithoutCsrf()
+      throws Exception {
+
+    mvc.perform(put(UPDATE_DELETE_AGENCY_PATH)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(VALID_AGENCY_UPDATE_DTO)
+        .header("Authorization", BEARER_AUTHORIZATION))
+        .andExpect(status().isOk());
+
+    verify(this.agencyValidator, times(1))
+        .validate(Mockito.anyLong(), Mockito.any(UpdateAgencyDTO.class));
+    verify(this.agencyAdminService, times(1)).updateAgency(Mockito.anyLong(), Mockito.any());
+  }
+
+  @Test
   public void updateAgency_Should_ReturnOkAndCallAgencyAdminServiceAndAgencyValidator_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(put(UPDATE_DELETE_AGENCY_PATH)
         .contentType(MediaType.APPLICATION_JSON)
         .content(VALID_AGENCY_UPDATE_DTO)
+        .with(agencyAdminCookieAuth())
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isOk());
@@ -203,12 +325,12 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void deletePostcodeRange_Should_ReturnOKAndCallAgencyAdminServiceAndAgencyValidator_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(delete(AGENCY_POSTCODE_RANGE_PATH + "1")
         .contentType(MediaType.APPLICATION_JSON)
+        .with(agencyAdminCookieAuth())
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isOk());
@@ -230,13 +352,13 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void createAgencyPostcodeRange_Should_ReturnCreatedAndCallAgencyPostCodeRangeAdminService_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(post(AGENCY_POSTCODE_RANGE_PATH)
         .contentType(MediaType.APPLICATION_JSON)
         .content(VALID_POSTCODE_RANGE_DTO)
+        .with(agencyAdminCookieAuth())
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isCreated());
@@ -259,13 +381,13 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void updateAgencyPostcodeRange_Should_ReturnOkAndCallAgencyPostCodeRangeAdminService_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(put(AGENCY_POSTCODE_RANGE_PATH)
         .contentType(MediaType.APPLICATION_JSON)
         .content(VALID_POSTCODE_RANGE_DTO)
+        .with(agencyAdminCookieAuth())
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isOk());
@@ -288,7 +410,6 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void changeAgencyType_Should_ReturnOkAndCallAgencyAdminService_When_agencyAdminAuthority()
       throws Exception {
     AgencyTypeRequestDTO requestDTO =
@@ -297,6 +418,7 @@ public class AgencyAdminControllerAuthorizationIT {
     mvc.perform(post(CHANGE_AGENCY_TYPE_PATH)
         .contentType(MediaType.APPLICATION_JSON)
         .content(new ObjectMapper().writeValueAsString(requestDTO))
+        .with(agencyAdminCookieAuth())
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isOk());
@@ -318,12 +440,12 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void deleteAgency_Should_ReturnOkAndCallAgencyAdminService_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(delete(UPDATE_DELETE_AGENCY_PATH)
         .contentType(MediaType.APPLICATION_JSON)
+        .with(agencyAdminCookieAuth())
         .cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE))
         .andExpect(status().isOk());
@@ -345,16 +467,22 @@ public class AgencyAdminControllerAuthorizationIT {
   }
 
   @Test
-  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   public void getAgency_Should_ReturnOkAndCallAgencyAdminService_When_agencyAdminAuthority()
       throws Exception {
 
     mvc.perform(get(GET_AGENCY_PATH + "/1")
         .contentType(MediaType.APPLICATION_JSON)
-        .cookie(CSRF_COOKIE)
-        .header(CSRF_HEADER, CSRF_VALUE))
+        .header("Authorization", BEARER_AUTHORIZATION))
         .andExpect(status().isOk());
 
     verify(this.agencyAdminService, times(1)).findAgency(anyLong());
+  }
+
+  private static RequestPostProcessor agencyAdminCookieAuth() {
+    return authentication(
+        new UsernamePasswordAuthenticationToken(
+            "agency-admin",
+            "n/a",
+            List.of(new SimpleGrantedAuthority("AUTHORIZATION_AGENCY_ADMIN"))));
   }
 }

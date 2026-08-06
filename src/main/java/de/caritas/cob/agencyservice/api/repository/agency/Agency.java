@@ -21,6 +21,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.sql.Types;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,10 +29,12 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.ParamDef;
-
 
 import org.hibernate.type.NumericBooleanConverter;
 
@@ -43,9 +46,7 @@ import org.hibernate.type.NumericBooleanConverter;
 @Getter
 @Setter
 @Builder
-@FilterDef(
-    name = "tenantFilter",
-    parameters = {@ParamDef(name = "tenantId", type = Long.class)})
+@FilterDef(name = "tenantFilter", parameters = { @ParamDef(name = "tenantId", type = Long.class) })
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class Agency implements TenantAware {
 
@@ -62,7 +63,7 @@ public class Agency implements TenantAware {
   @Column(name = "name", nullable = false)
   private String name;
 
-  @Column(name = "description")
+  @Column(name = "description", columnDefinition = "text")
   private String description;
 
   @Size(max = 5)
@@ -78,8 +79,37 @@ public class Agency implements TenantAware {
   @Column(name = "city")
   private String city;
 
-  @Column(name = "is_team_agency", nullable = false)
+  @Size(max = 255)
+  @Column(name = "street")
+  private String street;
+
+  @Size(max = 20)
+  @Column(name = "house_number")
+  private String houseNumber;
+
+  @Size(max = 100)
+  @Column(name = "floor_building")
+  private String floorBuilding;
+
+  @Size(max = 100)
+  @Column(name = "country")
+  private String country;
+
+  @Size(max = 30)
+  @Column(name = "phone")
+  private String phone;
+
+  @Size(max = 30)
+  @Column(name = "phone_secondary")
+  private String phoneSecondary;
+
+  @Size(max = 255)
+  @Column(name = "email")
+  private String email;
+
+  @Column(name = "is_team_agency", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
   private boolean teamAgency;
 
   @PositiveOrZero
@@ -87,17 +117,18 @@ public class Agency implements TenantAware {
   @NonNull
   private Integer consultingTypeId;
 
-  @Column(name = "is_offline", nullable = false)
+  @Column(name = "is_offline", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
-
+  @JdbcTypeCode(Types.TINYINT)
   private boolean offline;
 
   @Size(max = 500)
   @Column(name = "url")
   private String url;
 
-  @Column(name = "is_external", nullable = false)
+  @Column(name = "is_external", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
   private boolean isExternal;
 
   @PositiveOrZero
@@ -120,31 +151,37 @@ public class Agency implements TenantAware {
   @Column(name = "update_date", nullable = false)
   private LocalDateTime updateDate;
 
-  @Column(name = "data_protection_responsible_entity", nullable = false)
+  // Changeset 0016 declares this column NULL. nullable=false here contradicted the migration
+  // and only ever became real DDL on the create-drop test schema, where it rejected inserts
+  // production accepts. Same reasoning as the neighbouring DPO contact field below — that one
+  // was corrected, this one was missed (#204).
+  @Column(name = "data_protection_responsible_entity")
   @Enumerated(EnumType.STRING)
   private DataProtectionResponsibleEntity dataProtectionResponsibleEntity;
 
-
-  @Column(name = "data_protection_officer_contact", nullable = false)
+  // ADR-003 dev mode: the DB column is nullable (changeset 0016 declares it NULL, made explicit
+  // in 0024). "Required" is enforced at the application layer, gated by the
+  // agency.department.require-dpo-contact flag (default true in prod, false in testing/dev), so
+  // dev/test flows and the @DataJpaTest persistence tests can insert an Agency without it while
+  // production still rejects a missing DPO contact. Keeping nullable=false here would re-impose a
+  // hard NOT NULL on the create-drop test schema and block testing — see #oriso-codereview thread.
+  @Column(name = "data_protection_officer_contact", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionOfficerContactData;
 
-  @Column(name = "data_protection_alternative_contact", nullable = false)
+  @Column(name = "data_protection_alternative_contact", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionAlternativeContactData;
 
-  @Column(name = "data_protection_agency_contact", nullable = false)
+  @Column(name = "data_protection_agency_contact", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String dataProtectionAgencyResponsibleContactData;
-
-
 
   @OneToMany(targetEntity = AgencyPostcodeRange.class, mappedBy = "agency", fetch = FetchType.LAZY)
   private List<AgencyPostcodeRange> agencyPostcodeRanges;
 
-  @OneToMany(
-      targetEntity = AgencyTopic.class,
-      mappedBy = "agency",
-      fetch = FetchType.LAZY,
-      cascade = CascadeType.ALL,
-      orphanRemoval = true)
+  @OneToMany(targetEntity = AgencyTopic.class, mappedBy = "agency", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+  @BatchSize(size = 50)
   private List<AgencyTopic> agencyTopics;
 
   @Column(name = "tenant_id")
@@ -153,7 +190,8 @@ public class Agency implements TenantAware {
   @Column(name = "counselling_relations")
   private String counsellingRelations;
 
-  @Column(name = "agency_logo")
+  @Column(name = "agency_logo", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String agencyLogo;
 
   @Column(name = "matrix_user_id")
@@ -162,8 +200,25 @@ public class Agency implements TenantAware {
   @Column(name = "matrix_password")
   private String matrixPassword;
 
-  @Column(name = "settings")
+  @Column(name = "settings", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
   private String settings;
+
+  /**
+   * ADR-014 middle level of the chain tenant → agency → department: the Beratungsstelle's own data
+   * privacy policy as a JSON language→HTML map, inherited by every Fachbereich that has not
+   * published one of its own. Unlike a department text this has no draft state — an imprint names
+   * the responsible entity and the Beratungsstelle is always its own, so what is stored is what is
+   * in force.
+   */
+  @Column(name = "content_dpp", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
+  private String contentDpp;
+
+  /** Agency-wide imprint; see {@link #contentDpp}. */
+  @Column(name = "content_imprint", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
+  private String contentImprint;
 
   @Transient
   public boolean hasAnyDemographicsAttributes() {

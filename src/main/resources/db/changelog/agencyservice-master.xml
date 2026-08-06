@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.23.xsd">
+
+  <!--
+    Single consolidated master changelog for AgencyService (Liquibase Re-Enablement Plan
+    2026-07-04, package L1 "changelog truth").
+
+    Replaces the five per-environment masters
+    (local/dev/staging/testing/prod). Environments select changesets via Liquibase
+    contexts (see spring.liquibase.contexts in each application-<profile>.properties),
+    NOT via separate master files.
+
+    Contexts (see spring.liquibase.contexts per profile):
+      - contextFilter="seed": bootstrap changesets that create the base schema on an empty
+        database. Only local/dev run these (spring.liquibase.contexts=seed). staging/prod use
+        spring.liquibase.contexts=production, which does NOT match "seed", so the bootstrap is
+        skipped there — their base schema is managed out-of-band (ORISO-Database repo).
+      - no context: structural changesets that carry no context attribute and therefore run in
+        EVERY context (seed and production alike). They are additive (nullable columns) so they
+        are safe to apply on top of the existing staging/prod schema.
+
+    NB: an EMPTY contexts filter means "run everything" in Liquibase, so staging/prod must pass
+    a concrete non-"seed" context ("production"), not an empty string, to skip the bootstrap.
+
+    IMPORTANT: changeset file paths are the Liquibase identity (id+author+filepath).
+    Files are NOT moved or renamed. The seed changeset (0001) stays first in file order
+    so that on a fresh local/dev database the base tables exist before the later ALTERs.
+
+    Canonical structural order mirrors the former prod master (0002..0022).
+  -->
+
+  <!-- ==== Seed: fresh-database bootstrap (local/dev only) ==== -->
+  <include file="db/changelog/changeset/0001_initsql/initSql.xml" contextFilter="seed"/>
+
+  <!-- ==== Structural changesets (all environments) ==== -->
+  <include file="db/changelog/changeset/0002_agency_id_old_null/0002_changeSet.xml"/>
+  <include file="db/changelog/changeset/0003_agency_consulting_type/0003_changeSet.xml"/>
+  <include file="db/changelog/changeset/0004_agency_offline/0004_changeSet.xml"/>
+  <include file="db/changelog/changeset/0005_agency_delete_flag/0005_changeSet.xml"/>
+  <include file="db/changelog/changeset/0006_agency_url_and_external_flag/0006_changeSet.xml"/>
+  <include file="db/changelog/changeset/0007_tenant_id/0007_changeSet.xml"/>
+  <include file="db/changelog/changeset/0008_tenant_id_remove/0008_changeSet.xml"/>
+  <include file="db/changelog/changeset/0009_agency_topic/0009_changeSet.xml"/>
+  <include file="db/changelog/changeset/0010_agency_demographics/0010_changeSet.xml"/>
+  <include file="db/changelog/changeset/0011_agency_demographics_gender_column_change/0011_changeSet.xml"/>
+  <include file="db/changelog/changeset/0012_agency_counseling_relations/0012_changeSet.xml"/>
+  <include file="db/changelog/changeset/0013_make_diocese_nullable/0013_changeSet.xml"/>
+  <!-- uncomment it once confirmed diocese has been migrated correctly to tenant by migration tool
+  <include file="db/changelog/changeset/0014_drop_diocese/0014_changeSet.xml"/>
+  -->
+  <include file="db/changelog/changeset/0015_change_consultingtype_column_type/0015_changeSet.xml"/>
+  <include file="db/changelog/changeset/0016_add_data_protection_attributes/0016_changeSet.xml"/>
+  <include file="db/changelog/changeset/0017_add_agency_logo/0017_changeSet.xml"/>
+  <include file="db/changelog/changeset/0018_agency_matrix_credentials/0018_changeSet.xml"/>
+  <include file="db/changelog/changeset/0019_agency_admin_control/0019_changeSet.xml"/>
+  <include file="db/changelog/changeset/0020_agency_settings/0020_changeSet.xml"/>
+  <include file="db/changelog/changeset/0021_agency_topic_legal/0021_changeSet.xml"/>
+  <include file="db/changelog/changeset/0022_agency_address_contact/0022_changeSet.xml"/>
+  <include file="db/changelog/changeset/0023_agency_topic_department/0023_changeSet.xml"/>
+  <!-- ADR-003 dev mode: make agency.data_protection_officer_contact explicitly nullable so
+       testing/dev can create agencies without it; required stays enforced at the app layer in
+       prod (agency.department.require-dpo-contact). Additive, preconditioned (MARK_RAN). -->
+  <include file="db/changelog/changeset/0024_agency_dpo_contact_nullable/0024_changeSet.xml"/>
+  <!-- Demo/initial-delivery data is opt-in. Enable with Liquibase context
+       "demo-baseline" for demo environments or before customer-facing demo runs. -->
+  <include file="db/changelog/changeset/0025_demo_baseline/0025_changeSet.xml" contextFilter="demo-baseline"/>
+  <!-- ADR-014: shared legal-text objects (legal_text table + department references + backfill
+       that merges byte-identical inline texts into one shared row per tenant/kind/status). -->
+  <include file="db/changelog/changeset/0026_legal_text/0026_changeSet.xml"/>
+  <!-- ADR-014: agency-wide legal texts — the middle level of tenant → agency → department that
+       the ADR assumed but the schema never had (#222). Additive and nullable. -->
+  <include file="db/changelog/changeset/0027_agency_legal_text/0027_changeSet.xml"/>
+  <!-- TEN-INV-U2 (ORISO-Admin#569): agency ID reservations for open invites; the reserved ID is
+       the primary key so the same agency ID can never be handed out twice. -->
+  <include file="db/changelog/changeset/0028_agency_id_reservation/0028_changeSet.xml"/>
+
+  <!--
+    L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB
+    10.11 and the application booted with spring.jpa.hibernate.ddl-auto=validate. Hibernate
+    validated every JPA entity against the changelog-built schema with NO errors, so there are
+    no columns that the former dev ddl-auto=update had created behind the changelog's back — no
+    catch-up changesets are required. The permanent drift guard
+    (LiquibaseChangelogDriftIT) re-runs this check on demand.
+
+    Note: ORISO-Database/mariadb/agencyservice/schema.sql (a static dump) lags this changelog
+    (it is missing the output of changesets 0019-0022, e.g. agency_admin_control, settings and
+    the AVV address/contact columns). The changelog is authoritative; that dump should be
+    refreshed separately.
+  -->
+
+</databaseChangeLog>

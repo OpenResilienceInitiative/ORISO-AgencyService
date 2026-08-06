@@ -16,7 +16,7 @@ kubectl logs -n caritas -l app=agencyservice --tail=100
 
 ### Run Locally (Development)
 ```bash
-cd /home/caritas/Desktop/online-beratung/caritas-workspace/ORISO-AgencyService
+cd <path-to-your-workspace>/ORISO-AgencyService
 chmod +x mvnw
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -DskipTests
 ```

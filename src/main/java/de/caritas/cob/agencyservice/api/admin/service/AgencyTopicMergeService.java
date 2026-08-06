@@ -16,8 +16,42 @@ public class AgencyTopicMergeService {
     if (requestTopicIds == null || requestTopicIds.isEmpty()) {
       return Lists.newArrayList();
     } else {
-      return getMergedTopicsForNonEmptyTopicList(agency, requestTopicIds);
+      // dedup request ids at the single choke point create and update share: a repeated id
+      // (e.g. [5, 5]) must yield at most one department row per (agency, topic), otherwise the
+      // insert would violate UNIQUE uq_agency_topic (ADR-003) at flush
+      return getMergedTopicsForNonEmptyTopicList(
+          agency, requestTopicIds.stream().distinct().collect(Collectors.toList()));
     }
+  }
+
+  /**
+   * Resolves the agency topics to persist on an <b>update</b>, distinguishing a topic field that
+   * was omitted from the request from one that was explicitly cleared. This prevents an update that
+   * does not carry topic information (e.g. toggling the agency online, changing the postcode) from
+   * silently wiping all existing agency&#8211;topic links.
+   *
+   * <ul>
+   *   <li>{@code requestTopicIds == null} (field omitted) &rarr; keep the existing links.</li>
+   *   <li>{@code requestTopicIds} empty (field explicitly cleared) &rarr; remove all links.</li>
+   *   <li>{@code requestTopicIds} non-empty &rarr; set exactly to the requested topics.</li>
+   * </ul>
+   *
+   * @param targetAgency    the agency the resulting {@link AgencyTopic}s are attached to
+   * @param existingTopics  the agency's current topics, loaded from the database
+   * @param requestTopicIds the topic ids from the update request ({@code null} if not provided)
+   * @return the list of {@link AgencyTopic}s to persist
+   */
+  public List<AgencyTopic> getMergedTopicsForUpdate(Agency targetAgency,
+      List<AgencyTopic> existingTopics, List<Long> requestTopicIds) {
+    if (requestTopicIds == null) {
+      return reassignToAgency(targetAgency, existingTopics);
+    }
+    if (requestTopicIds.isEmpty()) {
+      return Lists.newArrayList();
+    }
+    return getAgencyTopics(targetAgency,
+        requestTopicIds.stream().distinct().collect(Collectors.toList()),
+        existingTopics == null ? Lists.newArrayList() : existingTopics);
   }
 
   private List<AgencyTopic> getMergedTopicsForNonEmptyTopicList(Agency agency, List<Long> requestTopicIds) {
@@ -35,6 +69,7 @@ public class AgencyTopicMergeService {
     var topicsToUpdate = existingAgencyTopics.stream()
         .filter(topicWithIdExistInTheRequest(requestTopicIds)).collect(
             Collectors.toList());
+    reassignToAgency(agency, topicsToUpdate);
 
     List<AgencyTopic> resultList = Lists.newArrayList();
     resultList.addAll(topicsToUpdate);
@@ -49,7 +84,18 @@ public class AgencyTopicMergeService {
   }
 
   private List<Long> extractTopicIds(List<AgencyTopic> agencyTopics) {
+    if (agencyTopics == null) {
+      return Lists.newArrayList();
+    }
     return agencyTopics.stream().map(AgencyTopic::getTopicId).collect(Collectors.toList());
+  }
+
+  private List<AgencyTopic> reassignToAgency(Agency agency, List<AgencyTopic> agencyTopics) {
+    if (agencyTopics == null) {
+      return Lists.newArrayList();
+    }
+    agencyTopics.forEach(agencyTopic -> agencyTopic.setAgency(agency));
+    return agencyTopics;
   }
 
   private Predicate<AgencyTopic> topicWithIdExistInTheRequest(List<Long> topicIds) {

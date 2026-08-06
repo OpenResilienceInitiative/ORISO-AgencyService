@@ -9,6 +9,7 @@ import static org.apache.commons.lang3.Validate.notNull;
 import com.google.common.base.Joiner;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
+import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
@@ -19,11 +20,14 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundExceptio
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
@@ -31,6 +35,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import lombok.NonNull;
@@ -39,6 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Service class to handle agency admin requests.
@@ -55,12 +62,16 @@ public class AgencyAdminService {
   private final @NonNull UserAdminService userAdminService;
   private final @NonNull DeleteAgencyValidator deleteAgencyValidator;
   private final @NonNull AgencyTopicMergeService agencyTopicMergeService;
+  private final @NonNull AgencyTopicRepository agencyTopicRepository;
   private final @NonNull AppointmentService appointmentService;
   private final @NonNull AgencyService agencyService;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull DataProtectionConverter dataProtectionConverter;
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
   private final @NonNull AgencySettingsService agencySettingsService;
+  private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
+  private final @NonNull TransactionOperations agencyCreationTransaction;
+  private final @NonNull LegalContentSanitizer legalContentSanitizer;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -128,12 +139,30 @@ public class AgencyAdminService {
     Agency agency = fromAgencyDTO(agencyDTO);
     setTenantIdOnCreate(agencyDTO, agency);
 
-    var savedAgency = agencyRepository.save(agency);
+    var savedAgency = saveWithReservationGuard(agency);
     agencyService.provisionMatrixCredentials(savedAgency);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(savedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(savedAgency);
     return new AgencyAdminFullResponseDTOBuilder(savedAgency)
         .fromAgency();
+  }
+
+  /**
+   * TEN-INV-U2 allocation contract: an agency ID reserved by an open invite must never be handed
+   * out to another agency. The ID sequence knows nothing about reservations, so the agency
+   * insert and the reservation guard share one transaction: the guard inserts (and removes
+   * again) a reservation row for the generated ID, letting the primary key of
+   * {@code agency_id_reservation} arbitrate creation-vs-reservation races at the database level
+   * instead of relying on a check-then-act sequence. A conflict rolls the agency row back —
+   * no compensation logic involved. Invite consumption flows release/consume their reservation
+   * before creating the agency, so they pass this guard.
+   */
+  private Agency saveWithReservationGuard(Agency agency) {
+    return agencyCreationTransaction.execute(status -> {
+      var savedAgency = agencyRepository.save(agency);
+      agencyIdAllocationService.guardAssignmentAgainstOpenReservations(savedAgency.getId());
+      return savedAgency;
+    });
   }
 
   private void setTenantIdOnCreate(AgencyDTO agencyDTO, Agency agency) {
@@ -176,6 +205,13 @@ public class AgencyAdminService {
         .description(agencyDTO.getDescription())
         .postCode(agencyDTO.getPostcode())
         .city(agencyDTO.getCity())
+        .street(agencyDTO.getStreet())
+        .houseNumber(agencyDTO.getHouseNumber())
+        .floorBuilding(agencyDTO.getFloorBuilding())
+        .country(agencyDTO.getCountry())
+        .phone(agencyDTO.getPhone())
+        .phoneSecondary(agencyDTO.getPhoneSecondary())
+        .email(agencyDTO.getEmail())
         .offline(true)
         .teamAgency(agencyDTO.getTeamAgency())
         .consultingTypeId(agencyDTO.getConsultingType())
@@ -243,6 +279,31 @@ public class AgencyAdminService {
     }
   }
 
+  private Map<String, String> legalContent(
+      UpdateAgencyDTO updateAgencyDTO,
+      Function<AgencyLegalContentDTO, Map<String, String>> kind) {
+    var content = updateAgencyDTO.getContent();
+    return content == null ? null : kind.apply(content);
+  }
+
+  /**
+   * Absent means untouched — the same rule {@link AgencyTopicMergeService} applies to topics, and
+   * for the same reason: an update about a phone number must not be able to wipe a legally
+   * required document.
+   *
+   * <p>An <em>empty</em> map counts as absent, not as "clear it". The generated request model
+   * initialises both maps to empty ones, so a client that sends only the imprint is
+   * indistinguishable from one that sends an empty privacy policy — treating empty as a deletion
+   * would hand exactly the silent-wipe defect this epic removes back to every partial update.
+   * Emptying a text is therefore expressed by sending the language key with empty content
+   * ({@code {"de": ""}}), which is what an emptied editor produces anyway.
+   */
+  private String resolveLegalTextForUpdate(String storedContent, Map<String, String> sentContent) {
+    return sentContent == null || sentContent.isEmpty()
+        ? storedContent
+        : legalContentSanitizer.sanitizeToJson(sentContent);
+  }
+
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
     if (updateAgencyDTO.getSettings() != null) {
       return agencySettingsService.toSettingsJson(updateAgencyDTO.getSettings());
@@ -258,6 +319,13 @@ public class AgencyAdminService {
         .description(updateAgencyDTO.getDescription())
         .postCode(updateAgencyDTO.getPostcode())
         .city(updateAgencyDTO.getCity())
+        .street(updateAgencyDTO.getStreet())
+        .houseNumber(updateAgencyDTO.getHouseNumber())
+        .floorBuilding(updateAgencyDTO.getFloorBuilding())
+        .country(updateAgencyDTO.getCountry())
+        .phone(updateAgencyDTO.getPhone())
+        .phoneSecondary(updateAgencyDTO.getPhoneSecondary())
+        .email(updateAgencyDTO.getEmail())
         .offline(updateAgencyDTO.getOffline())
         .teamAgency(agency.isTeamAgency())
         .url(updateAgencyDTO.getUrl())
@@ -269,7 +337,14 @@ public class AgencyAdminService {
         .agencyLogo(updateAgencyDTO.getAgencyLogo())
         .matrixUserId(agency.getMatrixUserId())
         .matrixPassword(agency.getMatrixPassword())
-        .settings(resolveSettingsForUpdate(agency, updateAgencyDTO));
+        .settings(resolveSettingsForUpdate(agency, updateAgencyDTO))
+        .contentDpp(
+            resolveLegalTextForUpdate(
+                agency.getContentDpp(), legalContent(updateAgencyDTO, AgencyLegalContentDTO::getPrivacy)))
+        .contentImprint(
+            resolveLegalTextForUpdate(
+                agency.getContentImprint(),
+                legalContent(updateAgencyDTO, AgencyLegalContentDTO::getImpressum)));
 
     dataProtectionConverter.convertToEntity(updateAgencyDTO.getDataProtection(), agencyBuilder);
 
@@ -287,8 +362,11 @@ public class AgencyAdminService {
     convertCounsellingRelations(updateAgencyDTO, agencyToUpdate);
 
     if (featureTopicsEnabled) {
-      List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopics(agencyToUpdate,
-          updateAgencyDTO.getTopicIds());
+      // Use getMergedTopicsForUpdate so that an update which does not carry topicIds (null) keeps
+      // the existing links instead of wiping them; an explicitly empty list still clears them.
+      var existingAgencyTopics = agencyTopicRepository.findAllByAgencyId(agency.getId());
+      List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopicsForUpdate(
+          agencyToUpdate, existingAgencyTopics, updateAgencyDTO.getTopicIds());
       agencyToUpdate.setAgencyTopics(agencyTopics);
     } else {
       // If the Topic feature is not enabled, Hibernate use an empty PersistentBag,

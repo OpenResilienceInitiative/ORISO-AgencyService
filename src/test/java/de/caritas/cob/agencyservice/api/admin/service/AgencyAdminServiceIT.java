@@ -1,14 +1,17 @@
 package de.caritas.cob.agencyservice.api.admin.service;
 
 import de.caritas.cob.agencyservice.AgencyServiceApplication;
+import de.caritas.cob.agencyservice.api.service.TopicService;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +22,15 @@ import org.springframework.transaction.annotation.Transactional;
 @DirtiesContext(classMode = ClassMode.BEFORE_CLASS)
 @Transactional
 @TestPropertySource(properties = "multitenancy.enabled=false")
+@Sql(scripts = "/database/AgencyDatabase.sql")
 public class AgencyAdminServiceIT extends AgencyAdminServiceITBase {
+
+  /**
+   * Without this the suite calls the real ConsultingTypeService on localhost:8083 during
+   * createAgency and fails with 401 (#204). Mirrors AgencyAdminServiceTenantAwareIT.
+   */
+  @MockitoBean
+  private TopicService topicService;
 
   @Test
   public void saveAgency_Should_PersistsAgency() {

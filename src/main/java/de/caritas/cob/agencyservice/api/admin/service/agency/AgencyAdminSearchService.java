@@ -85,8 +85,6 @@ public class AgencyAdminSearchService {
       queryResult = isBlank(keyword) || hasOnlySpecialCharacters(keyword)
           ? searchAgenciesWithoutKeywordFilter(entityManager, agencyAdminSearch)
           : searchAgenciesByKeyword(entityManager, agencyAdminSearch);
-    } catch (Exception ex) {
-      log.error("Could not create entity manager", ex);
     }
 
     var resultStream = queryResult.getResult().stream();
@@ -175,7 +173,7 @@ public class AgencyAdminSearchService {
   Predicate agencyAdminFilterPredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
     Predicate tenantScopePredicate = tenantScopePredicate(criteriaBuilder, root);
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
-      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.getUserId());
+      var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.requireUserId());
       if (!adminAgencyIds.isEmpty()) {
         return criteriaBuilder.and(
             tenantScopePredicate, createPredicateForAgencyAdmin(criteriaBuilder, root, adminAgencyIds));
@@ -223,10 +221,14 @@ public class AgencyAdminSearchService {
       addOrderBy(agencyAdminSearch, criteriaBuilder, criteriaQuery, expression, javaType);
     }
 
-    // Pagination
-    int firstResult = agencyAdminSearch.getPageNumber() == 0 ? 0
+    // Pagination. Page size and page number arrive straight from query parameters, so both can
+    // be negative. Only the zero case was handled, and a negative size reached
+    // setMaxResults() and surfaced as a 500 ("Max results cannot be negative"). Non-positive
+    // size now means no results, and a non-positive page number means the first page — the same
+    // contract the zero case already had (#206).
+    int firstResult = agencyAdminSearch.getPageNumber() <= 1 ? 0
         : (agencyAdminSearch.getPageNumber() - 1) * agencyAdminSearch.getPageSize();
-    return agencyAdminSearch.getPageSize() == 0 ? Lists.newArrayList()
+    return agencyAdminSearch.getPageSize() <= 0 ? Lists.newArrayList()
         : entityManager.createQuery(criteriaQuery)
             .setFirstResult(firstResult)
             .setMaxResults(agencyAdminSearch.getPageSize())

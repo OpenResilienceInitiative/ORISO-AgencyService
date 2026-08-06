@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.util.ReflectionTestUtils.setField;
 
@@ -20,9 +21,7 @@ import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRange;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRangeRepository;
-import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.LogService;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.jeasy.random.EasyRandom;
@@ -45,9 +44,6 @@ class AgencyPostcodeRangeAdminServiceTest {
   AgencyAdminService agencyAdminService;
 
   @Mock
-  AgencyService agencyService;
-
-  @Mock
   PostcodeRangeValidator postcodeRangeValidator;
 
   @Mock
@@ -67,17 +63,14 @@ class AgencyPostcodeRangeAdminServiceTest {
   }
 
   @Test
-  void deleteAgencyPostcodeRange_Should_setAgencyOffline_When_givenPostcodeRangeIsTheLast() {
-    var postcodeRange = new AgencyPostcodeRange();
-    var agency = new Agency();
-    agency.setAgencyPostcodeRanges(Collections.singletonList(postcodeRange));
-    postcodeRange.setAgency(agency);
-    when(this.agencyPostcodeRangeRepository.findAllByAgencyId(anyLong()))
-        .thenReturn(Set.of(postcodeRange));
-
+  void deleteAgencyPostcodeRange_Should_NotSetAgencyOffline_When_givenPostcodeRangeIsTheLast() {
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(1L);
 
-    verify(this.agencyService, times(1)).setAgencyOffline(any());
+    verify(this.agencyPostcodeRangeRepository, times(1)).deleteAllByAgencyId(1L);
+    // The offline status is controlled explicitly via agency update, so deleting the
+    // last postcode range must not reach the agency at all (#66). Without this the
+    // test name promised an assertion it never made.
+    verifyNoInteractions(this.agencyAdminService);
   }
 
   @Test
@@ -135,8 +128,7 @@ class AgencyPostcodeRangeAdminServiceTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  void updatePostcodeRange_Should_RemovePostcodeToOverwrite_BeforeValidation() {
+  void updatePostcodeRange_Should_ValidateNewRangesAndIntersection_BeforeSaving() {
     AgencyPostcodeRange agencyPostCodeRange = easyRandom.nextObject(AgencyPostcodeRange.class);
 
     when(agencyPostcodeRangeRepository.findAllByAgencyId(anyLong()))
@@ -145,9 +137,9 @@ class AgencyPostcodeRangeAdminServiceTest {
         AgencyPostcodeRange.class));
 
     agencyPostcodeRangeAdminService.updatePostcodeRange(AGENCY_ID, postcodeRangeDTO);
-    ArgumentCaptor<Set<AgencyPostcodeRange>> captor = ArgumentCaptor.forClass((Class) List.class);
-    verify(postcodeRangeValidator).validatePostcodeRanges(captor.capture());
-    assertThat(captor.getValue(), not(hasItem(agencyPostCodeRange)));
+
+    verify(postcodeRangeValidator, times(1)).validatePostcodeRanges(any());
+    verify(postcodeRangeValidator, times(1)).validatePostcodeRangeForIntersection(any(), any());
   }
 
   @Test

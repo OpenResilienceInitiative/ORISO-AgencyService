@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.tenant;
 
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,8 +12,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.keycloak.adapters.springsecurity.token.KeycloakAuthenticationToken;
-import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,9 +36,6 @@ class TenantResolverServiceTest {
 
   @Mock
   HttpServletRequest nonAuthenticatedRequest;
-
-  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
-  KeycloakAuthenticationToken token;
 
   @InjectMocks
   TenantResolverService tenantResolverService;
@@ -163,8 +159,6 @@ class TenantResolverServiceTest {
   @Test
   void resolve_Should_ResolveTenantId_FromHeader() {
     // given
-    when(multitenancyWithSingleDomainTenantResolver.resolve(authenticatedRequest))
-        .thenReturn(Optional.empty());
     when(customHeaderTenantResolver.resolve(authenticatedRequest)).thenReturn(Optional.of(2L));
 
     // when
@@ -173,6 +167,19 @@ class TenantResolverServiceTest {
     // then
     assertThat(resolved).isEqualTo(2L);
     verify(subdomainTenantResolver, never()).resolve(authenticatedRequest);
+  }
+
+  @Test
+  void resolve_Should_PreferExplicitHeaderOverSingleDomainTenant_ForNonAuthenticatedRequest() {
+    when(customHeaderTenantResolver.resolve(nonAuthenticatedRequest)).thenReturn(Optional.of(83L));
+    lenient().when(multitenancyWithSingleDomainTenantResolver.resolve(nonAuthenticatedRequest))
+        .thenReturn(Optional.of(1L));
+
+    Long resolved = tenantResolverService.resolve(nonAuthenticatedRequest);
+
+    assertThat(resolved).isEqualTo(83L);
+    verify(multitenancyWithSingleDomainTenantResolver, never()).resolve(nonAuthenticatedRequest);
+    verify(subdomainTenantResolver, never()).resolve(nonAuthenticatedRequest);
   }
 
   @Test

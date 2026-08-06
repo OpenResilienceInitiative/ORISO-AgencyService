@@ -25,8 +25,9 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Returns the list of agencies by search query parameter. [Authorization: Role:
-      agency-admin]'
+      summary: >-
+        Returns the list of agencies by search query parameter.
+        [Authorization: Role: agency-admin]
       operationId: searchAgencies
       parameters:
         - name: q
@@ -224,14 +225,146 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencyids/{agencyId}/availability:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Returns the authoritative allocation state of one agency ID: FREE, RESERVED by an open
+        invite, or ASSIGNED to a real agency. [Authorization: Role: agency-admin]
+      operationId: getAgencyIdAvailability
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency ID to check
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - successfull operation
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyIdAvailabilityResponseDTO'
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /agencyadmin/agencyids/next-free:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Returns the next free agency ID from the given value in the given direction, skipping
+        assigned and reserved IDs. [Authorization: Role: agency-admin]
+      operationId: getNextFreeAgencyId
+      parameters:
+        - name: fromId
+          in: query
+          description: The agency ID to start stepping from (exclusive)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: direction
+          in: query
+          description: Stepping direction
+          required: true
+          schema:
+            type: string
+            enum: [ UP, DOWN ]
+      responses:
+        200:
+          description: OK - successfull operation
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyIdResponseDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - no free agency ID exists in that direction
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /agencyadmin/agencyids/reservations:
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Reserves an agency ID for an open invite. Without an agencyId in the body (AUTO mode) the
+        smallest currently free ID is reserved atomically; with one, exactly that ID is reserved
+        or the request fails with a conflict. The server-side check is authoritative - a stale UI
+        state never produces a duplicate agency ID. Reserves agency IDs only; a supplied tenantId
+        is validated against TenantService but never reserved here.
+        [Authorization: Role: agency-admin]
+      operationId: reserveAgencyId
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/AgencyIdReservationRequestDTO'
+        required: true
+      responses:
+        201:
+          description: CREATED - agency ID was reserved
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyIdResponseDTO'
+        400:
+          description: BAD REQUEST - invalid request or non-existing tenant
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        409:
+          description: CONFLICT - agency ID is already assigned or reserved
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /agencyadmin/agencyids/reservations/{agencyId}:
+    delete:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Releases an open agency ID reservation (e.g. when an unconsumed invite is revoked or
+        deleted), making the ID assignable again. [Authorization: Role: agency-admin]
+      operationId: releaseAgencyIdReservation
+      parameters:
+        - name: agencyId
+          in: path
+          description: The reserved agency ID to release
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        204:
+          description: NO CONTENT - reservation was released
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - no open reservation for this agency ID
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
   /agencyadmin/agencies/{agencyId}/changetype:
     post:
       tags:
         - admin-agency-controller
-      summary: 'Change an agency from team-agency to default and vice-versa and switch the
-      associated consultant accounts to team consultant or default consultant. Ongoing team
-      counselings change to 1:1 when converting agency to default status. 1:1 counselings remain
-      single counselings when swapping the agency to team-agency. [Authorization: Role: user-admin]'
+      summary: >-
+        Change an agency from team-agency to default and vice-versa and switch the
+        associated consultant accounts to team consultant or default consultant. Ongoing team
+        counselings change to 1:1 when converting agency to default status. 1:1 counselings remain
+        single counselings when swapping the agency to team-agency. [Authorization: Role: user-admin]
       operationId: changeAgencyType
       parameters:
         - name: agencyId
@@ -253,6 +386,331 @@ paths:
           description: BAD REQUEST - invalid/incomplete request or body object
         401:
           description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/dpp:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Read a department's (Fachbereich = agency x topic) own data privacy policy (DSE) to
+        prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+        its own agencies]
+      operationId: getDepartmentDataProtection
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - department data privacy policy content and status
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentDataProtectionContentDTO'
+        400:
+          description: BAD REQUEST - caller may not access this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Publish or draft-save a department's (Fachbereich = agency x topic) own data
+        privacy policy (DSE). [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+        its own agencies]
+      operationId: publishDepartmentDataProtection
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/DepartmentDataProtectionDTO'
+        required: true
+      responses:
+        200:
+          description: OK - department data privacy policy stored
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentDataProtectionResponseDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request, or caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/legaltexts:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        List the caller tenant's shared legal texts of one kind, each with its department
+        usage count ("used by N departments", ADR-014). Library CRUD is full-admin only: a shared
+        text applies tenant-wide. [Authorization: Role: agency-admin]
+      operationId: getLegalTexts
+      parameters:
+        - name: kind
+          in: query
+          description: Which library to list (data privacy policies or imprints)
+          required: true
+          schema:
+            type: string
+            enum: [ DPP, IMPRINT ]
+      responses:
+        200:
+          description: OK - the tenant's legal texts of that kind
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LegalTextAdminDTO'
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Create a shared legal text owned by the caller's tenant (ADR-014).
+        [Authorization: Role: agency-admin — full admins only, see GET]
+      operationId: createLegalText
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/CreateLegalTextDTO'
+        required: true
+      responses:
+        200:
+          description: OK - legal text stored
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/LegalTextAdminDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request (e.g. blank label)
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/legaltexts/{legalTextId}:
+    put:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Update a shared legal text (label, multilingual content, optionally publication
+        status — omitted publish keeps the current status). Changes apply to every department
+        referencing the text. [Authorization: Role: agency-admin — full admins only, scoped to the
+        owning tenant]
+      operationId: updateLegalText
+      parameters:
+        - name: legalTextId
+          in: path
+          description: Legal text id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/UpdateLegalTextDTO'
+        required: true
+      responses:
+        200:
+          description: OK - legal text updated
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/LegalTextAdminDTO'
+        400:
+          description: BAD REQUEST - invalid request, or caller may not edit this tenant's text
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - legal text not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/legaltext-assignment:
+    put:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Assign a shared legal text to a department's DPP or imprint slot, or clear the
+        slot (null = department falls back to its own inline content, content_dpp/content_imprint;
+        tenant-level fallback is future work, ADR-014 / #136). The text's kind must match the
+        slot and the text must belong to the agency's tenant. [Authorization: Role: agency-admin or
+        restricted-agency-admin scoped to its own agencies]
+      operationId: assignDepartmentLegalText
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/LegalTextAssignmentDTO'
+        required: true
+      responses:
+        204:
+          description: NO CONTENT - assignment stored
+        400:
+          description: BAD REQUEST - kind mismatch, cross-tenant text, or caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department or legal text not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/imprint:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Read a department's (Fachbereich = agency x topic) own imprint (Impressum) to
+        prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+        its own agencies]
+      operationId: getDepartmentImprint
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - department imprint content and status
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentImprintContentDTO'
+        400:
+          description: BAD REQUEST - caller may not access this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Publish or draft-save a department's (Fachbereich = agency x topic) own imprint
+        (Impressum). [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own
+        agencies]
+      operationId: publishDepartmentImprint
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/DepartmentImprintDTO'
+        required: true
+      responses:
+        200:
+          description: OK - department imprint stored
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentImprintResponseDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request, or caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
         500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
       security:
@@ -472,6 +930,45 @@ components:
         templated:
           type: boolean
 
+    AgencyIdAvailabilityResponseDTO:
+      type: object
+      required:
+        - agencyId
+        - status
+      properties:
+        agencyId:
+          type: integer
+          format: int64
+          example: 21
+        status:
+          type: string
+          enum: [ FREE, RESERVED, ASSIGNED ]
+          example: FREE
+
+    AgencyIdResponseDTO:
+      type: object
+      required:
+        - agencyId
+      properties:
+        agencyId:
+          type: integer
+          format: int64
+          example: 21
+
+    AgencyIdReservationRequestDTO:
+      type: object
+      properties:
+        agencyId:
+          type: integer
+          format: int64
+          description: The manually picked agency ID to reserve. Omit for AUTO mode (smallest free ID).
+          example: 21
+        tenantId:
+          type: integer
+          format: int64
+          description: Tenant the pending agency belongs to. Validated only - never reserved here.
+          example: 1
+
     AgencyAdminSearchResultDTO:
       type: object
       properties:
@@ -487,7 +984,8 @@ components:
       type: object
       properties:
         id:
-          type: long
+          type: integer
+          format: int64
           example: 12132
         name:
           type: string
@@ -508,7 +1006,6 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 9223372036854775807
           example: 684
         name:
           type: string
@@ -527,6 +1024,34 @@ components:
           type: string
           maxLength: 100
           example: "Bonn"
+        street:
+          type: string
+          maxLength: 255
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          maxLength: 20
+          example: "12a"
+        floorBuilding:
+          type: string
+          maxLength: 100
+          example: "2. OG, Haus B"
+        country:
+          type: string
+          maxLength: 100
+          example: "Deutschland"
+        phone:
+          type: string
+          maxLength: 30
+          example: "0761 123456"
+        phoneSecondary:
+          type: string
+          maxLength: 30
+          example: "0761 654321"
+        email:
+          type: string
+          maxLength: 255
+          example: "kontakt@beratungsstelle.de"
         teamAgency:
           type: boolean
           example: false
@@ -571,12 +1096,38 @@ components:
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'
+        content:
+          $ref: '#/components/schemas/AgencyLegalContentDTO'
         agencyLogo:
           type: string
           example: "base64 encoded image"
         settings:
           $ref: '#/components/schemas/Settings'
           description: Agency settings including platform-level agencyAdminControls
+
+    AgencyLegalContentDTO:
+      type: object
+      description: >
+        ADR-014 middle level of the chain tenant -> agency -> department. The Beratungsstelle's own
+        legal texts, each a language -> HTML map. Every Fachbereich inherits these until it
+        publishes its own. There is no draft state here: what is stored is what is in force.
+
+        On update, omitting this object — or sending either member as an empty map — keeps the
+        stored text, so an update about something else can never wipe a legal document. To empty a
+        text, send the language key with empty content (`{"de": ""}`).
+      properties:
+        privacy:
+          type: object
+          description: Data privacy policy per language code.
+          additionalProperties:
+            type: string
+          example: { "de": "<p>Datenschutzerklärung</p>" }
+        impressum:
+          type: object
+          description: Imprint per language code.
+          additionalProperties:
+            type: string
+          example: { "de": "<p>Impressum</p>" }
 
     DataProtectionDTO:
         type: object
@@ -654,6 +1205,34 @@ components:
           type: string
           maxLength: 100
           example: "Muenchen"
+        street:
+          type: string
+          maxLength: 255
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          maxLength: 20
+          example: "12a"
+        floorBuilding:
+          type: string
+          maxLength: 100
+          example: "2. OG, Haus B"
+        country:
+          type: string
+          maxLength: 100
+          example: "Deutschland"
+        phone:
+          type: string
+          maxLength: 30
+          example: "0761 123456"
+        phoneSecondary:
+          type: string
+          maxLength: 30
+          example: "0761 654321"
+        email:
+          type: string
+          maxLength: 255
+          example: "kontakt@beratungsstelle.de"
         teamAgency:
           type: boolean
           example: false
@@ -671,7 +1250,8 @@ components:
         topicIds:
           type: array
           items:
-            type: long
+            type: integer
+            format: int64
         demographics:
           $ref: '#/components/schemas/DemographicsDTO'
         tenantId:
@@ -728,6 +1308,34 @@ components:
           type: string
           example: "Muenchen"
           maxLength: 100
+        street:
+          type: string
+          maxLength: 255
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          maxLength: 20
+          example: "12a"
+        floorBuilding:
+          type: string
+          maxLength: 100
+          example: "2. OG, Haus B"
+        country:
+          type: string
+          maxLength: 100
+          example: "Deutschland"
+        phone:
+          type: string
+          maxLength: 30
+          example: "0761 123456"
+        phoneSecondary:
+          type: string
+          maxLength: 30
+          example: "0761 654321"
+        email:
+          type: string
+          maxLength: 255
+          example: "kontakt@beratungsstelle.de"
         offline:
           type: boolean
           example: false
@@ -741,7 +1349,8 @@ components:
         topicIds:
           type: array
           items:
-            type: long
+            type: integer
+            format: int64
         demographics:
           $ref: '#/components/schemas/DemographicsDTO'
         counsellingRelations:
@@ -752,6 +1361,8 @@ components:
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'
+        content:
+          $ref: '#/components/schemas/AgencyLegalContentDTO'
         agencyLogo:
           type: string
           example: "base64 encoded image"
@@ -801,7 +1412,6 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 9223372036854775807
           example: 684
           description: "The agency id of the related postcoderanges"
         postcodeRanges:
@@ -864,20 +1474,207 @@ components:
       properties:
         field:
           type: string
-          example: 'name|description|postcode|city|teamAgency|offline'
+          example: 'id|name|description|postcode|city|teamAgency|offline|createDate'
           enum:
+            - 'id'
             - 'name'
             - 'description'
             - 'postCode'
             - 'city'
             - 'teamAgency'
             - 'offline'
+            - 'createDate'
         order:
           type: string
           example: 'ASC|DESC'
           enum:
             - 'ASC'
             - 'DESC'
+
+    LegalTextAdminDTO:
+      type: object
+      required:
+        - id
+        - kind
+        - label
+        - publicationStatus
+        - usageCount
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        label:
+          type: string
+          description: Admin-facing name shown in the legal-text library
+        content:
+          type: string
+          nullable: true
+          description: Stored multilingual content as a JSON language->HTML map string
+        publicationStatus:
+          type: string
+          enum: [ DRAFT, PUBLISHED ]
+        usageCount:
+          type: integer
+          format: int64
+          description: How many departments currently reference this text
+
+    CreateLegalTextDTO:
+      type: object
+      required:
+        - kind
+        - label
+        - content
+      properties:
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        label:
+          type: string
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML text (multilingual map).
+            Keys with the __meta suffix carry JSON translation metadata instead of HTML.
+          additionalProperties:
+            type: string
+        publish:
+          type: boolean
+          description: 'true = mark PUBLISHED; false/absent = keep as DRAFT'
+          default: false
+
+    UpdateLegalTextDTO:
+      type: object
+      required:
+        - label
+        - content
+      properties:
+        label:
+          type: string
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML text (multilingual map).
+            Keys with the __meta suffix carry JSON translation metadata instead of HTML.
+          additionalProperties:
+            type: string
+        publish:
+          type: boolean
+          nullable: true
+          description: >-
+            true = PUBLISHED, false = DRAFT; omitted/null = keep the current
+            publication status (a label/content-only update never unpublishes)
+
+    LegalTextAssignmentDTO:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+          description: Which slot of the department to assign
+        legalTextId:
+          type: integer
+          format: int64
+          nullable: true
+          description: >-
+            Legal text to reference; null clears the slot — the department falls back
+            to its own inline content (content_dpp/content_imprint). Tenant-level fallback is
+            future work (ADR-014 / #136).
+
+    DepartmentDataProtectionDTO:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML data privacy policy text (multilingual map)
+          additionalProperties:
+            type: string
+          example:
+            de: '<p>Datenschutzerklärung des Fachbereichs ...</p>'
+            en: '<p>Data privacy policy of the department ...</p>'
+        publish:
+          type: boolean
+          description: 'true = mark PUBLISHED (final legal document); false/absent = keep as DRAFT (draft-save)'
+          default: false
+
+    DepartmentDataProtectionResponseDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        publicationStatus:
+          type: string
+          description: Resulting publication status of the department's data privacy policy
+          enum:
+            - DRAFT
+            - PUBLISHED
+
+    DepartmentDataProtectionContentDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        content:
+          type: string
+          nullable: true
+          description: Stored multilingual content as a JSON language->HTML map string; null if never authored
+        publicationStatus:
+          type: string
+          description: Current publication status of the department's data privacy policy
+          enum:
+            - DRAFT
+            - PUBLISHED
+
+    DepartmentImprintDTO:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          description: Language code (e.g. de, en) to HTML imprint text (multilingual map).
+            Keys with the __meta suffix carry JSON translation metadata instead of HTML.
+          additionalProperties:
+            type: string
+          example:
+            de: '<p>Impressum des Fachbereichs ...</p>'
+            en: '<p>Imprint of the department ...</p>'
+        publish:
+          type: boolean
+          description: 'true = mark PUBLISHED (final legal document); false/absent = keep as DRAFT (draft-save)'
+          default: false
+
+    DepartmentImprintResponseDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        publicationStatus:
+          type: string
+          description: Resulting publication status of the department's imprint
+          enum:
+            - DRAFT
+            - PUBLISHED
+
+    DepartmentImprintContentDTO:
+      type: object
+      required:
+        - publicationStatus
+      properties:
+        content:
+          type: string
+          nullable: true
+          description: Stored multilingual content as a JSON language->HTML map string; null if never authored
+        publicationStatus:
+          type: string
+          description: Current publication status of the department's imprint
+          enum:
+            - DRAFT
+            - PUBLISHED
 
     AgencyAdminAllowedPermissionToggles:
       $ref: './components/agency-settings.yaml#/components/schemas/AgencyAdminAllowedPermissionToggles'

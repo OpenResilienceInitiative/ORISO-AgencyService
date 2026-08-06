@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.api.repository.agency;
 import de.caritas.cob.agencyservice.api.repository.TenantUnaware;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -40,8 +41,10 @@ public interface AgencyTenantUnawareRepository extends JpaRepository<Agency, Lon
 
   Optional<Agency> findByIdAndDeleteDateNull(Long agencyId);
 
+  @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})
   List<Agency> findByIdIn(List<Long> agencyIds);
 
+  @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
   List<Agency> findByTenantId(Long tenantId);

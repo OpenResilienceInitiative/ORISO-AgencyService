@@ -33,6 +33,16 @@ class AgencyTopicMergeServiceTest {
   }
 
   @Test
+  void getMergedTopics_Should_DeduplicateRepeatedRequestTopicIds() {
+    // a request carrying the same topic id twice (e.g. [5, 5]) must yield at most one department
+    // row per (agency, topic) - inserting both would violate UNIQUE uq_agency_topic at flush
+    List<AgencyTopic> mergedTopics = agencyTopicMergeService.getMergedTopics(agency,
+        Lists.newArrayList(5L, 5L, 7L));
+
+    assertThat(mergedTopics).extracting(topic -> topic.getTopicId()).containsExactly(5L, 7L);
+  }
+
+  @Test
   void getMergedTopics_Should_ReturnRequestTopicListIfAgencyTopicsIsNull() {
     // when
     List<AgencyTopic> mergedTopics = agencyTopicMergeService.getMergedTopics(agency,
@@ -119,5 +129,75 @@ class AgencyTopicMergeServiceTest {
     // then
     assertThat(mergedTopics).hasSize(2).contains(existingAgencyTopic1);
     assertThat(mergedTopics).extracting(topic -> topic.getTopicId()).containsExactly(1L, 3L);
+  }
+
+  @Test
+  void getMergedTopicsForUpdate_Should_PreserveExistingTopicsWhenRequestTopicIdsIsNull() {
+    // given existing links and an update that does not carry topicIds (null)
+    List<AgencyTopic> existingTopics = Lists.newArrayList(
+        AgencyTopic.builder().id(0L).topicId(1L).build(),
+        AgencyTopic.builder().id(1L).topicId(2L).build());
+
+    // when
+    List<AgencyTopic> mergedTopics =
+        agencyTopicMergeService.getMergedTopicsForUpdate(agency, existingTopics, null);
+
+    // then the existing topics are kept (not wiped)
+    assertThat(mergedTopics).containsExactlyElementsOf(existingTopics);
+    assertThat(mergedTopics).extracting(AgencyTopic::getTopicId).containsExactly(1L, 2L);
+    assertThat(mergedTopics).extracting(AgencyTopic::getAgency).containsOnly(agency);
+  }
+
+  @Test
+  void getMergedTopicsForUpdate_Should_ReturnEmptyWhenRequestTopicIdsIsNullAndNoExistingTopics() {
+    assertThat(agencyTopicMergeService.getMergedTopicsForUpdate(agency, null, null)).isEmpty();
+    assertThat(agencyTopicMergeService.getMergedTopicsForUpdate(agency, Lists.newArrayList(), null))
+        .isEmpty();
+  }
+
+  @Test
+  void getMergedTopicsForUpdate_Should_ClearTopicsWhenRequestTopicIdsIsExplicitlyEmpty() {
+    // given existing links and an explicit empty topic list (user cleared the field)
+    List<AgencyTopic> existingTopics = Lists.newArrayList(
+        AgencyTopic.builder().id(0L).topicId(1L).build());
+
+    // when
+    List<AgencyTopic> mergedTopics =
+        agencyTopicMergeService.getMergedTopicsForUpdate(agency, existingTopics,
+            Lists.newArrayList());
+
+    // then the links are cleared
+    assertThat(mergedTopics).isEmpty();
+  }
+
+  @Test
+  void getMergedTopicsForUpdate_Should_SetTopicsToRequestWhenRequestTopicIdsIsNonEmpty() {
+    // given existing links and a non-empty request
+    List<AgencyTopic> existingTopics = Lists.newArrayList(
+        AgencyTopic.builder().id(0L).topicId(1L).build());
+
+    // when
+    List<AgencyTopic> mergedTopics =
+        agencyTopicMergeService.getMergedTopicsForUpdate(agency, existingTopics,
+            Lists.newArrayList(2L, 3L));
+
+    // then the result reflects exactly the requested topics
+    assertThat(mergedTopics).extracting(AgencyTopic::getTopicId).containsExactly(2L, 3L);
+  }
+
+  @Test
+  void getMergedTopicsForUpdate_Should_ReuseExistingTopicWhenRequestContainsSameTopic() {
+    // given an existing database row and a request carrying the same topic id
+    var existingTopic = AgencyTopic.builder().id(42L).topicId(2L).build();
+
+    // when
+    List<AgencyTopic> mergedTopics =
+        agencyTopicMergeService.getMergedTopicsForUpdate(agency, Lists.newArrayList(existingTopic),
+            Lists.newArrayList(2L, 2L));
+
+    // then no duplicate row is created for the unique agency-topic key
+    assertThat(mergedTopics).containsExactly(existingTopic);
+    assertThat(mergedTopics).extracting(AgencyTopic::getId).containsExactly(42L);
+    assertThat(mergedTopics).extracting(AgencyTopic::getAgency).containsOnly(agency);
   }
 }

@@ -9,14 +9,12 @@ import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRange;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRangeRepository;
-import de.caritas.cob.agencyservice.api.service.AgencyService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class AgencyPostcodeRangeAdminService {
 
   private final @NonNull AgencyPostcodeRangeRepository agencyPostCodeRangeRepository;
-  private final @NonNull AgencyService agencyService;
   private final @NonNull AgencyAdminService agencyAdminService;
   private final PostcodeRangeValidator postcodeRangeValidator = new PostcodeRangeValidator();
-  @Value("${multitenancy.enabled}")
-  private boolean multitenancy;
-
 
   /**
    * Returns all post code ranges by given agency id.
@@ -43,8 +37,7 @@ public class AgencyPostcodeRangeAdminService {
    */
   public AgencyPostcodeRangeResponseDTO findPostcodeRangesForAgency(Long agencyId) {
 
-    var agencyPostcodeRanges =
-        this.agencyPostCodeRangeRepository.findAllByAgencyId(agencyId);
+    var agencyPostcodeRanges = this.agencyPostCodeRangeRepository.findAllByAgencyId(agencyId);
 
     return AgencyPostcodeRangeResponseDTOBuilder.getInstance(agencyPostcodeRanges, agencyId)
         .build();
@@ -57,23 +50,7 @@ public class AgencyPostcodeRangeAdminService {
    */
   @Transactional
   public void deleteAgencyPostcodeRange(Long agencyId) {
-    // Don't auto-disable agency when ranges are deleted
-    // The offline status should be controlled explicitly via agency update
-    // if (!multitenancy) {
-    //   markAgencyOffline(agencyId);
-    // }
     this.agencyPostCodeRangeRepository.deleteAllByAgencyId(agencyId);
-  }
-
-  private void markAgencyOffline(Long agencyId) {
-    var agencyPostCodeRanges = this.agencyPostCodeRangeRepository
-        .findAllByAgencyId(agencyId);
-
-    if (agencyPostCodeRanges.isEmpty()) {
-      throw new NotFoundException();
-    }
-
-    this.agencyService.setAgencyOffline(agencyId);
   }
 
   /**
@@ -116,8 +93,7 @@ public class AgencyPostcodeRangeAdminService {
     agencyPostcodeRangesToSave.forEach(this.agencyPostCodeRangeRepository::save);
     agencyPostcodeRangesToRemove.forEach(this.agencyPostCodeRangeRepository::delete);
 
-    var updatedAgencyPostcodeRanges =
-        this.agencyPostCodeRangeRepository.findAllByAgencyId(agency.getId());
+    var updatedAgencyPostcodeRanges = this.agencyPostCodeRangeRepository.findAllByAgencyId(agency.getId());
 
     return AgencyPostcodeRangeResponseDTOBuilder
         .getInstance(updatedAgencyPostcodeRanges, agency.getId())

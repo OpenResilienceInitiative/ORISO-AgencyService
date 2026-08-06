@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.repository.agency;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -47,8 +48,14 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
       + "AND ((:gender IS NULL) OR (a.genders LIKE CONCAT('%,',:gender,'%') OR a.genders LIKE CONCAT(:gender,'%'))) "
       + "AND a.delete_date IS NULL ";
 
+  // Only topics a help-seeker can actually reach. Without the reachability filter this reports
+  // topics whose every agency is offline or soft-deleted, and registration offers them as valid
+  // choices that dead-end on "Keine Online-Beratungsstelle gefunden" (ORISO-Frontend#245).
+  // The WHERE also gives AgencyTenantAwareRepository's `AND a.tenant_id = :tenantId` a real
+  // predicate to attach to instead of widening the INNER JOIN condition.
   String SELECT_ALL_AGENCIES_TOPICS = "SELECT distinct(at.topic_id) FROM agency_topic at "
-      + "INNER JOIN agency a ON a.id = at.agency_id ";
+      + "INNER JOIN agency a ON a.id = at.agency_id "
+      + "WHERE a.is_offline = false AND a.delete_date IS NULL ";
 
   String GROUP_BY_ORDER_BY = "GROUP BY a.id "
       + "ORDER BY a.postcode DESC";
@@ -94,8 +101,10 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
 
   Optional<Agency> findByIdAndDeleteDateNull(Long agencyId);
 
+  @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})
   List<Agency> findByIdIn(List<Long> agencyIds);
 
+  @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
   Optional<Agency> findById(Long agencyIds);

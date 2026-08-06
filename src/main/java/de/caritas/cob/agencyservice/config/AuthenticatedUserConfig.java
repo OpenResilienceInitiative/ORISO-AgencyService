@@ -3,8 +3,11 @@ package de.caritas.cob.agencyservice.config;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.exception.KeycloakException;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
+import org.apache.commons.codec.binary.Base32;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.stream.Collectors;
@@ -42,8 +45,8 @@ public class AuthenticatedUserConfig {
     Map<String, Object> claimMap = authenticationToken.getToken().getClaims();
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
-    authenticatedUser.setUserId(getUserAttribute(claimMap, CLAIM_NAME_USER_ID));
-    authenticatedUser.setUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME));
+    authenticatedUser.setUserId(getOptionalUserAttribute(claimMap, CLAIM_NAME_USER_ID));
+    authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
     authenticatedUser.setTenantId(getTenantId(claimMap));
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
         Collectors.toSet()));
@@ -62,11 +65,25 @@ public class AuthenticatedUserConfig {
     return Lists.newArrayList();
   }
 
+  private String decodeUsername(String username) {
+    if (!username.startsWith("enc.")) {
+      return username;
+    }
+    return new String(new Base32().decode(
+        username.substring(4).toUpperCase(Locale.ROOT).replace(".", "=")),
+        StandardCharsets.UTF_8);
+  }
+
   private String getUserAttribute(Map<String, Object> claimMap, String claimValue) {
     if (!claimMap.containsKey(claimValue)) {
       throw new KeycloakException("Keycloak user attribute '" + claimValue + "' not found.");
     }
     return claimMap.get(claimValue).toString();
+  }
+
+  private String getOptionalUserAttribute(Map<String, Object> claimMap, String claimValue) {
+    Object value = claimMap.get(claimValue);
+    return value == null ? null : value.toString();
   }
 
   private Long getTenantId(Map<String, Object> claimMap) {

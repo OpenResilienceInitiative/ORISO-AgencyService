@@ -7,11 +7,11 @@ import java.util.Iterator;
 import java.util.Properties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.EmptyInterceptor;
+import org.hibernate.Interceptor;
 
 @RequiredArgsConstructor
 @Slf4j
-public class TenantHibernateInterceptor extends EmptyInterceptor {
+public class TenantHibernateInterceptor implements Interceptor {
 
   private final Long TECHNICAL_TENANT_ID = 0L;
 
@@ -38,7 +38,6 @@ public class TenantHibernateInterceptor extends EmptyInterceptor {
       }
     }
 
-    super.preFlush(entities);
   }
 
   private boolean resolveMultiTenancy() {

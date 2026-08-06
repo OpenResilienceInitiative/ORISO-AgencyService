@@ -10,10 +10,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
@@ -31,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureTestDatabase(replace = Replace.ANY)
 @DirtiesContext(classMode = ClassMode.BEFORE_CLASS)
 @TestPropertySource(properties = "multitenancy.enabled=true")
+// AgencyDatabase.sql first: setTenants.sql only UPDATEs agency rows, so without the seed it
+// silently updated nothing and every read in the base fixture came back empty (#205).
+@Sql(value = "/database/AgencyDatabase.sql", executionPhase = ExecutionPhase.BEFORE_TEST_METHOD)
 @Sql(value = "/setTenants.sql", executionPhase = ExecutionPhase.BEFORE_TEST_METHOD)
 @Transactional(propagation = Propagation.NEVER)
 public class AgencyServiceTenantAwareIT extends AgencyServiceITBase {
@@ -38,7 +41,7 @@ public class AgencyServiceTenantAwareIT extends AgencyServiceITBase {
   @Autowired
   private PlatformTransactionManager transactionManager;
 
-  @MockBean
+  @MockitoBean
   TenantService tenantService;
 
   @Before

@@ -12,6 +12,7 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestExcept
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
+import de.caritas.cob.agencyservice.api.model.AgencyDepartmentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
@@ -20,10 +21,13 @@ import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
+import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Collections;
@@ -55,6 +59,8 @@ public class AgencyService {
   private final @NonNull ConsultingTypeManager consultingTypeManager;
   private final @NonNull AgencyRepository agencyRepository;
   private final @NonNull MatrixProvisioningService matrixProvisioningService;
+
+  private final @NonNull AgencyMatrixPasswordCipher matrixPasswordCipher;
 
   private final @NonNull TenantService tenantService;
   private final @NonNull DemographicsConverter demographicsConverter;
@@ -186,7 +192,7 @@ public class AgencyService {
 
     if (nonNull(agency.getMatrixUserId()) && nonNull(agency.getMatrixPassword())) {
       log.info("Agency {} already has Matrix credentials: {}", agency.getName(), agency.getMatrixUserId());
-      return Optional.of(new AgencyMatrixCredentialsDTO(agency.getMatrixUserId(), agency.getMatrixPassword()));
+      return Optional.of(matrixCredentialsDto(agency));
     }
 
     log.info("No existing Matrix credentials found. Provisioning new account for agency {}", agency.getName());
@@ -201,11 +207,12 @@ public class AgencyService {
       }
 
       var creds = optionalCredentials.get();
+      var encryptedPassword = matrixPasswordCipher.encrypt(creds.getPassword());
       agency.setMatrixUserId(creds.getUserId());
-      agency.setMatrixPassword(creds.getPassword());
+      agency.setMatrixPassword(encryptedPassword);
       if (saveEntity) {
         agencyRepository.updateMatrixCredentials(
-            agency.getId(), creds.getUserId(), creds.getPassword());
+            agency.getId(), creds.getUserId(), encryptedPassword);
         log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}",
             agency.getName(), agency.getId(), creds.getUserId());
       }
@@ -224,12 +231,19 @@ public class AgencyService {
   public Optional<AgencyMatrixCredentialsDTO> getMatrixCredentials(Long agencyId) {
     return agencyRepository
         .findById(agencyId)
-        .map(
-            agency -> new AgencyMatrixCredentialsDTO(
-                agency.getMatrixUserId(), agency.getMatrixPassword()));
+        .map(this::matrixCredentialsDto);
+  }
+
+  private AgencyMatrixCredentialsDTO matrixCredentialsDto(Agency agency) {
+    return new AgencyMatrixCredentialsDTO(
+        agency.getMatrixUserId(),
+        matrixPasswordCipher.decrypt(agency.getMatrixPassword()));
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
+    if (multitenancyWithSingleDomain) {
+      return Optional.empty();
+    }
     return Optional.of(consultingTypeId);
   }
 
@@ -472,8 +486,49 @@ public class AgencyService {
         .demographics(getDemographics(agency))
         .tenantId(agency.getTenantId())
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
+        .departments(
+            agency.getAgencyTopics().stream().map(this::convertToAgencyDepartmentDTO).toList())
         .agencyLogo(agency.getAgencyLogo());
 
+  }
+
+  /**
+   * Maps a department (Fachbereich = agency × topic) to its registration-search view: the topic id
+   * plus whether its own legal texts (ADR-003) are published. Uses the already-loaded {@code
+   * agencyTopics} association (the same one {@code topicIds} is built from), so no additional
+   * query is issued per agency or topic.
+   *
+   * <p>ADR-014: like {@link DepartmentLegalService}, a referenced shared legal-text object fully
+   * replaces the inline column — the flags must follow the same resolution order, otherwise the
+   * registration search would report stale inline state after a write-through publish/draft-save.
+   */
+  private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic) {
+    return new AgencyDepartmentDTO()
+        .topicId(agencyTopic.getTopicId())
+        .hasPublishedDpp(hasPublishedDpp(agencyTopic))
+        .hasPublishedImprint(hasPublishedImprint(agencyTopic));
+  }
+
+  private boolean hasPublishedDpp(AgencyTopic agencyTopic) {
+    LegalText referenced = agencyTopic.getDpp();
+    if (referenced != null) {
+      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return hasPublishedContent(agencyTopic.getContentDpp(), agencyTopic.getPublicationStatus());
+  }
+
+  private boolean hasPublishedImprint(AgencyTopic agencyTopic) {
+    LegalText referenced = agencyTopic.getImprint();
+    if (referenced != null) {
+      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
+    }
+    return hasPublishedContent(
+        agencyTopic.getContentImprint(), agencyTopic.getPublicationStatusImprint());
+  }
+
+  private boolean hasPublishedContent(String content, PublicationStatus status) {
+    var hasContent = content != null && !content.isBlank();
+    return PublicationStatus.PUBLISHED == status && hasContent;
   }
 
   private DemographicsDTO getDemographics(Agency agency) {
