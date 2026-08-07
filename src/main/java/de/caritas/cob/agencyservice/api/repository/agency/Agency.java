@@ -151,7 +151,11 @@ public class Agency implements TenantAware {
   @Column(name = "update_date", nullable = false)
   private LocalDateTime updateDate;
 
-  @Column(name = "data_protection_responsible_entity", nullable = false)
+  // Changeset 0016 declares this column NULL. nullable=false here contradicted the migration
+  // and only ever became real DDL on the create-drop test schema, where it rejected inserts
+  // production accepts. Same reasoning as the neighbouring DPO contact field below — that one
+  // was corrected, this one was missed (#204).
+  @Column(name = "data_protection_responsible_entity")
   @Enumerated(EnumType.STRING)
   private DataProtectionResponsibleEntity dataProtectionResponsibleEntity;
 
@@ -199,6 +203,22 @@ public class Agency implements TenantAware {
   @Column(name = "settings", columnDefinition = "longtext")
   @JdbcTypeCode(Types.LONGVARCHAR)
   private String settings;
+
+  /**
+   * ADR-014 middle level of the chain tenant → agency → department: the Beratungsstelle's own data
+   * privacy policy as a JSON language→HTML map, inherited by every Fachbereich that has not
+   * published one of its own. Unlike a department text this has no draft state — an imprint names
+   * the responsible entity and the Beratungsstelle is always its own, so what is stored is what is
+   * in force.
+   */
+  @Column(name = "content_dpp", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
+  private String contentDpp;
+
+  /** Agency-wide imprint; see {@link #contentDpp}. */
+  @Column(name = "content_imprint", columnDefinition = "longtext")
+  @JdbcTypeCode(Types.LONGVARCHAR)
+  private String contentImprint;
 
   @Transient
   public boolean hasAnyDemographicsAttributes() {

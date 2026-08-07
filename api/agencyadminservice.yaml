@@ -25,8 +25,9 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Returns the list of agencies by search query parameter. [Authorization: Role:
-        agency-admin]'
+      summary: >-
+        Returns the list of agencies by search query parameter.
+        [Authorization: Role: agency-admin]
       operationId: searchAgencies
       parameters:
         - name: q
@@ -224,14 +225,146 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencyids/{agencyId}/availability:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Returns the authoritative allocation state of one agency ID: FREE, RESERVED by an open
+        invite, or ASSIGNED to a real agency. [Authorization: Role: agency-admin]
+      operationId: getAgencyIdAvailability
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency ID to check
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - successfull operation
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyIdAvailabilityResponseDTO'
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /agencyadmin/agencyids/next-free:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Returns the next free agency ID from the given value in the given direction, skipping
+        assigned and reserved IDs. [Authorization: Role: agency-admin]
+      operationId: getNextFreeAgencyId
+      parameters:
+        - name: fromId
+          in: query
+          description: The agency ID to start stepping from (exclusive)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: direction
+          in: query
+          description: Stepping direction
+          required: true
+          schema:
+            type: string
+            enum: [ UP, DOWN ]
+      responses:
+        200:
+          description: OK - successfull operation
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyIdResponseDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - no free agency ID exists in that direction
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /agencyadmin/agencyids/reservations:
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Reserves an agency ID for an open invite. Without an agencyId in the body (AUTO mode) the
+        smallest currently free ID is reserved atomically; with one, exactly that ID is reserved
+        or the request fails with a conflict. The server-side check is authoritative - a stale UI
+        state never produces a duplicate agency ID. Reserves agency IDs only; a supplied tenantId
+        is validated against TenantService but never reserved here.
+        [Authorization: Role: agency-admin]
+      operationId: reserveAgencyId
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/AgencyIdReservationRequestDTO'
+        required: true
+      responses:
+        201:
+          description: CREATED - agency ID was reserved
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyIdResponseDTO'
+        400:
+          description: BAD REQUEST - invalid request or non-existing tenant
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        409:
+          description: CONFLICT - agency ID is already assigned or reserved
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /agencyadmin/agencyids/reservations/{agencyId}:
+    delete:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Releases an open agency ID reservation (e.g. when an unconsumed invite is revoked or
+        deleted), making the ID assignable again. [Authorization: Role: agency-admin]
+      operationId: releaseAgencyIdReservation
+      parameters:
+        - name: agencyId
+          in: path
+          description: The reserved agency ID to release
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        204:
+          description: NO CONTENT - reservation was released
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - no open reservation for this agency ID
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
   /agencyadmin/agencies/{agencyId}/changetype:
     post:
       tags:
         - admin-agency-controller
-      summary: 'Change an agency from team-agency to default and vice-versa and switch the
+      summary: >-
+        Change an agency from team-agency to default and vice-versa and switch the
         associated consultant accounts to team consultant or default consultant. Ongoing team
         counselings change to 1:1 when converting agency to default status. 1:1 counselings remain
-        single counselings when swapping the agency to team-agency. [Authorization: Role: user-admin]'
+        single counselings when swapping the agency to team-agency. [Authorization: Role: user-admin]
       operationId: changeAgencyType
       parameters:
         - name: agencyId
@@ -262,9 +395,10 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Read a department''s (Fachbereich = agency x topic) own data privacy policy (DSE) to
+      summary: >-
+        Read a department's (Fachbereich = agency x topic) own data privacy policy (DSE) to
         prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
-        its own agencies]'
+        its own agencies]
       operationId: getDepartmentDataProtection
       parameters:
         - name: agencyId
@@ -301,9 +435,10 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Publish or draft-save a department''s (Fachbereich = agency x topic) own data
+      summary: >-
+        Publish or draft-save a department's (Fachbereich = agency x topic) own data
         privacy policy (DSE). [Authorization: Role: agency-admin or restricted-agency-admin scoped to
-        its own agencies]'
+        its own agencies]
       operationId: publishDepartmentDataProtection
       parameters:
         - name: agencyId
@@ -348,9 +483,10 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'List the caller tenant''s shared legal texts of one kind, each with its department
+      summary: >-
+        List the caller tenant's shared legal texts of one kind, each with its department
         usage count ("used by N departments", ADR-014). Library CRUD is full-admin only: a shared
-        text applies tenant-wide. [Authorization: Role: agency-admin]'
+        text applies tenant-wide. [Authorization: Role: agency-admin]
       operationId: getLegalTexts
       parameters:
         - name: kind
@@ -378,8 +514,9 @@ paths:
     post:
       tags:
         - admin-agency-controller
-      summary: 'Create a shared legal text owned by the caller''s tenant (ADR-014).
-        [Authorization: Role: agency-admin — full admins only, see GET]'
+      summary: >-
+        Create a shared legal text owned by the caller's tenant (ADR-014).
+        [Authorization: Role: agency-admin — full admins only, see GET]
       operationId: createLegalText
       requestBody:
         content:
@@ -407,10 +544,11 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Update a shared legal text (label, multilingual content, optionally publication
+      summary: >-
+        Update a shared legal text (label, multilingual content, optionally publication
         status — omitted publish keeps the current status). Changes apply to every department
         referencing the text. [Authorization: Role: agency-admin — full admins only, scoped to the
-        owning tenant]'
+        owning tenant]
       operationId: updateLegalText
       parameters:
         - name: legalTextId
@@ -448,11 +586,12 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Assign a shared legal text to a department''s DPP or imprint slot, or clear the
+      summary: >-
+        Assign a shared legal text to a department's DPP or imprint slot, or clear the
         slot (null = department falls back to its own inline content, content_dpp/content_imprint;
-        tenant-level fallback is future work, ADR-014 / #136). The text''s kind must match the
-        slot and the text must belong to the agency''s tenant. [Authorization: Role: agency-admin or
-        restricted-agency-admin scoped to its own agencies]'
+        tenant-level fallback is future work, ADR-014 / #136). The text's kind must match the
+        slot and the text must belong to the agency's tenant. [Authorization: Role: agency-admin or
+        restricted-agency-admin scoped to its own agencies]
       operationId: assignDepartmentLegalText
       parameters:
         - name: agencyId
@@ -493,9 +632,10 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Read a department''s (Fachbereich = agency x topic) own imprint (Impressum) to
+      summary: >-
+        Read a department's (Fachbereich = agency x topic) own imprint (Impressum) to
         prefill the editor. [Authorization: Role: agency-admin or restricted-agency-admin scoped to
-        its own agencies]'
+        its own agencies]
       operationId: getDepartmentImprint
       parameters:
         - name: agencyId
@@ -532,9 +672,10 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Publish or draft-save a department''s (Fachbereich = agency x topic) own imprint
+      summary: >-
+        Publish or draft-save a department's (Fachbereich = agency x topic) own imprint
         (Impressum). [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own
-        agencies]'
+        agencies]
       operationId: publishDepartmentImprint
       parameters:
         - name: agencyId
@@ -789,6 +930,45 @@ components:
         templated:
           type: boolean
 
+    AgencyIdAvailabilityResponseDTO:
+      type: object
+      required:
+        - agencyId
+        - status
+      properties:
+        agencyId:
+          type: integer
+          format: int64
+          example: 21
+        status:
+          type: string
+          enum: [ FREE, RESERVED, ASSIGNED ]
+          example: FREE
+
+    AgencyIdResponseDTO:
+      type: object
+      required:
+        - agencyId
+      properties:
+        agencyId:
+          type: integer
+          format: int64
+          example: 21
+
+    AgencyIdReservationRequestDTO:
+      type: object
+      properties:
+        agencyId:
+          type: integer
+          format: int64
+          description: The manually picked agency ID to reserve. Omit for AUTO mode (smallest free ID).
+          example: 21
+        tenantId:
+          type: integer
+          format: int64
+          description: Tenant the pending agency belongs to. Validated only - never reserved here.
+          example: 1
+
     AgencyAdminSearchResultDTO:
       type: object
       properties:
@@ -826,7 +1006,6 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 9223372036854775807
           example: 684
         name:
           type: string
@@ -917,12 +1096,38 @@ components:
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'
+        content:
+          $ref: '#/components/schemas/AgencyLegalContentDTO'
         agencyLogo:
           type: string
           example: "base64 encoded image"
         settings:
           $ref: '#/components/schemas/Settings'
           description: Agency settings including platform-level agencyAdminControls
+
+    AgencyLegalContentDTO:
+      type: object
+      description: >
+        ADR-014 middle level of the chain tenant -> agency -> department. The Beratungsstelle's own
+        legal texts, each a language -> HTML map. Every Fachbereich inherits these until it
+        publishes its own. There is no draft state here: what is stored is what is in force.
+
+        On update, omitting this object — or sending either member as an empty map — keeps the
+        stored text, so an update about something else can never wipe a legal document. To empty a
+        text, send the language key with empty content (`{"de": ""}`).
+      properties:
+        privacy:
+          type: object
+          description: Data privacy policy per language code.
+          additionalProperties:
+            type: string
+          example: { "de": "<p>Datenschutzerklärung</p>" }
+        impressum:
+          type: object
+          description: Imprint per language code.
+          additionalProperties:
+            type: string
+          example: { "de": "<p>Impressum</p>" }
 
     DataProtectionDTO:
         type: object
@@ -1156,6 +1361,8 @@ components:
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'
+        content:
+          $ref: '#/components/schemas/AgencyLegalContentDTO'
         agencyLogo:
           type: string
           example: "base64 encoded image"
@@ -1205,7 +1412,6 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 9223372036854775807
           example: 684
           description: "The agency id of the related postcoderanges"
         postcodeRanges:
@@ -1355,8 +1561,9 @@ components:
         publish:
           type: boolean
           nullable: true
-          description: 'true = PUBLISHED, false = DRAFT; omitted/null = keep the current
-            publication status (a label/content-only update never unpublishes)'
+          description: >-
+            true = PUBLISHED, false = DRAFT; omitted/null = keep the current
+            publication status (a label/content-only update never unpublishes)
 
     LegalTextAssignmentDTO:
       type: object
@@ -1371,9 +1578,10 @@ components:
           type: integer
           format: int64
           nullable: true
-          description: 'Legal text to reference; null clears the slot — the department falls back
+          description: >-
+            Legal text to reference; null clears the slot — the department falls back
             to its own inline content (content_dpp/content_imprint). Tenant-level fallback is
-            future work (ADR-014 / #136).'
+            future work (ADR-014 / #136).
 
     DepartmentDataProtectionDTO:
       type: object

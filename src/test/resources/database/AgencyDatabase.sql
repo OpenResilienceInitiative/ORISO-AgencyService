@@ -1,11 +1,13 @@
 DROP TABLE IF EXISTS AGENCY_POSTCODE_RANGE;
 DROP TABLE IF EXISTS AGENCY_TOPIC;
+DROP TABLE IF EXISTS LEGAL_TEXT;
 DROP TABLE IF EXISTS AGENCY;
 DROP TABLE IF EXISTS AGENCY_ADMIN_CONTROL;
 DROP TABLE IF EXISTS DIOCESE;
 
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_POSTCODE_RANGE;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_TOPIC;
+DROP SEQUENCE IF EXISTS SEQUENCE_LEGAL_TEXT;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_ADMIN_CONTROL;
 
@@ -45,6 +47,8 @@ create table AGENCY
     MATRIX_USER_ID varchar(255) null default null,
     MATRIX_PASSWORD varchar(255) null default null,
     SETTINGS longtext null default null,
+    CONTENT_DPP longtext null default null,
+    CONTENT_IMPRINT longtext null default null,
     primary key (ID)
 );
 CREATE SEQUENCE SEQUENCE_AGENCY
@@ -67,6 +71,24 @@ CREATE SEQUENCE SEQUENCE_AGENCY_POSTCODE_RANGE
     START WITH 100000
     INCREMENT BY 1;
 
+-- ADR-014 (Liquibase changeset 0026_legal_text): legal texts are first-class shared
+-- objects owned by a Träger, referenced by departments instead of being inlined.
+create table LEGAL_TEXT
+(
+    ID                 bigint      not null,
+    TENANT_ID          bigint      null,
+    KIND               varchar(20) not null,
+    LABEL              varchar(255) not null,
+    CONTENT            longtext    null,
+    PUBLICATION_STATUS varchar(20) not null default 'DRAFT',
+    CREATE_DATE        timestamp,
+    UPDATE_DATE        timestamp,
+    primary key (ID)
+);
+CREATE SEQUENCE SEQUENCE_LEGAL_TEXT
+    START WITH 100000
+    INCREMENT BY 1;
+
 create table AGENCY_TOPIC
 (
     ID            bigint     not null,
@@ -78,8 +100,12 @@ create table AGENCY_TOPIC
     PUBLICATION_STATUS varchar(20) not null default 'DRAFT',
     CONTENT_IMPRINT longtext null,
     PUBLICATION_STATUS_IMPRINT varchar(20) not null default 'DRAFT',
+    DPP_ID        bigint     null,
+    IMPRINT_ID    bigint     null,
     primary key (ID),
-    foreign key (AGENCY_ID) references AGENCY (ID)
+    foreign key (AGENCY_ID) references AGENCY (ID),
+    foreign key (DPP_ID) references LEGAL_TEXT (ID),
+    foreign key (IMPRINT_ID) references LEGAL_TEXT (ID)
 );
 CREATE SEQUENCE SEQUENCE_AGENCY_TOPIC
     START WITH 100000

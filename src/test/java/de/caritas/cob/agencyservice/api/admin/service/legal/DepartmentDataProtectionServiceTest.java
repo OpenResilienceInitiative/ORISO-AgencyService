@@ -82,42 +82,69 @@ class DepartmentDataProtectionServiceTest {
     return department;
   }
 
+  private LegalText sharedDpp() {
+    return LegalText.builder()
+        .id(100L)
+        .kind(LegalTextKind.DPP)
+        .label("Geteilte DSE")
+        .content("{\"de\":\"<p>alt</p>\"}")
+        .publicationStatus(PublicationStatus.PUBLISHED)
+        .build();
+  }
+
   @Test
-  void publish_Should_writeThroughToReferencedLegalText_When_departmentReferencesOne() {
-    // ADR-014: once a department references a shared legal-text object, that object is the truth.
-    // The legacy per-department publish endpoint must therefore update the referenced object —
-    // writing the inline column would be silently ignored by the read path.
+  void publish_Should_breakSharedLink_And_storeOwnText_When_departmentReferencesOne() {
+    // ADR-014 amendment 2026-07-28: publishing under one Fachbereich must NOT rewrite the shared
+    // object — the 0026 backfill merged byte-identical departments onto one row, so writing through
+    // would silently republish every sibling department. Publishing means "this department leaves
+    // the shared text": clear the reference, store the text on the department itself.
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
-    var referenced =
-        LegalText.builder()
-            .id(100L)
-            .kind(LegalTextKind.DPP)
-            .label("Geteilte DSE")
-            .content("{\"de\":\"<p>alt</p>\"}")
-            .publicationStatus(PublicationStatus.DRAFT)
-            .build();
+    var referenced = sharedDpp();
     department.setDpp(referenced);
 
     var status =
         service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>neu</p>"), true);
 
     assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
-    assertThat(referenced.getContent()).contains("neu");
-    assertThat(referenced.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
-    assertThat(referenced.getUpdateDate()).isNotNull();
-    // the inline copy stays untouched — it is dead weight kept only for rollback
+
     var saved = ArgumentCaptor.forClass(AgencyTopic.class);
     verify(agencyTopicRepository).save(saved.capture());
-    assertThat(saved.getValue().getContentDpp()).isNull();
+    assertThat(saved.getValue().getDpp()).as("shared link must be broken").isNull();
+    assertThat(saved.getValue().getContentDpp()).contains("neu");
+    assertThat(saved.getValue().getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+
+    // the sibling departments still pointing at this row must be byte-identical afterwards
+    assertThat(referenced.getContent()).isEqualTo("{\"de\":\"<p>alt</p>\"}");
+    assertThat(referenced.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
   }
 
   @Test
-  void read_Should_returnReferencedLegalText_When_departmentReferencesOne() {
+  void draftSave_Should_keepSharedLink_And_parkDraftInline_When_departmentReferencesOne() {
+    // A draft must not change what the public sees: the reference stays, so the read path keeps
+    // resolving the inherited text while the draft waits in the otherwise-unused inline column.
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
-    department.setContentDpp("{\"de\":\"<p>inline-alt</p>\"}");
-    department.setPublicationStatus(PublicationStatus.DRAFT);
+    var referenced = sharedDpp();
+    department.setDpp(referenced);
+
+    var status =
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>entwurf</p>"), false);
+
+    assertThat(status).isEqualTo(PublicationStatus.DRAFT);
+
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getDpp()).as("draft must not unshare").isSameAs(referenced);
+    assertThat(saved.getValue().getContentDpp()).contains("entwurf");
+    assertThat(saved.getValue().getPublicationStatus()).isEqualTo(PublicationStatus.DRAFT);
+    assertThat(referenced.getContent()).isEqualTo("{\"de\":\"<p>alt</p>\"}");
+  }
+
+  @Test
+  void read_Should_returnReferencedLegalText_When_departmentReferencesOne_AndHasNoPendingDraft() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
     department.setDpp(
         LegalText.builder()
             .id(100L)
@@ -131,6 +158,29 @@ class DepartmentDataProtectionServiceTest {
 
     assertThat(view.content()).isEqualTo("{\"de\":\"<p>geteilt</p>\"}");
     assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+  }
+
+  @Test
+  void read_Should_returnPendingDraft_When_departmentHasDraftAlongsideReference() {
+    // The editor must show the admin their own unfinished work, not the inherited text they are
+    // about to replace — while the public still resolves the reference.
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setContentDpp("{\"de\":\"<p>entwurf</p>\"}");
+    department.setPublicationStatus(PublicationStatus.DRAFT);
+    department.setDpp(
+        LegalText.builder()
+            .id(100L)
+            .kind(LegalTextKind.DPP)
+            .label("Geteilte DSE")
+            .content("{\"de\":\"<p>geteilt</p>\"}")
+            .publicationStatus(PublicationStatus.PUBLISHED)
+            .build());
+
+    var view = service.getDepartmentDataPrivacy(7L, 42L);
+
+    assertThat(view.content()).isEqualTo("{\"de\":\"<p>entwurf</p>\"}");
+    assertThat(view.publicationStatus()).isEqualTo(PublicationStatus.DRAFT);
   }
 
   @Test

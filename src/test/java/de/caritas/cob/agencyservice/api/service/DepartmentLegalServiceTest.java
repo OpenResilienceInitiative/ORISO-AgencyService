@@ -173,6 +173,78 @@ class DepartmentLegalServiceTest {
   }
 
   @Test
+  void getPublishedDepartmentLegal_Should_fallBackToAgencyWideText_When_departmentHasNoneOfItsOwn() {
+    // ADR-014 chain tenant -> agency -> department: a Fachbereich that never authored anything
+    // shows what its Beratungsstelle publishes, not nothing.
+    var department = department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
+    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
+    department.getAgency().setContentImprint("{\"de\":\"<p>Impressum der Stelle</p>\"}");
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE der Stelle</p>\"}");
+    assertThat(view.imprintContent()).isEqualTo("{\"de\":\"<p>Impressum der Stelle</p>\"}");
+  }
+
+  @Test
+  void getPublishedDepartmentLegal_Should_preferOwnPublishedText_OverAgencyWideText() {
+    // Publishing is what leaves the inheritance for good.
+    var department =
+        department(
+            "{\"de\":\"<p>eigene DSE</p>\"}", PublicationStatus.PUBLISHED, null,
+            PublicationStatus.DRAFT);
+    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>eigene DSE</p>\"}");
+  }
+
+  @Test
+  void getPublishedDepartmentLegal_Should_keepShowingAgencyWideText_While_ownTextIsStillDraft() {
+    // The draft copy is invisible to users until it is published — until then the inherited text
+    // stays in force. A draft must never blank out a legally required document.
+    var department =
+        department(
+            "{\"de\":\"<p>Entwurf</p>\"}", PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
+    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE der Stelle</p>\"}");
+  }
+
+  @Test
+  void getPublishedDepartmentLegal_Should_fallBackToAgencyWideText_When_referencedTextIsDraft() {
+    var department = department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
+    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
+    department.setDpp(
+        LegalText.builder()
+            .id(100L)
+            .kind(LegalTextKind.DPP)
+            .label("Entwurf")
+            .content("{\"de\":\"<p>Entwurf</p>\"}")
+            .publicationStatus(PublicationStatus.DRAFT)
+            .build());
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE der Stelle</p>\"}");
+  }
+
+  @Test
+  void getPublishedDepartmentLegal_Should_returnNull_When_neitherLevelHasText() {
+    // A blank agency column is an absent text, not an empty-but-present document.
+    var department = department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
+    department.getAgency().setContentDpp("   ");
+
+    var view = service.getPublishedDepartmentLegal(7L, 42L);
+
+    assertThat(view.dppContent()).isNull();
+    assertThat(view.imprintContent()).isNull();
+  }
+
+  @Test
   void getPublishedDepartmentLegal_Should_throwNotFound_When_departmentMissing() {
     when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 99L)).thenReturn(Optional.empty());
 

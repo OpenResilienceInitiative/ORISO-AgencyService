@@ -33,13 +33,17 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.jdbc.Sql;
 
 @SpringBootTest(classes = AgencyServiceApplication.class)
-@TestPropertySource(properties = "spring.profiles.active=testing")
+// topics off: this suite covers search, pagination and sorting, not topic enrichment. With the
+// feature on, every result mapping calls the real ConsultingTypeService on :8083 (#206). The
+// sibling AgencyAdminSearchServiceIT already draws the boundary here.
+@TestPropertySource(properties = {"spring.profiles.active=testing",
+    "feature.topics.enabled=false"})
 @AutoConfigureTestDatabase(replace = Replace.ANY)
 @DirtiesContext(classMode = ClassMode.BEFORE_CLASS)
-@Transactional
+@Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyAdminSearchServiceSearchIT {
 
   @Autowired
@@ -47,6 +51,15 @@ class AgencyAdminSearchServiceSearchIT {
 
   @MockitoBean
   AuthenticatedUser authenticatedUser;
+
+  /**
+   * TopicEnrichmentService is @ConditionalOnExpression on feature.topics.enabled, but
+   * AgencyController requires it as a @NonNull constructor argument. Turning the feature off
+   * therefore removes the bean and the whole context fails to load, so the mock has to stand in
+   * for it. Same pairing as the sibling AgencyAdminSearchServiceIT (#206).
+   */
+  @MockitoBean
+  private de.caritas.cob.agencyservice.api.service.TopicEnrichmentService topicEnrichmentService;
 
   @BeforeEach
   public void setUp() {
