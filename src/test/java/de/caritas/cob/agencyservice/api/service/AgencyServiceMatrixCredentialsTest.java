@@ -38,6 +38,11 @@ class AgencyServiceMatrixCredentialsTest {
   @Mock private ApplicationSettingsService applicationSettingsService;
   @Mock private AgencySettingsService agencySettingsService;
   @Mock private AgencyAdminControlsService agencyAdminControlsService;
+
+  @org.mockito.Spy
+  private final de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier
+      effectivePermissionSettingsApplier =
+          new de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier();
   @Spy
   private AgencyMatrixPasswordCipher matrixPasswordCipher =
       new AgencyMatrixPasswordCipher(APP_KEY);
