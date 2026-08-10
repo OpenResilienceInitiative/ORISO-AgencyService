@@ -64,6 +64,11 @@ public class AgencyServiceTenantAwareTest {
   @Mock
   private AgencyAdminControlsService agencyAdminControlsService;
 
+  @org.mockito.Spy
+  private final de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier
+      effectivePermissionSettingsApplier =
+          new de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier();
+
   private static final Long TENANT_ID = 1L;
 
   @Before

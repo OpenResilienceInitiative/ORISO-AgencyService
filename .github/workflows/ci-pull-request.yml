@@ -28,25 +28,99 @@ jobs:
         image_name: oriso-agencyservice
         github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Non-blocking burn-in (Test Quality Audit 2026-07-04, item 3 + CI Roadmap Part 1).
-  # Runs `mvnw -B verify`, which reaches the surefire `integration-tests` execution
-  # (integration-test phase, **/*IT.*) — 24 IT classes that have never run in CI
-  # (local burn-in 2026-07-07: 7 green / 16 red, mostly context-load errors).
-  # continue-on-error keeps this OFF the required-checks path until the ITs are
-  # green; flip to a required check once burn-in is consistently passing.
-  integration-tests:
-    name: integration-tests (non-blocking, burn-in)
+  required-integration-tests:
+    name: required integration tests
     runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Run deterministic integration contract
+      uses: ./.github/actions/maven-verify-required
+      with:
+        java_version: '21'
+
+  # Explicit legacy quarantine: #185, owner @Storypapst, expires 2026-09-30.
+  # Turns the quarantine deadline into a check instead of a job title. This job
+  # is NOT continue-on-error, so once the date passes the workflow fails until
+  # #185 is closed or the deadline is consciously extended in this file.
+  legacy-quarantine-expiry:
+    name: legacy quarantine deadline (#185)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Fail once the quarantine deadline has passed
+      shell: bash
+      env:
+        QUARANTINE_EXPIRES: "2026-09-30"
+      run: |
+        today="$(date -u +%F)"
+        if [[ "${today}" > "${QUARANTINE_EXPIRES}" ]]; then
+          echo "::error::The #185 legacy integration quarantine expired on ${QUARANTINE_EXPIRES}. Fix the suite, or extend the deadline deliberately in this workflow."
+          exit 1
+        fi
+        echo "Quarantine #185 is valid until ${QUARANTINE_EXPIRES} (today ${today})."
+
+  legacy-integration-quarantine:
+    name: legacy integration quarantine (#185, expires 2026-09-30)
+    runs-on: ubuntu-latest
+    # Declared here, not hidden in the action: this job may go red without
+    # blocking the PR. legacy-quarantine-expiry below removes that tolerance
+    # on 2026-10-01.
     continue-on-error: true
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
 
-    - name: Run integration tests (verify)
+    - name: Run full legacy integration suite
       uses: ./.github/actions/maven-verify-burnin
       with:
         java_version: '21'
+
+  contract-tests:
+    name: CI contract tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install pinned test dependencies
+      run: python -m pip install --disable-pip-version-check pytest==9.0.2
+
+    - name: Verify the required-CI contract holds
+      run: python -m pytest -q tests/ci
+
+  required-ci:
+    name: required PreDev CI
+    if: always()
+    needs: [validate, required-integration-tests, contract-tests, legacy-quarantine-expiry]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Report the aggregate required conclusion
+      env:
+        VALIDATE_RESULT: ${{ needs.validate.result }}
+        CONTRACT_RESULT: ${{ needs.contract-tests.result }}
+        INTEGRATION_RESULT: ${{ needs.required-integration-tests.result }}
+        EXPIRY_RESULT: ${{ needs.legacy-quarantine-expiry.result }}
+      run: |
+        conclusion=success
+        if [[ "${VALIDATE_RESULT}" != success || "${INTEGRATION_RESULT}" != success \
+           || "${CONTRACT_RESULT}" != success || "${EXPIRY_RESULT}" != success ]]; then
+          conclusion=failure
+        fi
+        if [[ "${conclusion}" != success ]]; then
+          echo "::error::Required CI failed: validate=${VALIDATE_RESULT}, integration=${INTEGRATION_RESULT}, contract=${CONTRACT_RESULT}, quarantine-expiry=${EXPIRY_RESULT}"
+          exit 1
+        fi
 
   # Non-blocking OpenAPI contract diff: flags breaking changes to this service's
   # own vendored specs (api/*.yaml) between the PR base and head. Informational

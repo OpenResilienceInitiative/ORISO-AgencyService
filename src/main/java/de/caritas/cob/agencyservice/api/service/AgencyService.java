@@ -7,6 +7,7 @@ import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
+import de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
@@ -72,6 +73,9 @@ public class AgencyService {
   private final @NonNull AgencySettingsService agencySettingsService;
 
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
+
+  private final @NonNull AgencyEffectivePermissionSettingsApplier
+      effectivePermissionSettingsApplier;
 
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
@@ -452,9 +456,20 @@ public class AgencyService {
         .settings(buildAgencySettings(agency));
   }
 
+  /**
+   * Builds the settings served on the public/registration-facing agency response. Bakes the
+   * platform admin controls into the effective feature flags (forced-off disabled, enforced-on
+   * locked on) without exposing the controls themselves — see {@link
+   * AgencyEffectivePermissionSettingsApplier}. Mirrors ORISO-TenantService's
+   * withEffectivePermissions (ADR-013 P4). The admin-facing path ({@code AgencyAdminService})
+   * still attaches the raw controls via {@link
+   * AgencyAdminControlsService#enrichSettingsWithAgencyAdminControls} so the Admin UI can render
+   * disabled-not-hidden state.
+   */
   private Settings buildAgencySettings(Agency agency) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
-    return agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(settings);
+    effectivePermissionSettingsApplier.applyTo(settings, agencyAdminControlsService.getControls());
+    return settings;
   }
 
   protected String getRenderedAgencySpecificPrivacy(Agency agency) {
