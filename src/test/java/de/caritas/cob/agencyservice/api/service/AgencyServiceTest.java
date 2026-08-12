@@ -256,6 +256,32 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getListOfAgencies_Should_MapAddressPhoneAndOpeningHours()
+      throws MissingConsultingTypeException {
+
+    Agency agency = Agency.builder().id(101L).name("Zentrum")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .street("Musterstraße").houseNumber("12a")
+        .phone("+49301234567").openingHours("Mo-Fr 9-17 Uhr").build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of());
+
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(List.of(agency));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var result = agencyService.getAgencies(Optional.of(VALID_POSTCODE),
+        CONSULTING_TYPE_SUCHT, Optional.empty());
+
+    assertEquals(1, result.size());
+    assertEquals("Musterstraße", result.get(0).getStreet());
+    assertEquals("12a", result.get(0).getHouseNumber());
+    assertEquals("+49301234567", result.get(0).getPhone());
+    assertEquals("Mo-Fr 9-17 Uhr", result.get(0).getOpeningHours());
+  }
+
+  @Test
   public void getListOfAgencies_Should_DeriveLegalPublicationFlagsFromReferencedLegalText_WhenDepartmentReferencesOne()
       throws MissingConsultingTypeException {
 

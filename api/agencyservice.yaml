@@ -279,6 +279,24 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        street:
+          type: string
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          example: "12a"
+        phone:
+          type: string
+          example: "+49 30 1234567"
+        openingHours:
+          type: string
+          example: "Mo-Fr 9-17 Uhr"
+        departments:
+          type: array
+          description: The agency's departments (one per assigned topic) with the publication
+            state of their own legal texts. Optional - older clients can ignore it.
+          items:
+            $ref: '#/components/schemas/AgencyDepartmentDTO'
         settings:
           $ref: '#/components/schemas/Settings'
 
@@ -296,12 +314,6 @@ components:
             external:
               type: boolean
               example: "false"
-            departments:
-              type: array
-              description: The agency's departments (one per assigned topic) with the publication
-                state of their own legal texts. Optional - older clients can ignore it.
-              items:
-                $ref: '#/components/schemas/AgencyDepartmentDTO'
 
     AgencyDepartmentDTO:
       type: object

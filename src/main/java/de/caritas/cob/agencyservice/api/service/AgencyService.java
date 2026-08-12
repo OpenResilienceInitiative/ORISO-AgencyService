@@ -453,6 +453,12 @@ public class AgencyService {
         .agencySpecificPrivacy(renderedAgencySpecificPrivacy)
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
         .agencyLogo(agency.getAgencyLogo())
+        .street(agency.getStreet())
+        .houseNumber(agency.getHouseNumber())
+        .phone(agency.getPhone())
+        .openingHours(agency.getOpeningHours())
+        .departments(
+            agency.getAgencyTopics().stream().map(this::convertToAgencyDepartmentDTO).toList())
         .settings(buildAgencySettings(agency));
   }
 
@@ -503,7 +509,11 @@ public class AgencyService {
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
         .departments(
             agency.getAgencyTopics().stream().map(this::convertToAgencyDepartmentDTO).toList())
-        .agencyLogo(agency.getAgencyLogo());
+        .agencyLogo(agency.getAgencyLogo())
+        .street(agency.getStreet())
+        .houseNumber(agency.getHouseNumber())
+        .phone(agency.getPhone())
+        .openingHours(agency.getOpeningHours());
 
   }
 
