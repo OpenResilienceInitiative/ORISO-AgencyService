@@ -1052,6 +1052,10 @@ components:
           type: string
           maxLength: 255
           example: "kontakt@beratungsstelle.de"
+        openingHours:
+          type: string
+          maxLength: 1000
+          example: "Mo-Fr 9-17 Uhr"
         teamAgency:
           type: boolean
           example: false
@@ -1233,6 +1237,10 @@ components:
           type: string
           maxLength: 255
           example: "kontakt@beratungsstelle.de"
+        openingHours:
+          type: string
+          maxLength: 1000
+          example: "Mo-Fr 9-17 Uhr"
         teamAgency:
           type: boolean
           example: false
@@ -1336,6 +1344,10 @@ components:
           type: string
           maxLength: 255
           example: "kontakt@beratungsstelle.de"
+        openingHours:
+          type: string
+          maxLength: 1000
+          example: "Mo-Fr 9-17 Uhr"
         offline:
           type: boolean
           example: false
