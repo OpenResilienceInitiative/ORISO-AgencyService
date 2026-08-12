@@ -55,7 +55,7 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
   // predicate to attach to instead of widening the INNER JOIN condition.
   String SELECT_ALL_AGENCIES_TOPICS = "SELECT distinct(at.topic_id) FROM agency_topic at "
       + "INNER JOIN agency a ON a.id = at.agency_id "
-      + "WHERE a.is_offline = false AND a.delete_date IS NULL ";
+      + "WHERE a.is_offline = 0 AND a.delete_date IS NULL ";
 
   String GROUP_BY_ORDER_BY = "GROUP BY a.id "
       + "ORDER BY a.postcode DESC";
