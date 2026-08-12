@@ -314,6 +314,16 @@ components:
             external:
               type: boolean
               example: "false"
+            # departments also lives on AgencyResponseDTO now (by-id route needs it).
+            # It is intentionally repeated here: oasdiff compares allOf subschemas
+            # one by one, so dropping it from this subschema reads as a breaking
+            # removal even though the merged schema would be identical.
+            departments:
+              type: array
+              description: The agency's departments (one per assigned topic) with the publication
+                state of their own legal texts. Optional - older clients can ignore it.
+              items:
+                $ref: '#/components/schemas/AgencyDepartmentDTO'
 
     AgencyDepartmentDTO:
       type: object
