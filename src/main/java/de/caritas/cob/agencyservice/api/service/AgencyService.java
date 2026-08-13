@@ -458,7 +458,9 @@ public class AgencyService {
         .phone(agency.getPhone())
         .openingHours(agency.getOpeningHours())
         .departments(
-            agency.getAgencyTopics().stream().map(this::convertToAgencyDepartmentDTO).toList())
+            agency.getAgencyTopics().stream()
+                .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
+                .toList())
         .settings(buildAgencySettings(agency));
   }
 
@@ -508,7 +510,9 @@ public class AgencyService {
         .tenantId(agency.getTenantId())
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
         .departments(
-            agency.getAgencyTopics().stream().map(this::convertToAgencyDepartmentDTO).toList())
+            agency.getAgencyTopics().stream()
+                .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
+                .toList())
         .agencyLogo(agency.getAgencyLogo())
         .street(agency.getStreet())
         .houseNumber(agency.getHouseNumber())
@@ -527,11 +531,24 @@ public class AgencyService {
    * replaces the inline column — the flags must follow the same resolution order, otherwise the
    * registration search would report stale inline state after a write-through publish/draft-save.
    */
-  private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic) {
+  private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic,
+      Agency agency) {
     return new AgencyDepartmentDTO()
         .topicId(agencyTopic.getTopicId())
         .hasPublishedDpp(hasPublishedDpp(agencyTopic))
-        .hasPublishedImprint(hasPublishedImprint(agencyTopic));
+        .hasPublishedImprint(hasPublishedImprint(agencyTopic))
+        .openingHours(resolve(agencyTopic.getOpeningHours(), agency.getOpeningHours()))
+        .phoneExtension(agencyTopic.getPhoneExtension())
+        .floorLocation(resolve(agencyTopic.getFloorLocation(), agency.getFloorBuilding()));
+  }
+
+  /**
+   * ORISO-Admin#197 resolution chain for department contact details: the Fachbereich override
+   * wins when set, otherwise the Beratungsstelle value applies. Blank overrides are normalised to
+   * null on write, so a simple null check suffices here.
+   */
+  private String resolve(String departmentValue, String agencyValue) {
+    return departmentValue != null ? departmentValue : agencyValue;
   }
 
   private boolean hasPublishedDpp(AgencyTopic agencyTopic) {

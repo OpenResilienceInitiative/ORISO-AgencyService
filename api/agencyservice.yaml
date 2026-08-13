@@ -340,6 +340,24 @@ components:
           type: boolean
           description: true if the department has a published imprint of its own
           example: false
+        openingHours:
+          type: string
+          nullable: true
+          description: Resolved opening hours of the department - its own override when set,
+            otherwise the agency-level opening hours (Fachbereich ?? Beratungsstelle)
+          example: "Di+Do 14-18 Uhr"
+        phoneExtension:
+          type: string
+          nullable: true
+          description: Phone extension (Durchwahl) of the department; null when the department
+            has none (callers use the agency-level phone as-is)
+          example: "-23"
+        floorLocation:
+          type: string
+          nullable: true
+          description: Resolved floor/location detail inside the building - the department's own
+            override when set, otherwise the agency-level floor/building detail
+          example: "3. OG, Raum 312"
 
     DepartmentLegalDTO:
       type: object
