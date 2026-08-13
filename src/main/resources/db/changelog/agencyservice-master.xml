@@ -80,6 +80,10 @@
   <!-- [AGY-PUB-02] (#242): opening hours shown on the asker profile agency cards. Additive,
        nullable free text (multiline). -->
   <include file="db/changelog/changeset/0029_agency_opening_hours/0029_changeSet.xml"/>
+  <!-- ORISO-Admin#197 revival (#242 follow-up): per-Fachbereich contact detail overrides on
+       agency_topic (opening hours, phone extension, floor/location). Additive, all nullable;
+       null = inherit the Beratungsstelle value. -->
+  <include file="db/changelog/changeset/0030_agency_topic_details/0030_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB
