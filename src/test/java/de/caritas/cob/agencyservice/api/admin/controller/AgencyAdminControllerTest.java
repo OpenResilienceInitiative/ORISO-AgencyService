@@ -1,5 +1,6 @@
 package de.caritas.cob.agencyservice.api.admin.controller;
 
+import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.DATA_PROTECTION_OFFICER_IS_EMPTY;
 import static de.caritas.cob.agencyservice.testHelper.PathConstants.AGENCY_POSTCODE_RANGE_PATH;
 import static de.caritas.cob.agencyservice.testHelper.PathConstants.AGENCY_SEARCH_PATH;
 import static de.caritas.cob.agencyservice.testHelper.PathConstants.CHANGE_AGENCY_TYPE_PATH;
@@ -402,6 +403,34 @@ public class AgencyAdminControllerTest {
                 .contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isBadRequest())
         .andExpect(header().string("X-Reason", "INVALID_OFFLINE_STATUS"));
+  }
+
+  @Test
+  public void updateAgency_Should_ReturnStructuredFieldError_WhenDataProtectionIsInvalid()
+      throws Exception {
+
+    EasyRandom easyRandom = new EasyRandom();
+    UpdateAgencyDTO updateAgencyDTO = easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setPostcode(VALID_POSTCODE);
+    updateAgencyDTO.setConsultingType(CONSULTING_TYPE_PREGNANCY);
+    setValidDemographics(updateAgencyDTO.getDemographics());
+    setValidDataProtection(updateAgencyDTO.getDataProtection());
+    setValidAddress(updateAgencyDTO);
+    doThrow(new InvalidOfflineStatusException(DATA_PROTECTION_OFFICER_IS_EMPTY))
+        .when(agencyValidator)
+        .validate(1L, updateAgencyDTO);
+
+    this.mvc
+        .perform(
+            put(UPDATE_DELETE_AGENCY_PATH)
+                .content(new ObjectMapper().writeValueAsString(updateAgencyDTO))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isBadRequest())
+        .andExpect(header().string("X-Reason", "DATA_PROTECTION_OFFICER_IS_EMPTY"))
+        .andExpect(jsonPath("$.field").value("dataProtection"))
+        .andExpect(jsonPath("$.reason").value("DATA_PROTECTION_OFFICER_IS_EMPTY"))
+        .andExpect(
+            jsonPath("$.message").value("A data protection officer contact is required."));
   }
 
   @Test
