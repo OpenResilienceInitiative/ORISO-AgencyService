@@ -183,6 +183,31 @@ class DepartmentDetailsServiceTest {
   }
 
   @Test
+  void update_Should_allow_When_callerIsTechnicalTenantZero() {
+    // tenant 0 (super/technical) bypasses the cross-tenant guard
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+    existingDepartmentInTenant(1L);
+
+    var view = service.updateDepartmentDetails(7L, 42L, "Mo 9-12", null, null);
+
+    assertThat(view.openingHours()).isEqualTo("Mo 9-12");
+    verify(agencyTopicRepository).save(any());
+  }
+
+  @Test
+  void update_Should_throwAccessDenied_When_restrictedAdminHasNoAgencyIds() {
+    // a null agency-id list must deny, not fall through the IDOR guard
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
+    when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(null);
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.updateDepartmentDetails(7L, 42L, "Mo 9-12", null, null));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
   void update_Should_throwNotFound_When_departmentMissing() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 99L)).thenReturn(Optional.empty());

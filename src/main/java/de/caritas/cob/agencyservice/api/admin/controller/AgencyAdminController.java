@@ -436,7 +436,10 @@ public class AgencyAdminController implements AgencyadminApi {
    *
    * @param agencyId Agency Id (Beratungszentrum)
    * @param topicId  Topic Id (Fachbereich)
-   * @param departmentDetailsDTO the overrides to store
+   * @param departmentDetailsDTO the overrides to store (bean-validated — the generated {@code
+   *     AgencyadminApi} interface declares {@code @Valid @RequestBody}, which Spring honours on
+   *     this override; re-declaring {@code @Valid} here would be an illegal parameter-constraint
+   *     redefinition, HV000151)
    * @return the stored {@link DepartmentDetailsDTO} overrides after the update
    */
   @Override

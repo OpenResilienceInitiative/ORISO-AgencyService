@@ -424,6 +424,38 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getAgencies_With_Ids_Should_MapContactFieldsAndResolvedDepartmentDetails() {
+
+    // convertToAgencyResponseDTO maps the new contact fields and department details separately
+    // from convertToFullAgencyResponseDTO, so the ID-based path needs its own coverage.
+    Agency agency = Agency.builder().id(103L).name("Zentrum")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .street("Musterstraße").houseNumber("12a").phone("+49301234567")
+        .openingHours("Mo-Fr 9-17 Uhr").floorBuilding("Haus B").build();
+    AgencyTopic overriding = AgencyTopic.builder().agency(agency).topicId(1L)
+        .openingHours("Di+Do 14-18 Uhr").phoneExtension("-23").floorLocation("3. OG").build();
+    AgencyTopic inheriting = AgencyTopic.builder().agency(agency).topicId(2L).build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of(overriding, inheriting));
+
+    when(agencyRepository.findByIdIn(List.of(103L))).thenReturn(List.of(agency));
+
+    AgencyResponseDTO result = agencyService.getAgencies(List.of(103L)).get(0);
+
+    assertEquals("Musterstraße", result.getStreet());
+    assertEquals("12a", result.getHouseNumber());
+    assertEquals("+49301234567", result.getPhone());
+    assertEquals("Mo-Fr 9-17 Uhr", result.getOpeningHours());
+    var byTopicId = result.getDepartments().stream()
+        .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
+    assertEquals("Di+Do 14-18 Uhr", byTopicId.get(1L).getOpeningHours());
+    assertEquals("-23", byTopicId.get(1L).getPhoneExtension());
+    assertEquals("3. OG", byTopicId.get(1L).getFloorLocation());
+    assertEquals("Mo-Fr 9-17 Uhr", byTopicId.get(2L).getOpeningHours());
+    assertEquals(null, byTopicId.get(2L).getPhoneExtension());
+    assertEquals("Haus B", byTopicId.get(2L).getFloorLocation());
+  }
+
+  @Test
   public void getAgencies_With_Ids_Should_ForceFeatureOff_When_PlatformDisallowsIt() {
     when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
     when(agencySettingsService.toSettings(any()))
