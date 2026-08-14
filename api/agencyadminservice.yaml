@@ -1282,7 +1282,6 @@ components:
       type: object
       required:
         - name
-        - offline
         - external
       properties:
         name:

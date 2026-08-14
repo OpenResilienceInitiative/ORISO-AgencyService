@@ -311,6 +311,35 @@ public class AgencyAdminService {
     return agency.getSettings();
   }
 
+  /**
+   * Null {@code offline} on update means "leave the stored value", same as other optional
+   * update fields. Treating it as required would reject partial payloads with a {@code @NotNull}
+   * violation.
+   */
+  private boolean resolveOfflineForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    return updateAgencyDTO.getOffline() != null
+        ? updateAgencyDTO.getOffline()
+        : agency.isOffline();
+  }
+
+  /**
+   * Null {@code dataProtection} on update keeps the stored contacts. Calling
+   * {@link DataProtectionConverter#convertToEntity} with null would nullify them.
+   */
+  private void applyDataProtectionUpdate(
+      Agency agency, UpdateAgencyDTO updateAgencyDTO, Agency.AgencyBuilder agencyBuilder) {
+    if (updateAgencyDTO.getDataProtection() != null) {
+      dataProtectionConverter.convertToEntity(updateAgencyDTO.getDataProtection(), agencyBuilder);
+      return;
+    }
+    agencyBuilder
+        .dataProtectionResponsibleEntity(agency.getDataProtectionResponsibleEntity())
+        .dataProtectionOfficerContactData(agency.getDataProtectionOfficerContactData())
+        .dataProtectionAlternativeContactData(agency.getDataProtectionAlternativeContactData())
+        .dataProtectionAgencyResponsibleContactData(
+            agency.getDataProtectionAgencyResponsibleContactData());
+  }
+
   private Agency mergeAgencies(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
 
     var agencyBuilder = Agency.builder()
@@ -326,7 +355,7 @@ public class AgencyAdminService {
         .phone(updateAgencyDTO.getPhone())
         .phoneSecondary(updateAgencyDTO.getPhoneSecondary())
         .email(updateAgencyDTO.getEmail())
-        .offline(updateAgencyDTO.getOffline())
+        .offline(resolveOfflineForUpdate(agency, updateAgencyDTO))
         .teamAgency(agency.isTeamAgency())
         .url(updateAgencyDTO.getUrl())
         .isExternal(updateAgencyDTO.getExternal())
@@ -346,7 +375,7 @@ public class AgencyAdminService {
                 agency.getContentImprint(),
                 legalContent(updateAgencyDTO, AgencyLegalContentDTO::getImpressum)));
 
-    dataProtectionConverter.convertToEntity(updateAgencyDTO.getDataProtection(), agencyBuilder);
+    applyDataProtectionUpdate(agency, updateAgencyDTO, agencyBuilder);
 
     if (nonNull(updateAgencyDTO.getConsultingType())) {
       agencyBuilder.consultingTypeId(updateAgencyDTO.getConsultingType());

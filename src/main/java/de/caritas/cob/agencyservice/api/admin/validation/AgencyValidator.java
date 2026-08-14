@@ -1,5 +1,6 @@
 package de.caritas.cob.agencyservice.api.admin.validation;
 
+import de.caritas.cob.agencyservice.api.admin.validation.validators.AgencyDataProtectionValidator;
 import de.caritas.cob.agencyservice.api.admin.validation.validators.ConcreteAgencyValidator;
 import de.caritas.cob.agencyservice.api.admin.validation.validators.annotation.CreateAgencyValidator;
 import de.caritas.cob.agencyservice.api.admin.validation.validators.annotation.UpdateAgencyValidator;
@@ -49,7 +50,18 @@ public class AgencyValidator {
         .values()
         .stream()
         .filter(c -> c.getClass().isAnnotationPresent(UpdateAgencyValidator.class))
+        .filter(validator -> shouldRunUpdateValidator(validator, updateAgencyDTO))
         .forEach(validator -> validator.validate(fromUpdateAgencyDto(agencyId, updateAgencyDTO)));
+  }
+
+  /**
+   * A null {@code dataProtection} on update means "leave the stored value". Skip the data
+   * protection validator so a partial update is not rejected as {@code DATA_PROTECTION_DTO_IS_NULL}.
+   */
+  private boolean shouldRunUpdateValidator(
+      ConcreteAgencyValidator validator, UpdateAgencyDTO updateAgencyDTO) {
+    return updateAgencyDTO.getDataProtection() != null
+        || !(validator instanceof AgencyDataProtectionValidator);
   }
 
   private ValidateAgencyDTO fromAgencyDto(AgencyDTO agencyDto) {
