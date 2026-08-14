@@ -1,12 +1,12 @@
 name: AgencyService Build and Publish
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
       - dev
       - pre-dev
+      - integration/matrixrtc-rollback-agency-243-246
 
 env:
   REGISTRY: ghcr.io
