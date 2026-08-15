@@ -324,6 +324,18 @@ public class AgencyAdminService {
   }
 
   /**
+   * Null {@code openingHours} on update means "leave the stored value", same as {@code offline}
+   * and {@code dataProtection}: a partial payload that never mentions the field must not silently
+   * wipe it. Clearing the opening hours is expressed by sending an empty string — the same
+   * "absent keeps, empty deletes" split {@link #resolveLegalTextForUpdate} documents.
+   */
+  private String resolveOpeningHoursForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    return updateAgencyDTO.getOpeningHours() != null
+        ? updateAgencyDTO.getOpeningHours()
+        : agency.getOpeningHours();
+  }
+
+  /**
    * Null {@code dataProtection} on update keeps the stored contacts. Calling
    * {@link DataProtectionConverter#convertToEntity} with null would nullify them.
    */
@@ -356,7 +368,7 @@ public class AgencyAdminService {
         .phone(updateAgencyDTO.getPhone())
         .phoneSecondary(updateAgencyDTO.getPhoneSecondary())
         .email(updateAgencyDTO.getEmail())
-        .openingHours(updateAgencyDTO.getOpeningHours())
+        .openingHours(resolveOpeningHoursForUpdate(agency, updateAgencyDTO))
         .offline(resolveOfflineForUpdate(agency, updateAgencyDTO))
         .teamAgency(agency.isTeamAgency())
         .url(updateAgencyDTO.getUrl())

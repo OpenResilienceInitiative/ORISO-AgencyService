@@ -280,6 +280,47 @@ class AgencyAdminServiceTest {
         agency.getDataProtectionOfficerContactData(), saved.getDataProtectionOfficerContactData());
   }
 
+  @Test
+  void updateAgency_Should_KeepStoredOpeningHours_WhenPayloadOmitsThem() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOpeningHours("Mo-Fr 9-17 Uhr");
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOpeningHours(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("Mo-Fr 9-17 Uhr", agencyArgumentCaptor.getValue().getOpeningHours());
+  }
+
+  @Test
+  void updateAgency_Should_ClearOpeningHours_WhenPayloadSendsEmptyString() {
+    // Absent keeps, empty deletes — without this the field could never be cleared.
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOpeningHours("Mo-Fr 9-17 Uhr");
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOpeningHours("");
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("", agencyArgumentCaptor.getValue().getOpeningHours());
+  }
+
   private void clearDataProtection(Agency agency) {
     agency.setDataProtectionResponsibleEntity(null);
     agency.setDataProtectionAgencyResponsibleContactData(null);

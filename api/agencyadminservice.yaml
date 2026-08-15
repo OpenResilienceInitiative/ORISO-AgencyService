@@ -1459,6 +1459,9 @@ components:
         openingHours:
           type: string
           maxLength: 1000
+          description: >-
+            Omit (or send null) to keep the stored opening hours; send an empty
+            string to clear them.
           example: "Mo-Fr 9-17 Uhr"
         offline:
           type: boolean
