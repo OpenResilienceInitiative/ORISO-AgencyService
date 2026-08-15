@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -245,6 +246,79 @@ class AgencyAdminServiceTest {
     verify(agencyRepository).save(agencyArgumentCaptor.capture());
     var passedConsultingTypeId = agencyArgumentCaptor.getValue().getConsultingTypeId();
     assertEquals(agency.getConsultingTypeId(), passedConsultingTypeId);
+  }
+
+  @Test
+  void updateAgency_Should_KeepStoredDataProtectionAndOffline_WhenPayloadOmitsThem() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOffline(true);
+    agency.setDataProtectionResponsibleEntity(DataProtectionResponsibleEntity.DATA_PROTECTION_OFFICER);
+    DataProtectionContactDTO dataProtectionContactDTO =
+        this.easyRandom.nextObject(DataProtectionContactDTO.class);
+    agency.setDataProtectionOfficerContactData(JsonConverter.convertToJson(dataProtectionContactDTO));
+    agency.setDataProtectionAlternativeContactData(null);
+    agency.setDataProtectionAgencyResponsibleContactData(null);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOffline(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(dataProtectionConverter, never()).convertToEntity(any(), any());
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    var saved = agencyArgumentCaptor.getValue();
+    assertEquals(Boolean.TRUE, saved.isOffline());
+    assertEquals(
+        DataProtectionResponsibleEntity.DATA_PROTECTION_OFFICER,
+        saved.getDataProtectionResponsibleEntity());
+    assertEquals(
+        agency.getDataProtectionOfficerContactData(), saved.getDataProtectionOfficerContactData());
+  }
+
+  @Test
+  void updateAgency_Should_KeepStoredOpeningHours_WhenPayloadOmitsThem() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOpeningHours("Mo-Fr 9-17 Uhr");
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOpeningHours(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("Mo-Fr 9-17 Uhr", agencyArgumentCaptor.getValue().getOpeningHours());
+  }
+
+  @Test
+  void updateAgency_Should_ClearOpeningHours_WhenPayloadSendsEmptyString() {
+    // Absent keeps, empty deletes — without this the field could never be cleared.
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOpeningHours("Mo-Fr 9-17 Uhr");
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOpeningHours("");
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("", agencyArgumentCaptor.getValue().getOpeningHours());
   }
 
   private void clearDataProtection(Agency agency) {

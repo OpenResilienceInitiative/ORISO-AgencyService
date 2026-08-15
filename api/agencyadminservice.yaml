@@ -183,6 +183,10 @@ paths:
                 $ref: '#/components/schemas/AgencyAdminFullResponseDTO'
         400:
           description: BAD REQUEST - invalid/incomplete request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
         404:
           description: NOT FOUND - agency not found
         401:
@@ -984,6 +988,25 @@ paths:
         - Bearer: [ ]
 components:
   schemas:
+    ValidationErrorResponse:
+      type: object
+      required:
+        - field
+        - reason
+        - message
+      properties:
+        field:
+          type: string
+          description: Stable UpdateAgencyDTO field name that needs correction
+          example: dataProtection
+        reason:
+          type: string
+          description: Stable machine-readable validation reason
+          example: DATA_PROTECTION_OFFICER_IS_EMPTY
+        message:
+          type: string
+          description: Human-readable fallback message without submitted values
+          example: A data protection officer contact is required.
     RootDTO:
       type: object
       required:
@@ -1380,7 +1403,6 @@ components:
       type: object
       required:
         - name
-        - offline
         - external
       properties:
         name:
@@ -1437,6 +1459,9 @@ components:
         openingHours:
           type: string
           maxLength: 1000
+          description: >-
+            Omit (or send null) to keep the stored opening hours; send an empty
+            string to clear them.
           example: "Mo-Fr 9-17 Uhr"
         offline:
           type: boolean
