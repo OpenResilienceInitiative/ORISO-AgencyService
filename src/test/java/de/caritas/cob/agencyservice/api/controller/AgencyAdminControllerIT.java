@@ -361,31 +361,10 @@ class AgencyAdminControllerIT {
     assertNull(savedAgency.getDescription());
   }
 
-  @Test
-  @WithMockUser(authorities = "AUTHORIZATION_AGENCY_ADMIN")
-  void updateAgency_Should_returnStatusBadRequest_When_CentralDataProtectionIsEnabled_And_PayloadContainsInvalidDataProtectionContent() throws Exception {
-    var response = new ExtendedConsultingTypeResponseDTO();
-
-    Long tenantId = agencyRepository.findById(1L).get().getTenantId();
-    when(consultingTypeManager.getConsultingTypeSettings(anyInt())).thenReturn(response);
-
-    when(tenantService.getRestrictedTenantDataByTenantId(tenantId))
-        .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO().settings(new Settings().featureCentralDataProtectionTemplateEnabled(true)));
-
-    var agencyDTO = new UpdateAgencyDTO()
-        .name("Test update name")
-        .description(null)
-        .offline(true)
-        .external(false)
-        .dataProtection(new DataProtectionDTO().dataProtectionResponsibleEntity(DataProtectionDTO.DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)
-            .dataProtectionOfficerContact(new DataProtectionContactDTO()));
-
-
-    mockMvc.perform(withCsrf(put(PathConstants.UPDATE_DELETE_AGENCY_PATH)
-            .contentType(APPLICATION_JSON)
-            .content(JsonConverter.convertToJson(agencyDTO))))
-        .andExpect(status().isBadRequest());
-  }
+  // The "invalid data-protection content is rejected" case moved to
+  // AgencyAdminControllerDataProtectionValidationIT (#209): the rule it asserts is switched OFF in
+  // the testing profile by ADR-003 dev mode (agency.department.require-dpo-contact=false), so it
+  // could never pass here. That suite pins the property to the production value instead.
 
   @Test
   @WithMockUser(authorities = "AUTHORIZATION_AGENCY_ADMIN")
