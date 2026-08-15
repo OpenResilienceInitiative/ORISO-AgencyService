@@ -62,7 +62,8 @@ public class AgencyValidator {
   }
 
   private ValidateAgencyDTO fromUpdateAgencyDto(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
-    var existingAgency = agencyRepository.findById(agencyId).orElseThrow(() -> new BadRequestException("Agency with id " + agencyId + "not found!"));
+    var existingAgency = agencyRepository.findById(agencyId)
+        .orElseThrow(() -> new BadRequestException("Agency with id " + agencyId + " not found!"));
     return ValidateAgencyDTO.builder()
         .id(agencyId)
         .postcode(updateAgencyDTO.getPostcode())
