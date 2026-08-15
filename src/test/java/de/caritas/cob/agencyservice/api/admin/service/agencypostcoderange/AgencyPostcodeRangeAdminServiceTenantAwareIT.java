@@ -80,8 +80,8 @@ public class AgencyPostcodeRangeAdminServiceTenantAwareIT extends AgencyPostcode
   }
 
   @Test
-  public void deleteAgencyPostcodeRange_Should_accept_When_agencyIdNotExists() {
-    super.deleteAgencyPostcodeRange_Should_throwNotFound_When_agencyIdNotExists();
+  public void deleteAgencyPostcodeRange_Should_beNoOp_When_agencyIdNotExists() {
+    super.deleteAgencyPostcodeRange_Should_beNoOp_When_agencyIdNotExists();
   }
 
 }
