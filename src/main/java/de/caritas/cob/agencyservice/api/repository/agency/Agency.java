@@ -107,6 +107,10 @@ public class Agency implements TenantAware {
   @Column(name = "email")
   private String email;
 
+  @Size(max = 1000)
+  @Column(name = "opening_hours")
+  private String openingHours;
+
   @Column(name = "is_team_agency", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
   @JdbcTypeCode(Types.TINYINT)

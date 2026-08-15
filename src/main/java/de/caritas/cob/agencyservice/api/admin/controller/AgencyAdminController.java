@@ -8,6 +8,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchSe
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdStepDirection;
+import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
@@ -29,6 +30,7 @@ import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyPostcodeRangeResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionContentDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDetailsDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentImprintContentDTO;
@@ -65,6 +67,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyValidator agencyValidator;
   private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
   private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
+  private final @NonNull DepartmentDetailsService departmentDetailsService;
   private final @NonNull DepartmentImprintService departmentImprintService;
   private final @NonNull LegalTextAdminService legalTextAdminService;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
@@ -408,6 +411,56 @@ public class AgencyAdminController implements AgencyadminApi {
             .publicationStatus(
                 DepartmentImprintResponseDTO.PublicationStatusEnum.fromValue(status.name()));
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Entry point to read a department's (Fachbereich = agency × topic) contact detail overrides
+   * (opening hours, phone extension, floor/location) to prefill the admin form. A {@code null}
+   * member means "inherits from the Beratungsstelle". Same agency/tenant scoping as the
+   * department legal-text endpoints (IDOR guard inside the service).
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @return the stored {@link DepartmentDetailsDTO} overrides
+   */
+  @Override
+  public ResponseEntity<DepartmentDetailsDTO> getDepartmentDetails(Long agencyId, Long topicId) {
+    var view = departmentDetailsService.getDepartmentDetails(agencyId, topicId);
+    return ResponseEntity.ok(toDepartmentDetailsDTO(view));
+  }
+
+  /**
+   * Entry point to store a department's (Fachbereich = agency × topic) contact detail overrides
+   * (ORISO-Admin#197). Only overrides are persisted — a null/blank member clears the override so
+   * the department inherits the Beratungsstelle value again.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @param departmentDetailsDTO the overrides to store (bean-validated — the generated {@code
+   *     AgencyadminApi} interface declares {@code @Valid @RequestBody}, which Spring honours on
+   *     this override; re-declaring {@code @Valid} here would be an illegal parameter-constraint
+   *     redefinition, HV000151)
+   * @return the stored {@link DepartmentDetailsDTO} overrides after the update
+   */
+  @Override
+  public ResponseEntity<DepartmentDetailsDTO> updateDepartmentDetails(
+      Long agencyId, Long topicId, DepartmentDetailsDTO departmentDetailsDTO) {
+    var view =
+        departmentDetailsService.updateDepartmentDetails(
+            agencyId,
+            topicId,
+            departmentDetailsDTO.getOpeningHours(),
+            departmentDetailsDTO.getPhoneExtension(),
+            departmentDetailsDTO.getFloorLocation());
+    return ResponseEntity.ok(toDepartmentDetailsDTO(view));
+  }
+
+  private DepartmentDetailsDTO toDepartmentDetailsDTO(
+      de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsView view) {
+    return new DepartmentDetailsDTO()
+        .openingHours(view.openingHours())
+        .phoneExtension(view.phoneExtension())
+        .floorLocation(view.floorLocation());
   }
 
   /**

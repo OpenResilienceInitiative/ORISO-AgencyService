@@ -21,6 +21,7 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -59,6 +60,27 @@ public class AgencyTopic {
 
   @Column(name = "update_date")
   private LocalDateTime updateDate;
+
+  /**
+   * ORISO-Admin#197: override of the agency-level opening hours for this department (Fachbereich).
+   * {@code null} = inherit the Beratungsstelle's opening hours (resolution Fachbereich ?? agency).
+   */
+  @Size(max = 1000)
+  @Column(name = "opening_hours")
+  private String openingHours;
+
+  /** ORISO-Admin#197: the department's phone extension (Durchwahl). {@code null} = none. */
+  @Size(max = 50)
+  @Column(name = "phone_extension")
+  private String phoneExtension;
+
+  /**
+   * ORISO-Admin#197: floor/location detail (Etage/Bereich) of this department inside the building.
+   * {@code null} = inherit the agency-level floor/building detail.
+   */
+  @Size(max = 100)
+  @Column(name = "floor_location")
+  private String floorLocation;
 
   /** This department's (Fachbereich) own data privacy policy (Datenschutzerklärung) text. */
   @Column(name = "content_dpp")

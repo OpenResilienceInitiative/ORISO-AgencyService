@@ -716,6 +716,96 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/details:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Read a department's (Fachbereich = agency x topic) own contact detail overrides
+        (opening hours, phone extension, floor/location). Null members mean "inherits from the
+        Beratungsstelle". [Authorization: Role: agency-admin or restricted-agency-admin scoped to
+        its own agencies]
+      operationId: getDepartmentDetails
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - stored department detail overrides (null = inherited)
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentDetailsDTO'
+        400:
+          description: BAD REQUEST - caller may not access this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Store a department's (Fachbereich = agency x topic) contact detail overrides. Only
+        overrides are persisted - a null/blank member clears the override so the department
+        inherits the Beratungsstelle value again. [Authorization: Role: agency-admin or
+        restricted-agency-admin scoped to its own agencies]
+      operationId: updateDepartmentDetails
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/DepartmentDetailsDTO'
+        required: true
+      responses:
+        200:
+          description: OK - stored department detail overrides after the update
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentDetailsDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request, or caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/controls:
     get:
       tags:
@@ -1052,6 +1142,10 @@ components:
           type: string
           maxLength: 255
           example: "kontakt@beratungsstelle.de"
+        openingHours:
+          type: string
+          maxLength: 1000
+          example: "Mo-Fr 9-17 Uhr"
         teamAgency:
           type: boolean
           example: false
@@ -1233,6 +1327,10 @@ components:
           type: string
           maxLength: 255
           example: "kontakt@beratungsstelle.de"
+        openingHours:
+          type: string
+          maxLength: 1000
+          example: "Mo-Fr 9-17 Uhr"
         teamAgency:
           type: boolean
           example: false
@@ -1336,6 +1434,10 @@ components:
           type: string
           maxLength: 255
           example: "kontakt@beratungsstelle.de"
+        openingHours:
+          type: string
+          maxLength: 1000
+          example: "Mo-Fr 9-17 Uhr"
         offline:
           type: boolean
           example: false
@@ -1582,6 +1684,34 @@ components:
             Legal text to reference; null clears the slot — the department falls back
             to its own inline content (content_dpp/content_imprint). Tenant-level fallback is
             future work (ADR-014 / #136).
+
+    DepartmentDetailsDTO:
+      type: object
+      description: >
+        Per-department (Fachbereich = agency x topic) contact detail overrides (ORISO-Admin#197: a
+        center may run several Fachbereiche at different floors/areas with different hours). Every
+        member is nullable - null means "no override, inherit the Beratungsstelle value". The
+        public API resolves Fachbereich value ?? Beratungsstelle value.
+      properties:
+        openingHours:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Override of the agency-level opening hours; null = inherit
+          example: "Di+Do 14-18 Uhr"
+        phoneExtension:
+          type: string
+          nullable: true
+          maxLength: 50
+          description: Phone extension (Durchwahl) of the department; null = none
+          example: "-23"
+        floorLocation:
+          type: string
+          nullable: true
+          maxLength: 100
+          description: Floor/location detail (Etage/Bereich) inside the building; null = inherit
+            the agency-level floor/building detail
+          example: "3. OG, Raum 312"
 
     DepartmentDataProtectionDTO:
       type: object

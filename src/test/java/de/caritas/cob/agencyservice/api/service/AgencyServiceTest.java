@@ -256,6 +256,68 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getListOfAgencies_Should_ResolveDepartmentDetails_FachbereichBeforeAgency()
+      throws MissingConsultingTypeException {
+
+    // ORISO-Admin#197: a center may run several Fachbereiche at different floors/areas with
+    // different hours. Resolution chain: Fachbereich override ?? Beratungsstelle value.
+    Agency agency = Agency.builder().id(102L).name("Zentrum")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .openingHours("Mo-Fr 9-17 Uhr").floorBuilding("Haus B").build();
+    AgencyTopic overriding = AgencyTopic.builder().agency(agency).topicId(1L)
+        .openingHours("Di+Do 14-18 Uhr").phoneExtension("-23").floorLocation("3. OG").build();
+    AgencyTopic inheriting = AgencyTopic.builder().agency(agency).topicId(2L).build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of(overriding, inheriting));
+
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(List.of(agency));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var result = agencyService.getAgencies(Optional.of(VALID_POSTCODE),
+        CONSULTING_TYPE_SUCHT, Optional.empty());
+
+    assertEquals(1, result.size());
+    var byTopicId = result.get(0).getDepartments().stream()
+        .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
+    // the overriding Fachbereich serves its own values
+    assertEquals("Di+Do 14-18 Uhr", byTopicId.get(1L).getOpeningHours());
+    assertEquals("-23", byTopicId.get(1L).getPhoneExtension());
+    assertEquals("3. OG", byTopicId.get(1L).getFloorLocation());
+    // the inheriting Fachbereich resolves to the Beratungsstelle values
+    assertEquals("Mo-Fr 9-17 Uhr", byTopicId.get(2L).getOpeningHours());
+    assertEquals(null, byTopicId.get(2L).getPhoneExtension());
+    assertEquals("Haus B", byTopicId.get(2L).getFloorLocation());
+  }
+
+  @Test
+  public void getListOfAgencies_Should_MapAddressPhoneAndOpeningHours()
+      throws MissingConsultingTypeException {
+
+    Agency agency = Agency.builder().id(101L).name("Zentrum")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .street("Musterstraße").houseNumber("12a")
+        .phone("+49301234567").openingHours("Mo-Fr 9-17 Uhr").build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of());
+
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(List.of(agency));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var result = agencyService.getAgencies(Optional.of(VALID_POSTCODE),
+        CONSULTING_TYPE_SUCHT, Optional.empty());
+
+    assertEquals(1, result.size());
+    assertEquals("Musterstraße", result.get(0).getStreet());
+    assertEquals("12a", result.get(0).getHouseNumber());
+    assertEquals("+49301234567", result.get(0).getPhone());
+    assertEquals("Mo-Fr 9-17 Uhr", result.get(0).getOpeningHours());
+  }
+
+  @Test
   public void getListOfAgencies_Should_DeriveLegalPublicationFlagsFromReferencedLegalText_WhenDepartmentReferencesOne()
       throws MissingConsultingTypeException {
 
@@ -359,6 +421,38 @@ public class AgencyServiceTest {
     assertEquals(AGENCY_RESPONSE_DTO.getConsultingType(), result.getConsultingType());
     assertThat(agencyService.getAgencies(Collections.singletonList(AGENCY_ID)),
         everyItem(instanceOf(AgencyResponseDTO.class)));
+  }
+
+  @Test
+  public void getAgencies_With_Ids_Should_MapContactFieldsAndResolvedDepartmentDetails() {
+
+    // convertToAgencyResponseDTO maps the new contact fields and department details separately
+    // from convertToFullAgencyResponseDTO, so the ID-based path needs its own coverage.
+    Agency agency = Agency.builder().id(103L).name("Zentrum")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .street("Musterstraße").houseNumber("12a").phone("+49301234567")
+        .openingHours("Mo-Fr 9-17 Uhr").floorBuilding("Haus B").build();
+    AgencyTopic overriding = AgencyTopic.builder().agency(agency).topicId(1L)
+        .openingHours("Di+Do 14-18 Uhr").phoneExtension("-23").floorLocation("3. OG").build();
+    AgencyTopic inheriting = AgencyTopic.builder().agency(agency).topicId(2L).build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of(overriding, inheriting));
+
+    when(agencyRepository.findByIdIn(List.of(103L))).thenReturn(List.of(agency));
+
+    AgencyResponseDTO result = agencyService.getAgencies(List.of(103L)).get(0);
+
+    assertEquals("Musterstraße", result.getStreet());
+    assertEquals("12a", result.getHouseNumber());
+    assertEquals("+49301234567", result.getPhone());
+    assertEquals("Mo-Fr 9-17 Uhr", result.getOpeningHours());
+    var byTopicId = result.getDepartments().stream()
+        .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
+    assertEquals("Di+Do 14-18 Uhr", byTopicId.get(1L).getOpeningHours());
+    assertEquals("-23", byTopicId.get(1L).getPhoneExtension());
+    assertEquals("3. OG", byTopicId.get(1L).getFloorLocation());
+    assertEquals("Mo-Fr 9-17 Uhr", byTopicId.get(2L).getOpeningHours());
+    assertEquals(null, byTopicId.get(2L).getPhoneExtension());
+    assertEquals("Haus B", byTopicId.get(2L).getFloorLocation());
   }
 
   @Test

@@ -61,6 +61,7 @@ public class AgencyAdminFullResponseDTOBuilder {
         .phone(this.agency.getPhone())
         .phoneSecondary(this.agency.getPhoneSecondary())
         .email(this.agency.getEmail())
+        .openingHours(this.agency.getOpeningHours())
         .consultingType(this.agency.getConsultingTypeId())
         .description(this.agency.getDescription())
         .postcode(this.agency.getPostCode())
