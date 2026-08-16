@@ -30,9 +30,9 @@
     <openapi.generator.maven.version>7.17.0</openapi.generator.maven.version>
     <jackson-databind-nullable.version>0.2.3</jackson-databind-nullable.version>
     <jakarta.ws.rs-api.version>3.1.0</jakarta.ws.rs-api.version>
-    <commons-lang3.version>3.11</commons-lang3.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
     <liquibase-maven-plugin.version>4.23.2</liquibase-maven-plugin.version>
-    <h2.version>1.4.200</h2.version>
+    <h2.version>2.2.220</h2.version>
     <powermock-module-junit4.version>2.0.9</powermock-module-junit4.version>
     <easy-random-core.version>5.0.0</easy-random-core.version>
     <spring-boot-autoconfigure.version>4.0.7</spring-boot-autoconfigure.version>
@@ -41,6 +41,7 @@
     <springfox.version>2.9.2</springfox.version>
     <springfox-swagger-ui.version>2.10.0</springfox-swagger-ui.version>
     <spring-security-oauth2-test-webmvc-addons.version>3.0.1</spring-security-oauth2-test-webmvc-addons.version>
+    <httpcore5.version>5.4.3</httpcore5.version>
     <mockito.version>5.20.0</mockito.version>
     <!-- Filled in by jacoco:prepare-agent and consumed by surefire's argLine below.
          Declared empty here so a run that never reaches prepare-agent (`-DskipTests`,
@@ -56,6 +57,18 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- Spring Boot 4.0.7 manages 5.3.6, which is affected by CVE-2026-54399
+           and CVE-2026-54428. Keep both transport modules on the fixed release. -->
+      <dependency>
+        <groupId>org.apache.httpcomponents.core5</groupId>
+        <artifactId>httpcore5</artifactId>
+        <version>${httpcore5.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents.core5</groupId>
+        <artifactId>httpcore5-h2</artifactId>
+        <version>${httpcore5.version}</version>
+      </dependency>
       <!-- swagger-parser drags in commons-io 2.11.0 (CVE-2024-47554); force a fixed release. -->
       <dependency>
         <groupId>commons-io</groupId>
@@ -369,7 +382,7 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.12</version>
+      <version>4.13.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>
