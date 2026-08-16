@@ -1,5 +1,7 @@
 package de.caritas.cob.agencyservice.api.admin.service;
 
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_ID_NOT_AVAILABLE;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_DEFAULT_AGENCY;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_TEAM_AGENCY;
@@ -10,6 +12,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,7 +33,9 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConvert
 import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.admin.service.legal.ConsentTextService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionService;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
@@ -87,6 +93,12 @@ class AgencyAdminServiceTest {
 
   @Mock
   LegalContentSanitizer legalContentSanitizer;
+
+  @Mock
+  LegalTextVersionService legalTextVersionService;
+
+  @Mock
+  ConsentTextService consentTextService;
 
   @Mock
   AgencyTopicRepository agencyTopicRepository;
@@ -482,6 +494,55 @@ class AgencyAdminServiceTest {
     assertEquals("{\"de\":\"<p>DSE</p>\"}", agencyArgumentCaptor.getValue().getContentDpp());
     assertEquals(
         "{\"de\":\"<p>Impressum</p>\"}", agencyArgumentCaptor.getValue().getContentImprint());
+  }
+
+  @Test
+  void updateAgency_Should_recordNoVersion_When_theLegalWordingDidNotChange() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    // Changeset 0031 deliberately backfills no history, so an agency that already had legal texts
+    // has NO open version to deduplicate against. Without the change check, the first unrelated
+    // update - a phone number, the opening hours - would snapshot the untouched old wording stamped
+    // with the current time and assert the policy came into force at that moment.
+    verifyNoInteractions(legalTextVersionService);
+  }
+
+  @Test
+  void updateAgency_Should_recordAVersion_When_theLegalWordingChanged() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setId(AGENCY_ID);
+    agency.setContentDpp("{\"de\":\"<p>alt</p>\"}");
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>neu</p>")))
+        .thenReturn("{\"de\":\"<p>neu</p>\"}");
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(new AgencyLegalContentDTO().privacy(Map.of("de", "<p>neu</p>")));
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    // The agency level has no publication status, so a save IS the publish - but only when the
+    // wording actually moved.
+    verify(legalTextVersionService)
+        .recordPublication(
+            eq(LegalTextLevel.AGENCY),
+            eq(AGENCY_ID),
+            eq(LegalTextKind.DPP),
+            any(),
+            eq("{\"de\":\"<p>neu</p>\"}"),
+            any());
   }
 
   @Test

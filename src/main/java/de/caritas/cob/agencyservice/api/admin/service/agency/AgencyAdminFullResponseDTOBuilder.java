@@ -103,9 +103,15 @@ public class AgencyAdminFullResponseDTOBuilder {
   private AgencyLegalContentDTO getLegalContent() {
     var privacy = toContentMap(this.agency.getContentDpp());
     var impressum = toContentMap(this.agency.getContentImprint());
-    return privacy == null && impressum == null
+    // ADR-021 decision 4: the consent sentence is a field of the privacy policy, so it is read back
+    // through the same object rather than through a second endpoint.
+    var consentText = toContentMap(this.agency.getConsentText());
+    return privacy == null && impressum == null && consentText == null
         ? null
-        : new AgencyLegalContentDTO().privacy(privacy).impressum(impressum);
+        : new AgencyLegalContentDTO()
+            .privacy(privacy)
+            .impressum(impressum)
+            .consentText(consentText);
   }
 
   private Map<String, String> toContentMap(String storedJson) {
@@ -130,9 +136,12 @@ public class AgencyAdminFullResponseDTOBuilder {
    * The departments with the publication state of their own legal texts (ORISO-Admin#583).
    *
    * <p>An admin editing the agency-wide text needs to see who will <em>not</em> receive the
-   * change — a Fachbereich that has published its own text no longer inherits. The resolution
-   * is shared with the public agency read via {@link DepartmentLegalPublicationState}, so the
-   * switcher can never claim something different from what help-seekers are shown.
+   * change — a Fachbereich that has published its own text no longer inherits. That is the
+   * question {@link DepartmentLegalPublicationState} answers, and it is deliberately narrower than
+   * the public {@code AgencyDepartmentDTO.hasPublishedDpp}, which reports whether any policy is in
+   * force across the four ADR-021 levels. Using the wider predicate here would mark every
+   * department of an agency that has any agency-wide text, i.e. exactly the departments that DO
+   * still inherit — the marker would say the opposite of what it means.
    *
    * <p>Built from the already-loaded {@code agencyTopics} association ({@code topics} above uses
    * the same one), so this adds no query per agency or topic.
