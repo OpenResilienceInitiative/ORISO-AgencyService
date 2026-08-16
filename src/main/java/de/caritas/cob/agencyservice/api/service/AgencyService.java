@@ -26,6 +26,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
@@ -73,6 +74,8 @@ public class AgencyService {
   private final @NonNull AgencySettingsService agencySettingsService;
 
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
+
+  private final @NonNull LegalTextInheritanceResolver legalTextInheritanceResolver;
 
   private final @NonNull AgencyEffectivePermissionSettingsApplier
       effectivePermissionSettingsApplier;
@@ -551,26 +554,22 @@ public class AgencyService {
     return departmentValue != null ? departmentValue : agencyValue;
   }
 
+  /**
+   * Whether a data protection policy is in force for this department at all.
+   *
+   * <p>Measured defect, fixed here (CONTEXT-legal-documents, "known traps"): this used to be
+   * computed from the department level only, while {@code DepartmentLegalService} already fell back
+   * to the agency-wide text. A department could therefore report {@code hasPublishedDpp: false}
+   * while {@code /legal} returned content, and a client trusting the flag hid a document that
+   * existed. Both now ask the same resolver, so the flag cannot disagree with the endpoint.
+   */
   private boolean hasPublishedDpp(AgencyTopic agencyTopic) {
-    LegalText referenced = agencyTopic.getDpp();
-    if (referenced != null) {
-      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return hasPublishedContent(agencyTopic.getContentDpp(), agencyTopic.getPublicationStatus());
+    return legalTextInheritanceResolver.resolveDpp(agencyTopic).isPresent();
   }
 
+  /** Same fix for the imprint half — an inherited imprint is reachable and must be reported so. */
   private boolean hasPublishedImprint(AgencyTopic agencyTopic) {
-    LegalText referenced = agencyTopic.getImprint();
-    if (referenced != null) {
-      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return hasPublishedContent(
-        agencyTopic.getContentImprint(), agencyTopic.getPublicationStatusImprint());
-  }
-
-  private boolean hasPublishedContent(String content, PublicationStatus status) {
-    var hasContent = content != null && !content.isBlank();
-    return PublicationStatus.PUBLISHED == status && hasContent;
+    return legalTextInheritanceResolver.resolveImprint(agencyTopic).isPresent();
   }
 
   private DemographicsDTO getDemographics(Agency agency) {
