@@ -27,6 +27,7 @@ import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.api.service.legal.DepartmentLegalPublicationState;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import java.time.LocalDateTime;
@@ -530,13 +531,15 @@ public class AgencyService {
    * <p>ADR-014: like {@link DepartmentLegalService}, a referenced shared legal-text object fully
    * replaces the inline column — the flags must follow the same resolution order, otherwise the
    * registration search would report stale inline state after a write-through publish/draft-save.
+   * That order lives in {@link DepartmentLegalPublicationState}, shared with the admin read so the
+   * Fachbereich switcher (ORISO-Admin#583) can never disagree with what help-seekers are shown.
    */
   private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic,
       Agency agency) {
     return new AgencyDepartmentDTO()
         .topicId(agencyTopic.getTopicId())
-        .hasPublishedDpp(hasPublishedDpp(agencyTopic))
-        .hasPublishedImprint(hasPublishedImprint(agencyTopic))
+        .hasPublishedDpp(DepartmentLegalPublicationState.hasPublishedDpp(agencyTopic))
+        .hasPublishedImprint(DepartmentLegalPublicationState.hasPublishedImprint(agencyTopic))
         .openingHours(resolve(agencyTopic.getOpeningHours(), agency.getOpeningHours()))
         .phoneExtension(agencyTopic.getPhoneExtension())
         .floorLocation(resolve(agencyTopic.getFloorLocation(), agency.getFloorBuilding()));
@@ -549,28 +552,6 @@ public class AgencyService {
    */
   private String resolve(String departmentValue, String agencyValue) {
     return departmentValue != null ? departmentValue : agencyValue;
-  }
-
-  private boolean hasPublishedDpp(AgencyTopic agencyTopic) {
-    LegalText referenced = agencyTopic.getDpp();
-    if (referenced != null) {
-      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return hasPublishedContent(agencyTopic.getContentDpp(), agencyTopic.getPublicationStatus());
-  }
-
-  private boolean hasPublishedImprint(AgencyTopic agencyTopic) {
-    LegalText referenced = agencyTopic.getImprint();
-    if (referenced != null) {
-      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return hasPublishedContent(
-        agencyTopic.getContentImprint(), agencyTopic.getPublicationStatusImprint());
-  }
-
-  private boolean hasPublishedContent(String content, PublicationStatus status) {
-    var hasContent = content != null && !content.isBlank();
-    return PublicationStatus.PUBLISHED == status && hasContent;
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

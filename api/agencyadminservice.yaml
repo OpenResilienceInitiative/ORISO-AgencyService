@@ -1190,6 +1190,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TopicDTO'
+        departments:
+          type: array
+          description: >
+            The agency's departments (one per assigned topic) with the publication state of
+            their own legal texts. Lets the admin UI mark, in the Fachbereich switcher, which
+            departments have left the inherited text and will therefore not receive a change
+            to the agency-wide one (ORISO-Admin#583). Optional - older clients ignore it.
+          items:
+            $ref: '#/components/schemas/AgencyAdminDepartmentDTO'
         demographics:
           $ref: '#/components/schemas/DemographicsDTO'
         createDate:
@@ -1221,6 +1230,27 @@ components:
         settings:
           $ref: '#/components/schemas/Settings'
           description: Agency settings including platform-level agencyAdminControls
+
+    AgencyAdminDepartmentDTO:
+      type: object
+      description: >
+        One department (Fachbereich = agency x topic) and whether it carries published legal
+        texts of its own. Deliberately smaller than the public AgencyDepartmentDTO: the admin
+        read answers "who has left the inherited text", not the contact-detail overrides the
+        registration search needs.
+      properties:
+        topicId:
+          type: integer
+          format: int64
+          example: 7
+        hasPublishedDpp:
+          type: boolean
+          description: true if the department has a published data privacy policy of its own
+          example: true
+        hasPublishedImprint:
+          type: boolean
+          description: true if the department has a published imprint of its own
+          example: false
 
     AgencyLegalContentDTO:
       type: object
