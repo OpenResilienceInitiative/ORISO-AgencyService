@@ -13,6 +13,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyA
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminView;
@@ -45,6 +46,7 @@ class AgencyAdminControllerLegalTextTest {
   @Mock private DepartmentDetailsService departmentDetailsService;
   @Mock private DepartmentImprintService departmentImprintService;
   @Mock private LegalTextAdminService legalTextAdminService;
+  @Mock private LegalTextVersionAdminService legalTextVersionAdminService;
   @Mock private AgencyIdAllocationService agencyIdAllocationService;
 
   @InjectMocks private AgencyAdminController controller;

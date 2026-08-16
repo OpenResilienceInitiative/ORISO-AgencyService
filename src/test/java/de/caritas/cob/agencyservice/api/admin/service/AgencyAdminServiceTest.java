@@ -30,6 +30,7 @@ import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionService;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
@@ -87,6 +88,9 @@ class AgencyAdminServiceTest {
 
   @Mock
   LegalContentSanitizer legalContentSanitizer;
+
+  @Mock
+  LegalTextVersionService legalTextVersionService;
 
   @Mock
   AgencyTopicRepository agencyTopicRepository;

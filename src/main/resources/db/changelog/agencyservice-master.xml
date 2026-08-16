@@ -84,6 +84,10 @@
        agency_topic (opening hours, phone extension, floor/location). Additive, all nullable;
        null = inherit the Beratungsstelle value. -->
   <include file="db/changelog/changeset/0030_agency_topic_details/0030_changeSet.xml"/>
+  <!-- ADR-021 decision 3 (#250, #212): generic legal-text publication history. Immutable
+       snapshots keyed by a surrogate id (never by the publication timestamp), so "which wording
+       was in force on date X, published by whom" is answerable for the first time. -->
+  <include file="db/changelog/changeset/0031_legal_text_version/0031_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB

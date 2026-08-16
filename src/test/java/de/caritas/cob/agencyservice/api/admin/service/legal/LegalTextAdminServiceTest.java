@@ -44,6 +44,7 @@ class LegalTextAdminServiceTest {
   @Mock private AgencyTopicRepository agencyTopicRepository;
   @Mock private AuthenticatedUser authenticatedUser;
   @Mock private UserAdminService userAdminService;
+  @Mock private LegalTextVersionService legalTextVersionService;
 
   private LegalTextAdminService service;
 
@@ -56,7 +57,8 @@ class LegalTextAdminServiceTest {
             agencyTopicRepository,
             new LegalContentSanitizer(new InputSanitizer()),
             authenticatedUser,
-            userAdminService);
+            userAdminService,
+            legalTextVersionService);
   }
 
   @AfterEach

@@ -21,7 +21,10 @@ import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionService;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
@@ -72,6 +75,7 @@ public class AgencyAdminService {
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
   private final @NonNull TransactionOperations agencyCreationTransaction;
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
+  private final @NonNull LegalTextVersionService legalTextVersionService;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -269,7 +273,37 @@ public class AgencyAdminService {
     enrichWithAgencyTopicsIfTopicFeatureEnabled(updatedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(updatedAgency);
     agencyRepository.flush();
+    recordAgencyLegalTextVersions(updatedAgency);
     return buildAgencyAdminFullResponse(updatedAgency);
+  }
+
+  /**
+   * ADR-021 decision 3 on the Beratungsstelle level (level 3).
+   *
+   * <p>That level deliberately carries <b>no publication status</b> — CONTEXT-legal-documents puts
+   * it as "what is stored, applies", and every Fachbereich inherits it until it publishes one of
+   * its own. There is consequently no publish button to hang a snapshot on, so <em>a save is a
+   * publish here</em>: whatever an agency update leaves stored is the wording in force from that
+   * moment, and that is precisely what the history has to record.
+   *
+   * <p>Recording runs after the save, on the persisted wording, and {@link
+   * LegalTextVersionService#recordPublication} drops a wording identical to the current version.
+   * Without that, an update about opening hours — which resends the untouched legal texts — would
+   * manufacture a new "version" of a document nobody edited.
+   */
+  private void recordAgencyLegalTextVersions(Agency agency) {
+    legalTextVersionService.recordPublication(
+        LegalTextLevel.AGENCY,
+        agency.getId(),
+        LegalTextKind.DPP,
+        agency.getTenantId(),
+        agency.getContentDpp());
+    legalTextVersionService.recordPublication(
+        LegalTextLevel.AGENCY,
+        agency.getId(),
+        LegalTextKind.IMPRINT,
+        agency.getTenantId(),
+        agency.getContentImprint());
   }
 
   private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {

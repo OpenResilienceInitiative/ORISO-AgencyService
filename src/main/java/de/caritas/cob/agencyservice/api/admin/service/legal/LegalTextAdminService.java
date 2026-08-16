@@ -10,6 +10,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicReposi
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextRepository;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
@@ -42,6 +43,7 @@ public class LegalTextAdminService {
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
+  private final @NonNull LegalTextVersionService legalTextVersionService;
 
   /**
    * Lists the caller tenant's legal texts of one kind, each with its department usage count.
@@ -79,7 +81,9 @@ public class LegalTextAdminService {
             .createDate(now)
             .updateDate(now)
             .build();
-    return toView(legalTextRepository.save(text));
+    var saved = legalTextRepository.save(text);
+    recordPublicationIfPublished(saved, publish);
+    return toView(saved);
   }
 
   /**
@@ -102,7 +106,29 @@ public class LegalTextAdminService {
       text.setPublicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
     }
     text.setUpdateDate(LocalDateTime.now());
-    return toView(legalTextRepository.save(text));
+    var saved = legalTextRepository.save(text);
+    recordPublicationIfPublished(saved, saved.getPublicationStatus() == PublicationStatus.PUBLISHED);
+    return toView(saved);
+  }
+
+  /**
+   * ADR-021 decision 3 for the ADR-014 shared objects. A shared text is the document in force for
+   * every department referencing it, so its wording needs the same provable history as an inline
+   * one; leaving it out would mean a Träger loses its evidence precisely by doing the tidy thing
+   * and maintaining one document instead of N copies.
+   *
+   * <p>An update that leaves the text {@code DRAFT} records nothing, and re-saving an unchanged
+   * published wording is deduplicated inside {@link LegalTextVersionService}.
+   */
+  private void recordPublicationIfPublished(LegalText text, boolean published) {
+    if (published) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.SHARED,
+          text.getId(),
+          text.getKind(),
+          text.getTenantId(),
+          text.getContent());
+    }
   }
 
   /**

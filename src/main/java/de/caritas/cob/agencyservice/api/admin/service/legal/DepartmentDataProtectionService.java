@@ -15,6 +15,8 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -54,6 +56,7 @@ public class DepartmentDataProtectionService {
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
+  private final @NonNull LegalTextVersionService legalTextVersionService;
 
   /**
    * Sanitises and stores the department's DPP for the given agency × topic. When {@code publish} is
@@ -89,6 +92,17 @@ public class DepartmentDataProtectionService {
     department.setPublicationStatus(status);
     department.setUpdateDate(LocalDateTime.now());
     agencyTopicRepository.save(department);
+
+    // ADR-021 decision 3: only a real publish snapshots the wording. A draft-save deliberately
+    // writes no version — that is the #212 distinction update_date could never make.
+    if (publish) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.DEPARTMENT,
+          department.getId(),
+          LegalTextKind.DPP,
+          department.getAgency() == null ? null : department.getAgency().getTenantId(),
+          sanitizedJson);
+    }
 
     return status;
   }

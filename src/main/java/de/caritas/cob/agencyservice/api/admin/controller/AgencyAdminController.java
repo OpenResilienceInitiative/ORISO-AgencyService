@@ -12,6 +12,7 @@ import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetai
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
@@ -23,6 +24,7 @@ import de.caritas.cob.agencyservice.api.model.AgencyIdResponseDTO;
 import de.caritas.cob.agencyservice.api.model.CreateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAdminDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAssignmentDTO;
+import de.caritas.cob.agencyservice.api.model.LegalTextVersionDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
@@ -70,6 +72,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull DepartmentDetailsService departmentDetailsService;
   private final @NonNull DepartmentImprintService departmentImprintService;
   private final @NonNull LegalTextAdminService legalTextAdminService;
+  private final @NonNull LegalTextVersionAdminService legalTextVersionAdminService;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   /**
@@ -514,6 +517,50 @@ public class AgencyAdminController implements AgencyadminApi {
         LegalTextKind.valueOf(legalTextAssignmentDTO.getKind().getValue()),
         legalTextAssignmentDTO.getLegalTextId());
     return ResponseEntity.noContent().build();
+  }
+
+  /**
+   * ADR-021 decision 3: the publication history of one department's DPP or imprint, newest first.
+   * IDOR/tenant guards live in the service.
+   */
+  @Override
+  public ResponseEntity<List<LegalTextVersionDTO>> getDepartmentLegalTextVersions(
+      Long agencyId, Long topicId, String kind) {
+    var views =
+        legalTextVersionAdminService.listDepartmentVersions(
+            agencyId, topicId, LegalTextKind.valueOf(kind));
+    return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
+  }
+
+  /**
+   * ADR-021 decision 3 on the Beratungsstelle level, which has no publication status: every agency
+   * update that changes the stored wording is a publish there.
+   */
+  @Override
+  public ResponseEntity<List<LegalTextVersionDTO>> getAgencyLegalTextVersions(
+      Long agencyId, String kind) {
+    var views = legalTextVersionAdminService.listAgencyVersions(agencyId, LegalTextKind.valueOf(kind));
+    return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
+  }
+
+  /** One archived version, verbatim; authorised against the version's stored owner. */
+  @Override
+  public ResponseEntity<LegalTextVersionDTO> getLegalTextVersion(Long versionId) {
+    return ResponseEntity.ok(
+        toLegalTextVersionDto(legalTextVersionAdminService.getVersion(versionId)));
+  }
+
+  private LegalTextVersionDTO toLegalTextVersionDto(
+      de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionView view) {
+    return new LegalTextVersionDTO()
+        .id(view.id())
+        .kind(LegalTextVersionDTO.KindEnum.fromValue(view.kind().name()))
+        .ownerLevel(LegalTextVersionDTO.OwnerLevelEnum.fromValue(view.ownerLevel().name()))
+        .ownerId(view.ownerId())
+        .content(view.content())
+        .publishedAt(view.publishedAt() == null ? null : view.publishedAt().toString())
+        .publishedBy(view.publishedBy())
+        .supersededAt(view.supersededAt() == null ? null : view.supersededAt().toString());
   }
 
   private LegalTextAdminDTO toLegalTextAdminDto(

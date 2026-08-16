@@ -3,6 +3,8 @@ package de.caritas.cob.agencyservice.api.admin.service.legal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -18,6 +20,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicReposi
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -38,6 +41,7 @@ class DepartmentImprintServiceTest {
   @Mock private AgencyTopicRepository agencyTopicRepository;
   @Mock private AuthenticatedUser authenticatedUser;
   @Mock private UserAdminService userAdminService;
+  @Mock private LegalTextVersionService legalTextVersionService;
 
   private DepartmentImprintService service;
 
@@ -50,7 +54,8 @@ class DepartmentImprintServiceTest {
             agencyTopicRepository,
             new LegalContentSanitizer(new InputSanitizer()),
             authenticatedUser,
-            userAdminService);
+            userAdminService,
+            legalTextVersionService);
   }
 
   @AfterEach
@@ -200,6 +205,26 @@ class DepartmentImprintServiceTest {
     // dangerous markup removed, text kept
     assertThat(storedJson).contains("Impressum").doesNotContain("script").doesNotContain("onclick");
     assertThat(saved.getValue().getUpdateDate()).isNotNull();
+  }
+
+  @Test
+  void publish_Should_recordAnImmutableVersion_ForTheDepartmentLevel() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setId(4711L);
+    department.setAgency(Agency.builder().id(7L).name("BS").consultingTypeId(1).tenantId(3L).build());
+
+    service.publishDepartmentImprint(7L, 42L, Map.of("de", "<p>neu</p>"), true);
+
+    // The imprint is an information duty, never a consent gate (ADR-021 decision 7) - but "which
+    // imprint was reachable when" still has to be answerable, so it gets the same history.
+    verify(legalTextVersionService)
+        .recordPublication(
+            eq(LegalTextLevel.DEPARTMENT),
+            eq(4711L),
+            eq(LegalTextKind.IMPRINT),
+            eq(3L),
+            anyString());
   }
 
   @Test
