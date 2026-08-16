@@ -6,6 +6,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver;
+import de.caritas.cob.agencyservice.api.service.legal.PublicLegalTextRenderer;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class DepartmentLegalService {
 
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
   private final @NonNull LegalTextInheritanceResolver legalTextInheritanceResolver;
+  private final @NonNull PublicLegalTextRenderer publicLegalTextRenderer;
 
   /**
    * Loads the legal texts in force for the department, resolved across all four ADR-021 levels.
@@ -48,9 +50,12 @@ public class DepartmentLegalService {
 
     assertAgencyIsNotDeleted(department.getAgency());
 
+    // ADR-021 decision 5: substitute what the server owns, leave {{legal_links}} for the client.
     return new DepartmentLegalView(
-        legalTextInheritanceResolver.resolveDpp(department),
-        legalTextInheritanceResolver.resolveImprint(department));
+        publicLegalTextRenderer.render(
+            legalTextInheritanceResolver.resolveDpp(department), department),
+        publicLegalTextRenderer.render(
+            legalTextInheritanceResolver.resolveImprint(department), department));
   }
 
   /**

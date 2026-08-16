@@ -30,8 +30,19 @@ class DepartmentLegalServiceTest {
 
   @Mock private AgencyTopicRepository agencyTopicRepository;
   @Mock private LegalTextInheritanceResolver legalTextInheritanceResolver;
+  @Mock private de.caritas.cob.agencyservice.api.service.legal.PublicLegalTextRenderer publicLegalTextRenderer;
 
   @InjectMocks private DepartmentLegalService service;
+
+  @org.junit.jupiter.api.BeforeEach
+  void renderPassThrough() {
+    // Substitution is covered by PublicLegalTextRendererTest; here it must not hide the resolution.
+    org.mockito.Mockito.lenient()
+        .when(
+            publicLegalTextRenderer.render(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
 
   private AgencyTopic department(LocalDateTime agencyDeleteDate) {
     var department =
