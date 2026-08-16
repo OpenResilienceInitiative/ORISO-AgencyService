@@ -88,6 +88,11 @@
        snapshots keyed by a surrogate id (never by the publication timestamp), so "which wording
        was in force on date X, published by whom" is answerable for the first time. -->
   <include file="db/changelog/changeset/0031_legal_text_version/0031_changeSet.xml"/>
+  <!-- ADR-021 decision 4 (#250): the consent sentence a help-seeker ticks becomes a field of the
+       data protection policy — one document, one publication status, one history. The
+       cookie/authentication notice is deliberately NOT stored: it is a fixed addendum the client
+       renders, so no Träger can edit away the platform's mandatory disclosure. -->
+  <include file="db/changelog/changeset/0032_legal_consent_text/0032_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB

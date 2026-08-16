@@ -29,6 +29,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConvert
 import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.admin.service.legal.ConsentTextService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionService;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminResponseDTO;
@@ -91,6 +92,9 @@ class AgencyAdminServiceTest {
 
   @Mock
   LegalTextVersionService legalTextVersionService;
+
+  @Mock
+  ConsentTextService consentTextService;
 
   @Mock
   AgencyTopicRepository agencyTopicRepository;

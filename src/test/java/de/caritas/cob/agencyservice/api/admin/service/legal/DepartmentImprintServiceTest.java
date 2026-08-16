@@ -224,7 +224,7 @@ class DepartmentImprintServiceTest {
             eq(4711L),
             eq(LegalTextKind.IMPRINT),
             eq(3L),
-            anyString());
+            anyString(), any());
   }
 
   @Test

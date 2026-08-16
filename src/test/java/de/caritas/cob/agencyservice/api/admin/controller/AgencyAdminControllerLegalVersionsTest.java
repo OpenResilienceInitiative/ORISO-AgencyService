@@ -52,6 +52,7 @@ class AgencyAdminControllerLegalVersionsTest {
         level,
         4711L,
         "{\"de\":\"<p>Fassung</p>\"}",
+        "{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}",
         LocalDateTime.of(2026, 5, 1, 9, 0),
         "admin-uuid",
         supersededAt);

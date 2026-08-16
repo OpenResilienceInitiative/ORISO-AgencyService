@@ -100,9 +100,15 @@ public class AgencyAdminFullResponseDTOBuilder {
   private AgencyLegalContentDTO getLegalContent() {
     var privacy = toContentMap(this.agency.getContentDpp());
     var impressum = toContentMap(this.agency.getContentImprint());
-    return privacy == null && impressum == null
+    // ADR-021 decision 4: the consent sentence is a field of the privacy policy, so it is read back
+    // through the same object rather than through a second endpoint.
+    var consentText = toContentMap(this.agency.getConsentText());
+    return privacy == null && impressum == null && consentText == null
         ? null
-        : new AgencyLegalContentDTO().privacy(privacy).impressum(impressum);
+        : new AgencyLegalContentDTO()
+            .privacy(privacy)
+            .impressum(impressum)
+            .consentText(consentText);
   }
 
   private Map<String, String> toContentMap(String storedJson) {

@@ -19,6 +19,7 @@ public record LegalTextVersionView(
     LegalTextLevel ownerLevel,
     Long ownerId,
     String content,
+    String consentText,
     LocalDateTime publishedAt,
     String publishedBy,
     LocalDateTime supersededAt) {}

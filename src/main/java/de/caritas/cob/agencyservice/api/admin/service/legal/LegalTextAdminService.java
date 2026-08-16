@@ -44,6 +44,7 @@ public class LegalTextAdminService {
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
   private final @NonNull LegalTextVersionService legalTextVersionService;
+  private final @NonNull ConsentTextService consentTextService;
 
   /**
    * Lists the caller tenant's legal texts of one kind, each with its department usage count.
@@ -67,7 +68,11 @@ public class LegalTextAdminService {
   /** Creates a legal text owned by the caller's tenant (full agency admins only). */
   @Transactional
   public LegalTextAdminView createLegalText(
-      LegalTextKind kind, String label, Map<String, String> content, boolean publish) {
+      LegalTextKind kind,
+      String label,
+      Map<String, String> content,
+      Map<String, String> consentText,
+      boolean publish) {
     assertFullAgencyAdmin();
     assertValidLabel(label);
     var now = LocalDateTime.now();
@@ -77,6 +82,7 @@ public class LegalTextAdminService {
             .kind(kind)
             .label(label)
             .content(legalContentSanitizer.sanitizeToJson(content))
+            .consentText(resolveConsentText(kind, consentText, publish))
             .publicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT)
             .createDate(now)
             .updateDate(now)
@@ -93,15 +99,26 @@ public class LegalTextAdminService {
    */
   @Transactional
   public LegalTextAdminView updateLegalText(
-      Long legalTextId, String label, Map<String, String> content, Boolean publish) {
+      Long legalTextId,
+      String label,
+      Map<String, String> content,
+      Map<String, String> consentText,
+      Boolean publish) {
     assertFullAgencyAdmin();
     LegalText text =
         legalTextRepository.findById(legalTextId).orElseThrow(NotFoundException::new);
     assertCallerTenantOwnsText(text);
     assertValidLabel(label);
 
+    // A null publish flag keeps the current status, so the token validator has to be told what the
+    // resulting status will be - otherwise updating an already published text could slip a consent
+    // sentence without {{legal_links}} past the gate.
+    var willBePublished =
+        publish != null ? publish : text.getPublicationStatus() == PublicationStatus.PUBLISHED;
+
     text.setLabel(label);
     text.setContent(legalContentSanitizer.sanitizeToJson(content));
+    text.setConsentText(resolveConsentText(text.getKind(), consentText, willBePublished));
     if (publish != null) {
       text.setPublicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
     }
@@ -127,7 +144,8 @@ public class LegalTextAdminService {
           text.getId(),
           text.getKind(),
           text.getTenantId(),
-          text.getContent());
+          text.getContent(),
+          text.getConsentText());
     }
   }
 
@@ -198,8 +216,21 @@ public class LegalTextAdminService {
         text.getKind(),
         text.getLabel(),
         text.getContent(),
+        text.getConsentText(),
         text.getPublicationStatus(),
         usage);
+  }
+
+  /**
+   * ADR-021 decision 7: only the DPP is consent-bearing. An imprint is an information duty, so a
+   * consent sentence submitted alongside one is dropped rather than stored — storing it would
+   * create a second, unreachable consent wording that nothing renders and nothing validates.
+   */
+  private String resolveConsentText(
+      LegalTextKind kind, Map<String, String> consentText, boolean publish) {
+    return kind == LegalTextKind.DPP
+        ? consentTextService.sanitizeAndValidate(consentText, publish)
+        : null;
   }
 
   private void assertValidLabel(String label) {

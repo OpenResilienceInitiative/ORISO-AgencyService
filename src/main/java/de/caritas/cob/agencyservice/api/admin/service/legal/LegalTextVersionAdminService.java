@@ -102,6 +102,7 @@ public class LegalTextVersionAdminService {
         version.getOwnerLevel(),
         version.getOwnerId(),
         version.getContent(),
+        version.getConsentText(),
         version.getPublishedAt(),
         version.getPublishedBy(),
         version.getSupersededAt());

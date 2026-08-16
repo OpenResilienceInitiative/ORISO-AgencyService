@@ -74,6 +74,14 @@ public class LegalTextVersion {
   @Column(name = "content", columnDefinition = "longtext")
   private String content;
 
+  /**
+   * The consent sentence as published alongside {@link #content} (ADR-021 decision 4). Changing
+   * only the consent wording still means publishing a new DPP version whose body may be identical
+   * — that is the point: one version pointer covers both.
+   */
+  @Column(name = "consent_text", columnDefinition = "longtext")
+  private String consentText;
+
   @Column(name = "published_at", nullable = false)
   private LocalDateTime publishedAt;
 

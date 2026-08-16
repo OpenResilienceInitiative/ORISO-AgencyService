@@ -57,6 +57,7 @@ public class DepartmentDataProtectionService {
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
   private final @NonNull LegalTextVersionService legalTextVersionService;
+  private final @NonNull ConsentTextService consentTextService;
 
   /**
    * Sanitises and stores the department's DPP for the given agency × topic. When {@code publish} is
@@ -67,7 +68,11 @@ public class DepartmentDataProtectionService {
    */
   @Transactional
   public PublicationStatus publishDepartmentDataPrivacy(
-      Long agencyId, Long topicId, Map<String, String> content, boolean publish) {
+      Long agencyId,
+      Long topicId,
+      Map<String, String> content,
+      Map<String, String> consentText,
+      boolean publish) {
     assertRestrictedAdminOwnsAgency(agencyId);
 
     AgencyTopic department =
@@ -78,7 +83,10 @@ public class DepartmentDataProtectionService {
     assertCallerTenantMatches(department.getAgency());
 
     var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
-    var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
+    // ADR-021 decision 2: validated BEFORE anything is written, so a consent text missing the
+    // mandatory token leaves the stored document untouched instead of half-updating it.
+    var sanitizedConsent = consentTextService.sanitizeAndValidate(consentText, publish);
+    final var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
 
     // ADR-014 amendment 2026-07-28: never write through to the referenced shared object. The 0026
     // backfill merged byte-identical departments onto one row, so writing through would silently
@@ -89,6 +97,7 @@ public class DepartmentDataProtectionService {
       department.setDpp(null);
     }
     department.setContentDpp(sanitizedJson);
+    department.setConsentText(sanitizedConsent);
     department.setPublicationStatus(status);
     department.setUpdateDate(LocalDateTime.now());
     agencyTopicRepository.save(department);
@@ -101,7 +110,8 @@ public class DepartmentDataProtectionService {
           department.getId(),
           LegalTextKind.DPP,
           department.getAgency() == null ? null : department.getAgency().getTenantId(),
-          sanitizedJson);
+          sanitizedJson,
+          sanitizedConsent);
     }
 
     return status;
@@ -126,10 +136,10 @@ public class DepartmentDataProtectionService {
     LegalText referenced = department.getDpp();
     if (referenced != null && !hasPendingDraft(department, referenced)) {
       return new DepartmentDataProtectionView(
-          referenced.getContent(), referenced.getPublicationStatus());
+          referenced.getContent(), referenced.getConsentText(), referenced.getPublicationStatus());
     }
     return new DepartmentDataProtectionView(
-        department.getContentDpp(), department.getPublicationStatus());
+        department.getContentDpp(), department.getConsentText(), department.getPublicationStatus());
   }
 
   /**

@@ -346,6 +346,7 @@ public class AgencyAdminController implements AgencyadminApi {
     var response =
         new DepartmentDataProtectionContentDTO()
             .content(view.content())
+            .consentText(view.consentText())
             .publicationStatus(
                 DepartmentDataProtectionContentDTO.PublicationStatusEnum.fromValue(
                     view.publicationStatus().name()));
@@ -360,6 +361,7 @@ public class AgencyAdminController implements AgencyadminApi {
             agencyId,
             topicId,
             departmentDataProtectionDTO.getContent(),
+            departmentDataProtectionDTO.getConsentText(),
             Boolean.TRUE.equals(departmentDataProtectionDTO.getPublish()));
     var response =
         new DepartmentDataProtectionResponseDTO()
@@ -485,6 +487,7 @@ public class AgencyAdminController implements AgencyadminApi {
             LegalTextKind.valueOf(createLegalTextDTO.getKind().getValue()),
             createLegalTextDTO.getLabel(),
             createLegalTextDTO.getContent(),
+            createLegalTextDTO.getConsentText(),
             Boolean.TRUE.equals(createLegalTextDTO.getPublish()));
     return ResponseEntity.ok(toLegalTextAdminDto(view));
   }
@@ -498,6 +501,7 @@ public class AgencyAdminController implements AgencyadminApi {
             legalTextId,
             updateLegalTextDTO.getLabel(),
             updateLegalTextDTO.getContent(),
+            updateLegalTextDTO.getConsentText(),
             // null = preserve the current publication status (see service javadoc)
             updateLegalTextDTO.getPublish());
     return ResponseEntity.ok(toLegalTextAdminDto(view));
@@ -558,6 +562,7 @@ public class AgencyAdminController implements AgencyadminApi {
         .ownerLevel(LegalTextVersionDTO.OwnerLevelEnum.fromValue(view.ownerLevel().name()))
         .ownerId(view.ownerId())
         .content(view.content())
+        .consentText(view.consentText())
         .publishedAt(view.publishedAt() == null ? null : view.publishedAt().toString())
         .publishedBy(view.publishedBy())
         .supersededAt(view.supersededAt() == null ? null : view.supersededAt().toString());
@@ -570,6 +575,7 @@ public class AgencyAdminController implements AgencyadminApi {
         .kind(LegalTextAdminDTO.KindEnum.fromValue(view.kind().name()))
         .label(view.label())
         .content(view.content())
+        .consentText(view.consentText())
         .publicationStatus(
             LegalTextAdminDTO.PublicationStatusEnum.fromValue(view.publicationStatus().name()))
         .usageCount(view.usageCount());

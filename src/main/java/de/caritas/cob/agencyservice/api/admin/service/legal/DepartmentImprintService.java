@@ -95,7 +95,9 @@ public class DepartmentImprintService {
           department.getId(),
           LegalTextKind.IMPRINT,
           department.getAgency() == null ? null : department.getAgency().getTenantId(),
-          sanitizedJson);
+          sanitizedJson,
+          // An imprint is an information duty, never consent-bearing (ADR-021 decision 7).
+          null);
     }
 
     return status;

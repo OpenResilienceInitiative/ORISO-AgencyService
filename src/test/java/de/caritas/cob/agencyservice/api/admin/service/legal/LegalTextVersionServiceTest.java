@@ -55,8 +55,7 @@ class LegalTextVersionServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
 
     var result =
-        service.recordPublication(
-            LegalTextLevel.DEPARTMENT, 42L, LegalTextKind.DPP, 3L, "{\"de\":\"<p>x</p>\"}");
+        service.recordPublication(LegalTextLevel.DEPARTMENT, 42L, LegalTextKind.DPP, 3L, "{\"de\":\"<p>x</p>\"}", null);
 
     assertThat(result).isPresent();
     var stored = result.get();
@@ -79,7 +78,7 @@ class LegalTextVersionServiceTest {
     when(legalTextVersionRepository.save(any(LegalTextVersion.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "new");
+    service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "new", null);
 
     ArgumentCaptor<List<LegalTextVersion>> captor = ArgumentCaptor.captor();
     verify(legalTextVersionRepository).saveAll(captor.capture());
@@ -95,7 +94,7 @@ class LegalTextVersionServiceTest {
             LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP))
         .thenReturn(List.of(openVersion("same")));
 
-    var result = service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "same");
+    var result = service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "same", null);
 
     // Load-bearing for the agency level, where every unrelated update resends the legal texts:
     // without this, editing the opening hours would forge a new version of the privacy policy.
@@ -106,12 +105,12 @@ class LegalTextVersionServiceTest {
 
   @Test
   void recordPublication_Should_skip_When_thereIsNoDocument() {
-    assertThat(service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, null))
+    assertThat(service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, null, null))
         .isEmpty();
-    assertThat(service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "   "))
+    assertThat(service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "   ", null))
         .isEmpty();
     // The sanitizer serialises "no translations" to an empty JSON object, which is just as absent.
-    assertThat(service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "{}"))
+    assertThat(service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP, 3L, "{}", null))
         .isEmpty();
 
     verify(legalTextVersionRepository, never()).save(any());
@@ -125,7 +124,7 @@ class LegalTextVersionServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
 
     var result =
-        service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.IMPRINT, null, "x");
+        service.recordPublication(LegalTextLevel.AGENCY, 7L, LegalTextKind.IMPRINT, null, "x", null);
 
     assertThat(result).isPresent();
     assertThat(result.get().getPublishedBy()).isNull();

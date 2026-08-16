@@ -51,19 +51,34 @@ public class LegalTextVersionService {
    * (see the class comment). Supersedes the previous current version with the same timestamp the
    * new one carries, so the history has no gap and no overlap.
    *
-   * @return the newly written snapshot, or {@link Optional#empty()} when the wording was unchanged
-   *     or empty (an empty document is not a version of anything)
+   * <p>ADR-021 decision 4: the consent sentence travels with the policy. Changing only the consent
+   * wording is still a new version — its body may be byte-identical, and that is exactly what makes
+   * "which consent belonged to which policy" answerable by "the same version" instead of by
+   * correlating timestamps.
+   *
+   * @return the newly written snapshot, or {@link Optional#empty()} when policy and consent wording
+   *     were both unchanged, or the policy is empty (an empty document is not a version of
+   *     anything)
    */
   @Transactional
   public Optional<LegalTextVersion> recordPublication(
-      LegalTextLevel ownerLevel, Long ownerId, LegalTextKind kind, Long tenantId, String content) {
+      LegalTextLevel ownerLevel,
+      Long ownerId,
+      LegalTextKind kind,
+      Long tenantId,
+      String content,
+      String consentText) {
     if (ownerId == null || isBlank(content)) {
       return Optional.empty();
     }
     var open =
         legalTextVersionRepository.findByOwnerLevelAndOwnerIdAndKindAndSupersededAtIsNull(
             ownerLevel, ownerId, kind);
-    if (open.stream().anyMatch(version -> Objects.equals(version.getContent(), content))) {
+    if (open.stream()
+        .anyMatch(
+            version ->
+                Objects.equals(version.getContent(), content)
+                    && Objects.equals(version.getConsentText(), consentText))) {
       return Optional.empty();
     }
 
@@ -79,6 +94,7 @@ public class LegalTextVersionService {
                 .ownerLevel(ownerLevel)
                 .ownerId(ownerId)
                 .content(content)
+                .consentText(consentText)
                 .publishedAt(now)
                 .publishedBy(authenticatedUser.getUserId())
                 .build()));

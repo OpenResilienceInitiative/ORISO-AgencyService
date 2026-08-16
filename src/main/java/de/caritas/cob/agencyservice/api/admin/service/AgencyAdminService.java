@@ -20,6 +20,7 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundExceptio
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
+import de.caritas.cob.agencyservice.api.admin.service.legal.ConsentTextService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionService;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
@@ -76,6 +77,7 @@ public class AgencyAdminService {
   private final @NonNull TransactionOperations agencyCreationTransaction;
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull LegalTextVersionService legalTextVersionService;
+  private final @NonNull ConsentTextService consentTextService;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -297,13 +299,15 @@ public class AgencyAdminService {
         agency.getId(),
         LegalTextKind.DPP,
         agency.getTenantId(),
-        agency.getContentDpp());
+        agency.getContentDpp(),
+        agency.getConsentText());
     legalTextVersionService.recordPublication(
         LegalTextLevel.AGENCY,
         agency.getId(),
         LegalTextKind.IMPRINT,
         agency.getTenantId(),
-        agency.getContentImprint());
+        agency.getContentImprint(),
+        null);
   }
 
   private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {
@@ -337,6 +341,22 @@ public class AgencyAdminService {
     return sentContent == null || sentContent.isEmpty()
         ? storedContent
         : legalContentSanitizer.sanitizeToJson(sentContent);
+  }
+
+  /**
+   * ADR-021 decision 4: the agency-wide consent sentence is a field of the agency-wide DPP, and
+   * follows the same "absent keeps, empty clears" rule as the policy itself.
+   *
+   * <p>The mandatory-token validator always runs on a submitted sentence, because this level has no
+   * publication status: what is stored is in force (ADR-021 decision 2 / CONTEXT-legal-documents).
+   * There is no draft state in which an incomplete sentence could safely rest here.
+   */
+  private String resolveConsentTextForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    var sent = legalContent(updateAgencyDTO, AgencyLegalContentDTO::getConsentText);
+    if (sent == null || sent.isEmpty()) {
+      return agency.getConsentText();
+    }
+    return consentTextService.sanitizeAndValidate(sent, true);
   }
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
@@ -421,7 +441,8 @@ public class AgencyAdminService {
         .contentImprint(
             resolveLegalTextForUpdate(
                 agency.getContentImprint(),
-                legalContent(updateAgencyDTO, AgencyLegalContentDTO::getImpressum)));
+                legalContent(updateAgencyDTO, AgencyLegalContentDTO::getImpressum)))
+        .consentText(resolveConsentTextForUpdate(agency, updateAgencyDTO));
 
     applyDataProtectionUpdate(agency, updateAgencyDTO, agencyBuilder);
 
