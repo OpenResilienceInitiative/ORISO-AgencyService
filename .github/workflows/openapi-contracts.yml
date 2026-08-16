@@ -39,7 +39,7 @@ jobs:
       uses: actions/checkout@v6
       with:
         repository: OpenResilienceInitiative/ORISO-TenantService
-        ref: ${{ github.event_name == 'pull_request' && 'a213d5546e2cdbcbd1f641291661f11cbbca2cfc' || 'pre-dev' }}
+        ref: ${{ github.event_name == 'pull_request' && '232a7bd59eebb20681f84ad4f2b9e48bfcbd25fd' || 'pre-dev' }}
         path: .providers/tenant
 
     - name: Checkout UserService provider

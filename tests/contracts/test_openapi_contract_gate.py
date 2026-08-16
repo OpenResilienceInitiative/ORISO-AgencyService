@@ -80,7 +80,7 @@ class OpenApiContractGateTest(unittest.TestCase):
             workflow,
             re.compile(
                 r"repository: OpenResilienceInitiative/ORISO-TenantService.*"
-                r"a213d5546e2cdbcbd1f641291661f11cbbca2cfc",
+                r"232a7bd59eebb20681f84ad4f2b9e48bfcbd25fd",
                 re.DOTALL,
             ),
         )
