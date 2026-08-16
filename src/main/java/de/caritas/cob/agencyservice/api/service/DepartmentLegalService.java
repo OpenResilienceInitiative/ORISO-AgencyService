@@ -4,7 +4,6 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundExceptio
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
-import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver;
 import de.caritas.cob.agencyservice.api.service.legal.PublicLegalTextRenderer;
 import lombok.NonNull;
@@ -75,11 +74,5 @@ public class DepartmentLegalService {
     if (agency == null || agency.getDeleteDate() != null) {
       throw new NotFoundException();
     }
-  }
-
-  /** Kept for callers that only care whether a raw stored text counts as published. */
-  static boolean isPublished(String content, PublicationStatus status) {
-    var hasContent = content != null && !content.isBlank();
-    return PublicationStatus.PUBLISHED == status && hasContent;
   }
 }
