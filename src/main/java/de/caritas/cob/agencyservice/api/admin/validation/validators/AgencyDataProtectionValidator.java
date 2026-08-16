@@ -27,6 +27,9 @@ public class AgencyDataProtectionValidator implements ConcreteAgencyValidator {
 
   @Override
   public void validate(ValidateAgencyDTO validateAgencyDto) {
+    if (validateAgencyDto.getDataProtectionDTO() == null) {
+      return;
+    }
 
     var tenant = tenantService.getRestrictedTenantDataByTenantId(validateAgencyDto.getTenantId());
 

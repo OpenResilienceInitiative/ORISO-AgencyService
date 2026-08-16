@@ -49,10 +49,18 @@ public class AgencyPostcodeRangeAdminServiceITBase {
     assertThat(this.agencyPostcodeRangeRepository.findAllByAgencyId(agencyId), hasSize(0));
   }
 
-  public void deleteAgencyPostcodeRange_Should_throwNotFound_When_agencyIdNotExists() {
+  /**
+   * Deleting the ranges of an unknown agency is an idempotent no-op: the service is a single
+   * {@code deleteAllByAgencyId} with no existence check (the offline side effect and its lookup
+   * were removed on purpose, #66). The contract is "the agency has no ranges afterwards", which
+   * holds whether or not it ever existed — so this must not throw (#210).
+   */
+  public void deleteAgencyPostcodeRange_Should_beNoOp_When_agencyIdNotExists() {
     var agencyId = -1L;
 
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(agencyId);
+
+    assertThat(this.agencyPostcodeRangeRepository.findAllByAgencyId(agencyId), hasSize(0));
   }
 
 }

@@ -11,6 +11,7 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidDemograph
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidOfflineStatusException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidPostcodeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.ValidationErrorResponse;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import java.net.UnknownHostException;
 import jakarta.validation.ConstraintViolationException;
@@ -134,7 +135,7 @@ public class ApiResponseEntityExceptionHandler extends ResponseEntityExceptionHa
 
     return handleExceptionInternal(
         ex,
-        null,
+        ValidationErrorResponse.from(ex.getHttpStatusExceptionReason()),
         new CustomHttpHeader(ex.getHttpStatusExceptionReason()).buildHeader(),
         HttpStatus.BAD_REQUEST,
         request);

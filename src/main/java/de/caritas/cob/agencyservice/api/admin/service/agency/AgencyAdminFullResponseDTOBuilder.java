@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.hallink.AgencyLinksBuilder;
+import de.caritas.cob.agencyservice.api.model.AgencyAdminDepartmentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
@@ -15,6 +16,7 @@ import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
 import de.caritas.cob.agencyservice.api.model.TopicDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.service.legal.DepartmentLegalPublicationState;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -61,6 +63,7 @@ public class AgencyAdminFullResponseDTOBuilder {
         .phone(this.agency.getPhone())
         .phoneSecondary(this.agency.getPhoneSecondary())
         .email(this.agency.getEmail())
+        .openingHours(this.agency.getOpeningHours())
         .consultingType(this.agency.getConsultingTypeId())
         .description(this.agency.getDescription())
         .postcode(this.agency.getPostCode())
@@ -69,6 +72,7 @@ public class AgencyAdminFullResponseDTOBuilder {
         .external((this.agency.isExternal()))
         .offline(this.agency.isOffline())
         .topics(getTopics())
+        .departments(getDepartments())
         .counsellingRelations(splitToList(agency.getCounsellingRelations()))
         .createDate(String.valueOf(this.agency.getCreateDate()))
         .updateDate(String.valueOf(this.agency.getUpdateDate()))
@@ -120,6 +124,30 @@ public class AgencyAdminFullResponseDTOBuilder {
   private DemographicsDTO getDemographics(Agency agency) {
     return agency.hasAnyDemographicsAttributes() ? new DemographicsConverter().convertToDTO(agency)
         : null;
+  }
+
+  /**
+   * The departments with the publication state of their own legal texts (ORISO-Admin#583).
+   *
+   * <p>An admin editing the agency-wide text needs to see who will <em>not</em> receive the
+   * change — a Fachbereich that has published its own text no longer inherits. The resolution
+   * is shared with the public agency read via {@link DepartmentLegalPublicationState}, so the
+   * switcher can never claim something different from what help-seekers are shown.
+   *
+   * <p>Built from the already-loaded {@code agencyTopics} association ({@code topics} above uses
+   * the same one), so this adds no query per agency or topic.
+   */
+  private List<AgencyAdminDepartmentDTO> getDepartments() {
+    var agencyTopics = agency.getAgencyTopics();
+    if (agencyTopics == null) {
+      return Lists.newArrayList();
+    }
+    return agencyTopics.stream()
+        .map(agencyTopic -> new AgencyAdminDepartmentDTO()
+            .topicId(agencyTopic.getTopicId())
+            .hasPublishedDpp(DepartmentLegalPublicationState.hasPublishedDpp(agencyTopic))
+            .hasPublishedImprint(DepartmentLegalPublicationState.hasPublishedImprint(agencyTopic)))
+        .toList();
   }
 
   private List<TopicDTO> getTopics() {
