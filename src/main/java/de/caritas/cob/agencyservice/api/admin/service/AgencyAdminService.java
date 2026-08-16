@@ -115,7 +115,8 @@ public class AgencyAdminService {
     if (response.getEmbedded() != null) {
       var settings = agencySettingsService.toSettings(agency.getSettings());
       response.getEmbedded().setSettings(
-          agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(settings));
+          agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(
+              settings, agency.getTenantId()));
     }
   }
 
@@ -327,11 +328,8 @@ public class AgencyAdminService {
   }
 
   private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {
-    if (updateAgencyDTO.getSettings() != null
-        && updateAgencyDTO.getSettings().getAgencyAdminControls() != null) {
-      agencyAdminControlsService.updateControls(
-          updateAgencyDTO.getSettings().getAgencyAdminControls());
-    }
+    // Parent policies are owned by TenantService. Agency updates may carry the read-only
+    // compatibility view, but must never mutate it.
   }
 
   private Map<String, String> legalContent(

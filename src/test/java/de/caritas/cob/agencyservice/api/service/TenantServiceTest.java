@@ -10,8 +10,12 @@ import static org.mockito.Mockito.when;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.SettingDTO;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
+import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
+import de.caritas.cob.agencyservice.tenantservice.generated.ApiClient;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
+import org.springframework.http.HttpHeaders;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +35,12 @@ class TenantServiceTest {
 
   @Mock
   ApplicationSettingsService applicationSettingsService;
+
+  @Mock SecurityHeaderSupplier securityHeaderSupplier;
+
+  @Mock TenantHeaderSupplier tenantHeaderSupplier;
+
+  @Mock ApiClient apiClient;
 
   @Mock
   TenantControllerApi tenantControllerApi;
@@ -75,6 +85,22 @@ class TenantServiceTest {
 
     assertEquals(1L, result.getId());
     verify(tenantControllerApi).getRestrictedSingleTenancyTenantData();
+  }
+
+  @Test
+  void getPermissionPolicies_shouldUseExactlyTheRequestedTenantAndForwardAuthentication() {
+    var headers = new HttpHeaders();
+    headers.add("Authorization", "Bearer token");
+    var expected = new TenantPermissionPolicies().tenantId(7L).policies(java.util.Map.of());
+    when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
+    when(tenantControllerApi.getApiClient()).thenReturn(apiClient);
+    when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(headers);
+    when(tenantControllerApi.getTenantPermissionPolicies(7L)).thenReturn(expected);
+
+    assertEquals(expected, tenantService.getPermissionPolicies(7L));
+
+    verify(tenantControllerApi).getTenantPermissionPolicies(7L);
+    verify(apiClient).addDefaultHeader("Authorization", "Bearer token");
   }
 
   @Test
