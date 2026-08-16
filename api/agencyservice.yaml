@@ -349,11 +349,23 @@ components:
           example: 7
         hasPublishedDpp:
           type: boolean
-          description: true if the department has a published data privacy policy of its own
+          description: >-
+            true if a data privacy policy is in force for this department at ALL, resolved across
+            the four ADR-021 levels (Fachbereich -> Beratungsstelle -> Träger -> platform
+            operator) - i.e. exactly when
+            `GET /agencies/{agencyId}/topics/{topicId}/legal` returns dpp content.
+
+            This deliberately differs from the same-named field on the admin
+            `AgencyAdminDepartmentDTO`, which answers "does this department carry a policy of its
+            OWN" for the Fachbereich switcher. Reporting "of its own" here was a defect: a
+            department returned false while /legal served an inherited document, so clients hid a
+            text that existed.
           example: true
         hasPublishedImprint:
           type: boolean
-          description: true if the department has a published imprint of its own
+          description: >-
+            true if an imprint is in force for this department at ALL, resolved across the four
+            ADR-021 levels. Same "in force" vs. "of its own" distinction as hasPublishedDpp.
           example: false
         openingHours:
           type: string
