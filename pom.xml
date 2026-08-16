@@ -42,6 +42,11 @@
     <springfox-swagger-ui.version>2.10.0</springfox-swagger-ui.version>
     <spring-security-oauth2-test-webmvc-addons.version>3.0.1</spring-security-oauth2-test-webmvc-addons.version>
     <mockito.version>5.20.0</mockito.version>
+    <!-- Filled in by jacoco:prepare-agent and consumed by surefire's argLine below.
+         Declared empty here so a run that never reaches prepare-agent (`-DskipTests`,
+         or an invocation of surefire on its own) still resolves the placeholder
+         instead of handing the JVM a literal `@{jacocoArgLine}`. -->
+    <jacocoArgLine></jacocoArgLine>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <hibernate.search.version>6.1.1.Final</hibernate.search.version>
@@ -710,7 +715,12 @@
         </artifactId> <!-- surefire plugin version managed by Spring Boot -->
         <configuration>
           <skipTests>true</skipTests>
-          <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+          <!-- @{jacocoArgLine} is late-replaced by surefire with the value
+               jacoco:prepare-agent set. It has to be spliced in here rather than left to
+               JaCoCo's default: JaCoCo writes the `argLine` PROPERTY, but this explicit
+               <argLine> configuration overrides that property outright, so without this the
+               coverage agent would be dropped silently and every report would read 0%. -->
+          <argLine>@{jacocoArgLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
         </configuration>
         <executions>
           <execution>
@@ -742,6 +752,45 @@
                 <include>**/*IT.*</include>
               </includes>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Coverage for the CI run summary. `report` is bound to the `test` phase so it runs
+           behind the surefire `unit-tests` execution; the integration-test execution appends
+           to the same exec file afterwards, so the reported figure is the unit-suite floor
+           rather than the whole picture. `prepare-agent` publishes its JVM flags as
+           `jacocoArgLine` instead of the default `argLine`, because surefire here sets an
+           explicit <argLine> for the Mockito agent that would otherwise override it — see
+           the property and the surefire configuration above. Generated and inner classes are
+           excluded: they inflate the denominator without being anything a test could
+           meaningfully reach. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.10</version>
+        <configuration>
+          <excludes>
+            <exclude>**/*generated*/**</exclude>
+            <exclude>**/org/openapitools/**</exclude>
+            <exclude>**/*$*</exclude>
+          </excludes>
+        </configuration>
+        <executions>
+          <execution>
+            <id>prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+            <configuration>
+              <propertyName>jacocoArgLine</propertyName>
+            </configuration>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>
