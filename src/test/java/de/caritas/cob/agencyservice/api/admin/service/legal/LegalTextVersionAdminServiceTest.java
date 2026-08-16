@@ -135,8 +135,21 @@ class LegalTextVersionAdminServiceTest {
     service.getVersion(100L);
 
     // A shared ADR-014 text belongs to a Träger, not to one agency, so it is guarded like the
-    // library itself.
+    // library itself: full agency admins only, plus the owning-tenant check.
+    verify(accessGuard).assertFullAgencyAdmin();
     verify(accessGuard).assertCallerTenantIs(3L);
+  }
+
+  @Test
+  void getVersion_Should_rejectARestrictedAdminReadingASharedVersion() {
+    var stored = version(LegalTextLevel.SHARED, 55L);
+    when(legalTextVersionRepository.findById(100L)).thenReturn(Optional.of(stored));
+    doThrow(new AgencyAccessDeniedException()).when(accessGuard).assertFullAgencyAdmin();
+
+    // A shared text spans agencies a restricted admin does not administer, so guessing a version id
+    // must not hand them tenant-wide wording and publisher identities.
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.getVersion(100L));
   }
 
   @Test

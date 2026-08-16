@@ -1,6 +1,9 @@
 package de.caritas.cob.agencyservice.api.admin.service.legal;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +36,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsentTextService {
 
+  private static final TypeReference<LinkedHashMap<String, String>> LANGUAGE_MAP =
+      new TypeReference<>() {};
+
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
+
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Sanitises the multilingual consent text and, when {@code publish} is true, enforces the
@@ -71,6 +79,53 @@ public class ConsentTextService {
                     language, LegalTextTokens.LEGAL_LINKS_TOKEN));
           }
         });
+  }
+
+  /**
+   * Resolves the consent text for an update where the field may simply not have been sent.
+   *
+   * <p><b>Absent keeps.</b> The generated request models initialise map properties to an empty map,
+   * so a client that never heard of this field is indistinguishable from one clearing it — and an
+   * independently deployed Admin updating a label would silently delete the Träger's consent
+   * sentence. That is the same silent-wipe trap {@code AgencyAdminService#resolveLegalTextForUpdate}
+   * already documents for the policy body, resolved the same way: clearing is expressed by sending
+   * the language key with empty content ({@code {"de": ""}}), not by omitting the field.
+   *
+   * <p>A retained sentence is still validated when the update publishes, otherwise omitting the
+   * field would be a way to publish a stored sentence that never passed the token check.
+   */
+  public String resolveForUpdate(String storedConsentJson, Map<String, String> sent, boolean publish) {
+    // Absent is "the map has no entries at all". A map that DOES carry a language key with empty
+    // content is an explicit clear, and must not be confused with the two — it is the only way a
+    // client can ever delete the sentence.
+    if (sent == null || sent.isEmpty()) {
+      if (publish) {
+        assertStoredTextPublishable(storedConsentJson);
+      }
+      return storedConsentJson;
+    }
+    return sanitizeAndValidate(sent, publish);
+  }
+
+  /**
+   * The token check applied to an already-stored sentence, so the "absent keeps" rule above cannot
+   * become a bypass of {@link #assertMandatoryTokenPresent}.
+   *
+   * <p>An unreadable stored value is left alone rather than rejected: it predates this validator,
+   * and refusing to publish a policy because an old consent column will not parse would block the
+   * admin on something they cannot fix from the editor.
+   */
+  public void assertStoredTextPublishable(String storedConsentJson) {
+    if (storedConsentJson == null || storedConsentJson.isBlank()) {
+      return;
+    }
+    final Map<String, String> byLanguage;
+    try {
+      byLanguage = objectMapper.readValue(storedConsentJson, LANGUAGE_MAP);
+    } catch (Exception e) {
+      return;
+    }
+    assertMandatoryTokenPresent(byLanguage);
   }
 
   private boolean isEmpty(Map<String, String> consentText) {

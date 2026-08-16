@@ -96,6 +96,61 @@ class ConsentTextServiceTest {
   }
 
   @Test
+  void resolveForUpdate_Should_keepTheStoredSentence_When_theFieldIsOmitted() {
+    var stored = "{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}";
+
+    // The generated request models initialise map properties to an EMPTY MAP, so an Admin build
+    // that predates this field is indistinguishable from one clearing it. Treating that as a
+    // deletion would silently wipe the Träger's consent sentence on a label-only update.
+    assertThat(service.resolveForUpdate(stored, null, true)).isEqualTo(stored);
+    assertThat(service.resolveForUpdate(stored, Map.of(), true)).isEqualTo(stored);
+  }
+
+  @Test
+  void resolveForUpdate_Should_allowClearing_ByAnExplicitEmptyValue() {
+    var stored = "{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}";
+
+    // Clearing is expressed the way the repo already expresses it for the policy body: send the
+    // language key with empty content.
+    assertThat(service.resolveForUpdate(stored, mapOf("de", ""), true)).isNull();
+  }
+
+  @Test
+  void resolveForUpdate_Should_replaceTheStoredSentence_When_aNewOneIsSent() {
+    var stored = "{\"de\":\"alt {{legal_links}}\"}";
+
+    assertThat(service.resolveForUpdate(stored, Map.of("de", "neu {{legal_links}}"), true))
+        .contains("neu");
+  }
+
+  @Test
+  void resolveForUpdate_Should_stillValidateARetainedSentence_OnPublish() {
+    var storedWithoutToken = "{\"de\":\"Ich stimme zu.\"}";
+
+    // Otherwise omitting the field would be a way to publish a sentence that never passed the gate.
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(() -> service.resolveForUpdate(storedWithoutToken, Map.of(), true))
+        .withMessageContaining("{{legal_links}}");
+
+    // ... but a draft-save may keep it.
+    assertThat(service.resolveForUpdate(storedWithoutToken, Map.of(), false))
+        .isEqualTo(storedWithoutToken);
+  }
+
+  @Test
+  void resolveForUpdate_Should_notBlockOnAnUnreadableStoredValue() {
+    // Such a value predates the validator; refusing to publish would block the admin on something
+    // they cannot fix from the editor.
+    assertThat(service.resolveForUpdate("not json", Map.of(), true)).isEqualTo("not json");
+  }
+
+  private static Map<String, String> mapOf(String key, String value) {
+    var map = new HashMap<String, String>();
+    map.put(key, value);
+    return map;
+  }
+
+  @Test
   void metaKeys_Should_beSkippedByTheTokenCheck() {
     var withMeta = new HashMap<String, String>();
     withMeta.put("de", "Ich habe die {{legal_links}} gelesen.");

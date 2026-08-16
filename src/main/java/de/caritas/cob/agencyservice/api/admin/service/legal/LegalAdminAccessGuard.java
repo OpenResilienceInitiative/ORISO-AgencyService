@@ -46,6 +46,21 @@ public class LegalAdminAccessGuard {
   }
 
   /**
+   * Library guard, mirroring {@code LegalTextAdminService#assertFullAgencyAdmin}: an ADR-014 shared
+   * legal text applies tenant-wide, across agencies a restricted admin does not administer, so the
+   * library — and equally its publication history, which carries the wording and the publisher
+   * identities — is full-agency-admin only. Restricted admins use the per-department endpoints.
+   */
+  public void assertFullAgencyAdmin() {
+    if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
+      log.warn(
+          "Restricted admin user {} may not read the tenant-wide legal-text history",
+          authenticatedUser.getUserId());
+      throw new AgencyAccessDeniedException();
+    }
+  }
+
+  /**
    * Cross-tenant guard (mirrors {@code AgencyTenantValidator}): a full agency admin of tenant A
    * must not read tenant B's legal texts. Necessary because the Hibernate tenant filter is not
    * installed when {@code multitenancy.enabled=false} (all deployed profiles), so agency-id

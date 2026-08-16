@@ -277,6 +277,44 @@ class DepartmentDataProtectionServiceTest {
   }
 
   @Test
+  void publish_Should_keepTheStoredConsentText_When_theFieldIsOmitted() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setConsentText("{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}");
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>neu</p>"), null, true);
+
+    // An Admin build that predates this field publishes a policy body without it; wiping the
+    // Träger's sentence on that request would be a silent legal regression.
+    assertThat(department.getConsentText()).contains("{{legal_links}}");
+  }
+
+  @Test
+  void unpublish_Should_closeTheOpenVersion_ratherThanLeavingItInForce() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setId(4711L);
+    department.setPublicationStatus(PublicationStatus.PUBLISHED);
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>zurueckgezogen</p>"), null, false);
+
+    // Public resolution now falls through to the agency level, so a snapshot still reading as
+    // "in force" would make the history assert the opposite of what help-seekers are shown.
+    verify(legalTextVersionService)
+        .supersedeCurrent(LegalTextLevel.DEPARTMENT, 4711L, LegalTextKind.DPP);
+  }
+
+  @Test
+  void draftSave_Should_notCloseAnything_When_nothingWasPublishedBefore() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>Entwurf</p>"), null, false);
+
+    verifyNoInteractions(legalTextVersionService);
+  }
+
+  @Test
   void draftSave_Should_storeAnIncompleteConsentText() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();

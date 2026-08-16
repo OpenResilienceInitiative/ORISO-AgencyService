@@ -2,6 +2,9 @@ package de.caritas.cob.agencyservice.api.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
@@ -34,15 +37,32 @@ class DepartmentLegalServiceTest {
 
   @InjectMocks private DepartmentLegalService service;
 
+  /**
+   * The renderer is stubbed to MARK what passes through it, not to pass it through unchanged.
+   *
+   * <p>A transparent pass-through would make this test blind to the thing it exists to prove: drop
+   * the render call from the service and every assertion would still hold, so the substitution step
+   * could be deleted without a single test going red. The marker means every text this service
+   * returns must have been through the renderer.
+   */
   @org.junit.jupiter.api.BeforeEach
-  void renderPassThrough() {
-    // Substitution is covered by PublicLegalTextRendererTest; here it must not hide the resolution.
+  void markWhatPassesThroughTheRenderer() {
     org.mockito.Mockito.lenient()
         .when(
             publicLegalTextRenderer.render(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-        .thenAnswer(invocation -> invocation.getArgument(0));
+        .thenAnswer(
+            invocation -> {
+              ResolvedLegalText resolved = invocation.getArgument(0);
+              return new ResolvedLegalText(
+                  resolved.content() == null ? null : resolved.content() + RENDERED,
+                  resolved.consentText() == null ? null : resolved.consentText() + RENDERED,
+                  resolved.sourceLevel(),
+                  resolved.versionId());
+            });
   }
+
+  private static final String RENDERED = "|rendered";
 
   private AgencyTopic department(LocalDateTime agencyDeleteDate) {
     var department =
@@ -79,13 +99,15 @@ class DepartmentLegalServiceTest {
 
     var view = service.getPublishedDepartmentLegal(7L, 42L);
 
-    assertThat(view.dpp().content()).contains("DSE");
-    assertThat(view.dpp().consentText()).contains("{{legal_links}}");
+    // Every returned text must have gone through the substitution step.
+    assertThat(view.dpp().content()).contains("DSE").endsWith(RENDERED);
+    assertThat(view.dpp().consentText()).contains("{{legal_links}}").endsWith(RENDERED);
     assertThat(view.dpp().sourceLevel()).isEqualTo(LegalTextSourceLevel.DEPARTMENT);
     // The version id is what ORISO-UserService pins a recorded consent to (ADR-022 decision 2).
     assertThat(view.dpp().versionId()).isEqualTo(100L);
     // An inherited imprint is legitimately reachable and reported as coming from the agency level.
     assertThat(view.imprint().sourceLevel()).isEqualTo(LegalTextSourceLevel.AGENCY);
+    assertThat(view.imprint().content()).endsWith(RENDERED);
   }
 
   @Test
@@ -129,5 +151,7 @@ class DepartmentLegalServiceTest {
     // The measured defect: the flag used to look only at the department level while the endpoint
     // already inherited, so a department reported false while /legal returned content.
     assertThat(service.hasResolvableDpp(department)).isTrue();
+    // hasResolvableDpp asks the resolver directly - substitution is irrelevant to a yes/no flag.
+    verify(publicLegalTextRenderer, never()).render(any(), any());
   }
 }

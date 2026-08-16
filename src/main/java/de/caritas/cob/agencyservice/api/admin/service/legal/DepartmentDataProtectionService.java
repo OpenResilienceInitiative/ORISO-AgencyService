@@ -85,7 +85,11 @@ public class DepartmentDataProtectionService {
     var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
     // ADR-021 decision 2: validated BEFORE anything is written, so a consent text missing the
     // mandatory token leaves the stored document untouched instead of half-updating it.
-    var sanitizedConsent = consentTextService.sanitizeAndValidate(consentText, publish);
+    // "Absent keeps": an Admin build that predates this field must not wipe the Träger's sentence
+    // by publishing a policy body (see ConsentTextService#resolveForUpdate).
+    var sanitizedConsent =
+        consentTextService.resolveForUpdate(department.getConsentText(), consentText, publish);
+    final var wasPublished = department.getPublicationStatus() == PublicationStatus.PUBLISHED;
     final var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
 
     // ADR-014 amendment 2026-07-28: never write through to the referenced shared object. The 0026
@@ -112,6 +116,11 @@ public class DepartmentDataProtectionService {
           department.getAgency() == null ? null : department.getAgency().getTenantId(),
           sanitizedJson,
           sanitizedConsent);
+    } else if (wasPublished) {
+      // Withdrawing a published policy back to DRAFT is not a new version, but the old one has
+      // stopped applying — leaving it open would have the history claim it is still in force.
+      legalTextVersionService.supersedeCurrent(
+          LegalTextLevel.DEPARTMENT, department.getId(), LegalTextKind.DPP);
     }
 
     return status;

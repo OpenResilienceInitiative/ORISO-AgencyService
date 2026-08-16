@@ -105,6 +105,83 @@ class PublicLegalTextRendererTest {
   }
 
   @Test
+  void render_Should_escapeMarkupInSubstitutedNames() {
+    when(topicService.getAllTopics())
+        .thenReturn(List.of(new TopicDTO().id(42L).name("Sucht<script>alert(1)</script>")));
+    var department = department();
+    department.setAgency(
+        Agency.builder()
+            .id(7L)
+            .name("<img src=x onerror=alert(1)>")
+            .consultingTypeId(1)
+            .build());
+
+    var rendered = renderer(true).render(resolved(), department);
+
+    // Substitution happens AFTER LegalContentSanitizer, so an unescaped name would land in HTML
+    // that the frontend renders with dangerouslySetInnerHTML - stored XSS reaching every
+    // help-seeker of that Beratungsstelle.
+    assertThat(rendered.content()).doesNotContain("<img").doesNotContain("<script>");
+    assertThat(rendered.content()).contains("&lt;img").contains("&lt;script&gt;");
+  }
+
+  @Test
+  void render_Should_produceValidJson_When_aNameContainsQuotes() throws Exception {
+    var department = department();
+    department.setAgency(
+        Agency.builder().id(7L).name("Caritas \"Mitte\"").consultingTypeId(1).build());
+
+    var rendered = renderer(false).render(resolved(), department);
+
+    // Substituting into the serialized JSON would break out of the string and hand every client an
+    // unparseable legal document. Round-tripping proves it stayed a map.
+    var parsed =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readValue(
+                rendered.content(),
+                new com.fasterxml.jackson.core.type.TypeReference<
+                    java.util.LinkedHashMap<String, String>>() {});
+    assertThat(parsed).containsKey("de");
+    assertThat(parsed.get("de")).contains("Caritas &quot;Mitte&quot;");
+  }
+
+  @Test
+  void render_Should_leaveTranslationMetadataUntouched() throws Exception {
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    var metaValue = "{\"mt\":true,\"src\":\"de\"}";
+    var stored =
+        mapper.writeValueAsString(
+            java.util.Map.of("de", "<p>{{Beratungsstelle}}</p>", "de__meta", metaValue));
+
+    var rendered =
+        renderer(false)
+            .render(
+                new ResolvedLegalText(stored, null, LegalTextSourceLevel.DEPARTMENT, 1L),
+                department());
+
+    var parsed =
+        mapper.readValue(
+            rendered.content(),
+            new com.fasterxml.jackson.core.type.TypeReference<
+                java.util.LinkedHashMap<String, String>>() {});
+    // __meta carries JSON, not prose; it must survive byte-identically.
+    assertThat(parsed.get("de__meta")).isEqualTo(metaValue);
+    assertThat(parsed.get("de")).contains("Caritas Freiburg");
+  }
+
+  @Test
+  void render_Should_serveUnsubstituted_When_theStoredContentIsNotAMap() {
+    var broken =
+        new ResolvedLegalText("not json at all", null, LegalTextSourceLevel.DEPARTMENT, 1L);
+
+    var rendered = renderer(false).render(broken, department());
+
+    // An already-damaged legal document must not additionally be handed over half-rewritten, and
+    // this is a public read path that must not fail.
+    assertThat(rendered.content()).isEqualTo("not json at all");
+  }
+
+  @Test
   void render_Should_passThrough_When_thereIsNoDepartment() {
     var resolved = resolved();
 

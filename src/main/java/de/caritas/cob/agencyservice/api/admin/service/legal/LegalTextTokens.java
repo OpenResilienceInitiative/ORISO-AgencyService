@@ -73,9 +73,37 @@ public final class LegalTextTokens {
   }
 
   /**
+   * HTML-escapes a value that is about to be substituted into already-sanitised legal HTML.
+   *
+   * <p>Substitution happens <em>after</em> {@code LegalContentSanitizer} has run, so the value
+   * never passes the OWASP allowlist. An agency name is admin-authored, but admin-authored is not
+   * the same as safe: legal content is rendered into the page as HTML (CONTEXT-legal-documents
+   * records {@code AnonymousConsentGate} doing so via {@code dangerouslySetInnerHTML}), so an
+   * unescaped name containing markup would be stored XSS reaching every help-seeker of that
+   * Beratungsstelle. Escaping here is the only point where that can still be prevented.
+   *
+   * <p>Explicit and exhaustive rather than delegated: the five characters below are the complete
+   * set that can break out of HTML text or an attribute value, and keeping the list visible is
+   * worth more here than reusing a general-purpose escaper.
+   */
+  public static String escapeForHtml(String value) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    return value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;");
+  }
+
+  /**
    * Replaces the given tokens with their values. A plain literal replacement: no expression
-   * language, no method calls, nothing a Träger can steer. Values are used as given — callers pass
-   * data they already trust or have sanitised.
+   * language, no method calls, nothing a Träger can steer.
+   *
+   * <p>Values are inserted verbatim — callers substituting into HTML must pass them through
+   * {@link #escapeForHtml} first.
    *
    * <p>Tokens absent from {@code values} are left standing. That is how {@code
    * &#123;&#123;legal_links&#125;&#125;} survives the server side and reaches the client, which is

@@ -86,7 +86,13 @@ public class LegalTextVersionAdminService {
         accessGuard.assertRestrictedAdminOwnsAgency(agency.getId());
         accessGuard.assertCallerTenantMatches(agency);
       }
-      case SHARED -> accessGuard.assertCallerTenantIs(version.getTenantId());
+      case SHARED -> {
+        // A shared text spans agencies a restricted admin does not administer, so the tenant check
+        // alone would let one read tenant-wide wording and publisher identities by guessing ids —
+        // exactly what the library CRUD refuses them.
+        accessGuard.assertFullAgencyAdmin();
+        accessGuard.assertCallerTenantIs(version.getTenantId());
+      }
       default -> throw new NotFoundException();
     }
   }

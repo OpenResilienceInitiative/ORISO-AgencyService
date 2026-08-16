@@ -117,6 +117,57 @@ class LegalTextVersionServiceTest {
   }
 
   @Test
+  void supersedeCurrent_Should_closeTheOpenVersion_withoutInsertingADraftOne() {
+    var previous = openVersion("withdrawn");
+    when(legalTextVersionRepository.findByOwnerLevelAndOwnerIdAndKindAndSupersededAtIsNull(
+            LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP))
+        .thenReturn(List.of(previous));
+
+    assertThat(service.supersedeCurrent(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP)).isTrue();
+
+    // Unpublishing is not a new version, but leaving the old one open would have the history claim
+    // a withdrawn policy is still in force.
+    assertThat(previous.getSupersededAt()).isNotNull();
+    verify(legalTextVersionRepository).saveAll(anyList());
+    verify(legalTextVersionRepository, never()).save(any());
+  }
+
+  @Test
+  void supersedeCurrent_Should_beANoOp_When_nothingIsInForce() {
+    when(legalTextVersionRepository.findByOwnerLevelAndOwnerIdAndKindAndSupersededAtIsNull(
+            LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP))
+        .thenReturn(List.of());
+
+    assertThat(service.supersedeCurrent(LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP)).isFalse();
+    verify(legalTextVersionRepository, never()).saveAll(anyList());
+  }
+
+  @Test
+  void recordPublication_Should_recordANewVersion_When_onlyTheConsentWordingChanged() {
+    var previous = openVersion("same policy");
+    previous.setConsentText("{\"de\":\"alt {{legal_links}}\"}");
+    when(legalTextVersionRepository.findByOwnerLevelAndOwnerIdAndKindAndSupersededAtIsNull(
+            LegalTextLevel.AGENCY, 7L, LegalTextKind.DPP))
+        .thenReturn(List.of(previous));
+    when(legalTextVersionRepository.save(any(LegalTextVersion.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    var result =
+        service.recordPublication(
+            LegalTextLevel.AGENCY,
+            7L,
+            LegalTextKind.DPP,
+            3L,
+            "same policy",
+            "{\"de\":\"neu {{legal_links}}\"}");
+
+    // ADR-021 decision 4: changing only the consent sentence is still a new version of the policy -
+    // that is what makes "which consent belonged to which policy" answerable by "the same version".
+    assertThat(result).isPresent();
+    assertThat(result.get().getConsentText()).contains("neu");
+  }
+
+  @Test
   void recordPublication_Should_recordAnUnknownPublisher_ratherThanGuessingOne() {
     noOpenVersion();
     when(authenticatedUser.getUserId()).thenReturn(null);

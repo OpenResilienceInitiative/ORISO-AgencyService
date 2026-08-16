@@ -1,5 +1,7 @@
 package de.caritas.cob.agencyservice.api.service.legal;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextTokens;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.service.TopicService;
@@ -44,6 +46,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class PublicLegalTextRenderer {
 
+  private static final String META_KEY_SUFFIX = "__meta";
+  private static final TypeReference<LinkedHashMap<String, String>> LANGUAGE_MAP =
+      new TypeReference<>() {};
+
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
   /**
    * Optional: the topics feature is toggleable, and this must not become a hard dependency of the
    * public legal path.
@@ -54,11 +62,17 @@ public class PublicLegalTextRenderer {
   /**
    * Substitutes the server-owned tokens in a resolved text and its consent sentence.
    *
-   * <p>The stored form is a JSON language→HTML map string and the substitution is applied to that
-   * string as a whole. That is safe because the tokens are literal and only ever occur inside
-   * values — a language key is a code like {@code de}, never prose — and it avoids a
-   * parse/serialise round trip that would re-order keys and re-escape entities on a hot public
-   * path.
+   * <p>The stored form is a JSON language→HTML map string, and substitution runs <b>inside the
+   * parsed values</b>, never over the serialised string. Replacing text in the JSON representation
+   * looks tempting and is wrong twice over: a perfectly ordinary name like {@code Caritas "Mitte"}
+   * would break out of its JSON string and hand clients an unparseable document, and a name
+   * containing markup would land in already-sanitised HTML without ever meeting the sanitiser.
+   * Values are therefore {@linkplain LegalTextTokens#escapeForHtml HTML-escaped} and the map is
+   * re-serialised properly.
+   *
+   * <p>{@code __meta} keys carry translation metadata as JSON, not prose, and are passed through
+   * untouched — substituting into them would corrupt the payload the same way sanitising them
+   * would.
    */
   public ResolvedLegalText render(ResolvedLegalText resolved, AgencyTopic department) {
     if (resolved == null || department == null) {
@@ -69,22 +83,59 @@ public class PublicLegalTextRenderer {
       return resolved;
     }
     return new ResolvedLegalText(
-        LegalTextTokens.substitute(resolved.content(), values),
-        LegalTextTokens.substitute(resolved.consentText(), values),
+        substituteInLanguageMap(resolved.content(), values),
+        substituteInLanguageMap(resolved.consentText(), values),
         resolved.sourceLevel(),
         resolved.versionId());
   }
 
-  /** Only tokens the server can actually answer; the rest is the client's half. */
+  /**
+   * Parses the language→text map, substitutes inside each value, and serialises it again.
+   *
+   * <p>A stored map that does not parse is returned unchanged rather than partially rewritten: a
+   * legal document that is already damaged must not additionally be handed to a help-seeker with
+   * half-substituted placeholders, and this is a public read path that must not fail.
+   */
+  private String substituteInLanguageMap(String storedJson, Map<String, String> values) {
+    if (storedJson == null || storedJson.isBlank()) {
+      return storedJson;
+    }
+    final Map<String, String> byLanguage;
+    try {
+      byLanguage = objectMapper.readValue(storedJson, LANGUAGE_MAP);
+    } catch (Exception e) {
+      log.warn("Stored legal content is not a readable language map; serving it unsubstituted");
+      return storedJson;
+    }
+    var substituted = new LinkedHashMap<String, String>();
+    byLanguage.forEach(
+        (language, text) ->
+            substituted.put(
+                language,
+                language != null && language.endsWith(META_KEY_SUFFIX)
+                    ? text
+                    : LegalTextTokens.substitute(text, values)));
+    try {
+      return objectMapper.writeValueAsString(substituted);
+    } catch (Exception e) {
+      log.warn("Could not re-serialise the substituted legal content; serving it unsubstituted");
+      return storedJson;
+    }
+  }
+
+  /**
+   * Only tokens the server can actually answer; the rest is the client's half. Values are escaped
+   * here, at the one place they enter sanitised HTML.
+   */
   private Map<String, String> serverOwnedValues(AgencyTopic department) {
     var values = new LinkedHashMap<String, String>();
     var agency = department.getAgency();
     if (agency != null && agency.getName() != null) {
-      values.put(LegalTextTokens.BERATUNGSSTELLE, agency.getName());
+      values.put(LegalTextTokens.BERATUNGSSTELLE, LegalTextTokens.escapeForHtml(agency.getName()));
     }
     var topicName = resolveTopicName(department.getTopicId());
     if (topicName != null) {
-      values.put(LegalTextTokens.THEMA, topicName);
+      values.put(LegalTextTokens.THEMA, LegalTextTokens.escapeForHtml(topicName));
     }
     return values;
   }

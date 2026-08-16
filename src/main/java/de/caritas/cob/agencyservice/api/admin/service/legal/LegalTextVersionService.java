@@ -100,6 +100,33 @@ public class LegalTextVersionService {
                 .build()));
   }
 
+  /**
+   * Closes the version currently in force without opening a new one, for the case where a document
+   * stops applying rather than being replaced: unpublishing a text back to DRAFT.
+   *
+   * <p>Without this, the last snapshot keeps {@code supersededAt == null}, which the history API
+   * documents as "still in force" — while public resolution has already fallen through to another
+   * level. A history that says a withdrawn policy is current is worse than no history.
+   *
+   * @return true when a version was actually closed
+   */
+  @Transactional
+  public boolean supersedeCurrent(LegalTextLevel ownerLevel, Long ownerId, LegalTextKind kind) {
+    if (ownerId == null) {
+      return false;
+    }
+    var open =
+        legalTextVersionRepository.findByOwnerLevelAndOwnerIdAndKindAndSupersededAtIsNull(
+            ownerLevel, ownerId, kind);
+    if (open.isEmpty()) {
+      return false;
+    }
+    var now = LocalDateTime.now();
+    open.forEach(version -> version.setSupersededAt(now));
+    legalTextVersionRepository.saveAll(open);
+    return true;
+  }
+
   /** The full history of one document, newest first. */
   @Transactional(readOnly = true)
   public List<LegalTextVersion> listVersions(

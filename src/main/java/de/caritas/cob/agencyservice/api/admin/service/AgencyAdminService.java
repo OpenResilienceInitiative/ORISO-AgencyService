@@ -40,6 +40,7 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
@@ -271,11 +272,16 @@ public class AgencyAdminService {
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
     var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
     applySettingsUpdate(updateAgencyDTO);
+    // Read the stored wording before the merge overwrites it: what makes an agency-level save a
+    // publish is that the wording CHANGED, and afterwards there is nothing left to compare against.
+    final var storedDpp = agency.getContentDpp();
+    final var storedConsent = agency.getConsentText();
+    final var storedImprint = agency.getContentImprint();
     var updatedAgency = agencyRepository.save(mergeAgencies(agency, updateAgencyDTO));
     enrichWithAgencyTopicsIfTopicFeatureEnabled(updatedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(updatedAgency);
     agencyRepository.flush();
-    recordAgencyLegalTextVersions(updatedAgency);
+    recordAgencyLegalTextVersions(updatedAgency, storedDpp, storedConsent, storedImprint);
     return buildAgencyAdminFullResponse(updatedAgency);
   }
 
@@ -288,26 +294,36 @@ public class AgencyAdminService {
    * publish here</em>: whatever an agency update leaves stored is the wording in force from that
    * moment, and that is precisely what the history has to record.
    *
-   * <p>Recording runs after the save, on the persisted wording, and {@link
-   * LegalTextVersionService#recordPublication} drops a wording identical to the current version.
-   * Without that, an update about opening hours — which resends the untouched legal texts — would
-   * manufacture a new "version" of a document nobody edited.
+   * <p><b>Only an actual change is a publish.</b> Comparing against the previously stored wording
+   * is what makes that true, and {@link LegalTextVersionService#recordPublication} deduplicating
+   * against the open version is not enough on its own: changeset 0031 deliberately backfills no
+   * history, so for every agency that already had legal texts there IS no open version to
+   * deduplicate against. The first unrelated update — a phone number, the opening hours — would
+   * otherwise snapshot the untouched old wording stamped with the current time and assert that the
+   * policy came into force at that moment. A date invented for a document nobody edited is exactly
+   * the false evidence #212 refuses to backfill.
    */
-  private void recordAgencyLegalTextVersions(Agency agency) {
-    legalTextVersionService.recordPublication(
-        LegalTextLevel.AGENCY,
-        agency.getId(),
-        LegalTextKind.DPP,
-        agency.getTenantId(),
-        agency.getContentDpp(),
-        agency.getConsentText());
-    legalTextVersionService.recordPublication(
-        LegalTextLevel.AGENCY,
-        agency.getId(),
-        LegalTextKind.IMPRINT,
-        agency.getTenantId(),
-        agency.getContentImprint(),
-        null);
+  private void recordAgencyLegalTextVersions(
+      Agency agency, String storedDpp, String storedConsent, String storedImprint) {
+    if (!Objects.equals(storedDpp, agency.getContentDpp())
+        || !Objects.equals(storedConsent, agency.getConsentText())) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.AGENCY,
+          agency.getId(),
+          LegalTextKind.DPP,
+          agency.getTenantId(),
+          agency.getContentDpp(),
+          agency.getConsentText());
+    }
+    if (!Objects.equals(storedImprint, agency.getContentImprint())) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.AGENCY,
+          agency.getId(),
+          LegalTextKind.IMPRINT,
+          agency.getTenantId(),
+          agency.getContentImprint(),
+          null);
+    }
   }
 
   private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {
@@ -352,11 +368,10 @@ public class AgencyAdminService {
    * There is no draft state in which an incomplete sentence could safely rest here.
    */
   private String resolveConsentTextForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
-    var sent = legalContent(updateAgencyDTO, AgencyLegalContentDTO::getConsentText);
-    if (sent == null || sent.isEmpty()) {
-      return agency.getConsentText();
-    }
-    return consentTextService.sanitizeAndValidate(sent, true);
+    return consentTextService.resolveForUpdate(
+        agency.getConsentText(),
+        legalContent(updateAgencyDTO, AgencyLegalContentDTO::getConsentText),
+        true);
   }
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {

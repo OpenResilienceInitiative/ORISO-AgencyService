@@ -116,16 +116,39 @@ public class LegalTextAdminService {
     var willBePublished =
         publish != null ? publish : text.getPublicationStatus() == PublicationStatus.PUBLISHED;
 
+    final var wasPublished = text.getPublicationStatus() == PublicationStatus.PUBLISHED;
+
     text.setLabel(label);
     text.setContent(legalContentSanitizer.sanitizeToJson(content));
-    text.setConsentText(resolveConsentText(text.getKind(), consentText, willBePublished));
+    text.setConsentText(
+        resolveConsentTextForUpdate(text, consentText, willBePublished));
     if (publish != null) {
       text.setPublicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
     }
     text.setUpdateDate(LocalDateTime.now());
     var saved = legalTextRepository.save(text);
-    recordPublicationIfPublished(saved, saved.getPublicationStatus() == PublicationStatus.PUBLISHED);
+
+    if (saved.getPublicationStatus() == PublicationStatus.PUBLISHED) {
+      recordPublicationIfPublished(saved, true);
+    } else if (wasPublished) {
+      // Unpublishing is not a new version, but the old one has stopped applying: public resolution
+      // now falls through to another level while the last snapshot would still read as in force.
+      legalTextVersionService.supersedeCurrent(
+          LegalTextLevel.SHARED, saved.getId(), saved.getKind());
+    }
     return toView(saved);
+  }
+
+  /**
+   * ADR-021 decision 7 plus the "absent keeps" rule: an imprint never carries a consent sentence,
+   * and an update that does not mention the sentence must not delete it. See
+   * {@link ConsentTextService#resolveForUpdate}.
+   */
+  private String resolveConsentTextForUpdate(
+      LegalText text, Map<String, String> consentText, boolean publish) {
+    return text.getKind() == LegalTextKind.DPP
+        ? consentTextService.resolveForUpdate(text.getConsentText(), consentText, publish)
+        : null;
   }
 
   /**

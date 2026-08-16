@@ -71,6 +71,8 @@ public class DepartmentImprintService {
     assertCallerTenantMatches(department.getAgency());
 
     var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
+    final var wasPublished =
+        department.getPublicationStatusImprint() == PublicationStatus.PUBLISHED;
     var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
 
     // ADR-014 amendment 2026-07-28: never write through to the referenced shared object. The 0026
@@ -98,6 +100,9 @@ public class DepartmentImprintService {
           sanitizedJson,
           // An imprint is an information duty, never consent-bearing (ADR-021 decision 7).
           null);
+    } else if (wasPublished) {
+      legalTextVersionService.supersedeCurrent(
+          LegalTextLevel.DEPARTMENT, department.getId(), LegalTextKind.IMPRINT);
     }
 
     return status;
