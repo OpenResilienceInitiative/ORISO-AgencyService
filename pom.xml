@@ -41,6 +41,7 @@
     <springfox.version>2.9.2</springfox.version>
     <springfox-swagger-ui.version>2.10.0</springfox-swagger-ui.version>
     <spring-security-oauth2-test-webmvc-addons.version>3.0.1</spring-security-oauth2-test-webmvc-addons.version>
+    <httpcore5.version>5.4.3</httpcore5.version>
     <mockito.version>5.20.0</mockito.version>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
@@ -51,6 +52,18 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- Spring Boot 4.0.7 manages 5.3.6, which is affected by CVE-2026-54399
+           and CVE-2026-54428. Keep both transport modules on the fixed release. -->
+      <dependency>
+        <groupId>org.apache.httpcomponents.core5</groupId>
+        <artifactId>httpcore5</artifactId>
+        <version>${httpcore5.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents.core5</groupId>
+        <artifactId>httpcore5-h2</artifactId>
+        <version>${httpcore5.version}</version>
+      </dependency>
       <!-- swagger-parser drags in commons-io 2.11.0 (CVE-2024-47554); force a fixed release. -->
       <dependency>
         <groupId>commons-io</groupId>
