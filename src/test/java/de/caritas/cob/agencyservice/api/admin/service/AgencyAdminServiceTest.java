@@ -141,7 +141,8 @@ class AgencyAdminServiceTest {
 
     Mockito.lenient().when(agencySettingsService.toSettings(any())).thenReturn(new Settings());
     Mockito.lenient().when(agencySettingsService.toSettingsJson(any())).thenReturn("{}");
-    Mockito.lenient().when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
+    Mockito.lenient()
+        .when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any(), any()))
         .thenAnswer(invocation -> invocation.getArgument(0) != null
             ? invocation.getArgument(0)
             : new Settings());

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.config.CacheManagerConfig;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
+import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,8 @@ class TenantServiceGetRestrictedTenantDataByTenantIdCacheTest {
   @MockitoBean private TenantServiceApiControllerFactory tenantServiceApiControllerFactory;
 
   @MockitoBean private ApplicationSettingsService applicationSettingsService;
+  @MockitoBean private SecurityHeaderSupplier securityHeaderSupplier;
+  @MockitoBean private TenantHeaderSupplier tenantHeaderSupplier;
 
   @Autowired private TenantService tenantService;
 

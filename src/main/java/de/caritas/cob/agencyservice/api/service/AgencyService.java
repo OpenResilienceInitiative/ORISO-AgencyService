@@ -476,7 +476,8 @@ public class AgencyService {
    */
   private Settings buildAgencySettings(Agency agency) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
-    effectivePermissionSettingsApplier.applyTo(settings, agencyAdminControlsService.getControls());
+    effectivePermissionSettingsApplier.applyTo(
+        settings, agencyAdminControlsService.getResolvedControls(agency.getTenantId()));
     return settings;
   }
 
