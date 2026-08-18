@@ -41,6 +41,22 @@ class LegalContentSanitizerTest {
   }
 
   @Test
+  void sanitizeToJson_Should_keepHeadingAnchors_ThroughTheLegalWritePath() {
+    // The Admin editor persists chapter anchors as heading ids; the "x" removal persists as
+    // data-anchor-removed="true". Both must survive the save, or the read mode loses its
+    // chapter navigation and removed anchors resurrect on reload (TenantService 7f37f30).
+    var json =
+        sanitizer.sanitizeToJson(
+            Map.of(
+                "de",
+                "<h2 id=\"1-gegenstand\">§ 1 Gegenstand</h2>"
+                    + "<h2 data-anchor-removed=\"true\">Altkapitel</h2><p>Text</p>"));
+
+    assertThat(json).contains("id=\\\"1-gegenstand\\\"");
+    assertThat(json).contains("data-anchor-removed=\\\"true\\\"");
+  }
+
+  @Test
   void sanitizeToJson_Should_passThroughValidStrictMeta_Unsanitised() {
     var metaJson = "{\"mt\":true,\"src\":\"de\",\"at\":\"2026-07-16T10:00:00Z\"}";
 
