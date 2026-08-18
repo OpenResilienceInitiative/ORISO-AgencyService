@@ -1,6 +1,8 @@
 package de.caritas.cob.agencyservice.api.admin.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
@@ -15,13 +17,18 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminServic
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionView;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.model.LegalTextVersionDTO;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,6 +53,11 @@ class AgencyAdminControllerLegalVersionsTest {
   @InjectMocks private AgencyAdminController controller;
 
   private LegalTextVersionView view(LegalTextLevel level, LocalDateTime supersededAt) {
+    return view(level, LocalDateTime.of(2026, 5, 1, 9, 0), supersededAt);
+  }
+
+  private LegalTextVersionView view(
+      LegalTextLevel level, LocalDateTime publishedAt, LocalDateTime supersededAt) {
     return new LegalTextVersionView(
         100L,
         LegalTextKind.DPP,
@@ -53,7 +65,7 @@ class AgencyAdminControllerLegalVersionsTest {
         4711L,
         "{\"de\":\"<p>Fassung</p>\"}",
         "{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}",
-        LocalDateTime.of(2026, 5, 1, 9, 0),
+        publishedAt,
         "admin-uuid",
         supersededAt);
   }
@@ -72,9 +84,9 @@ class AgencyAdminControllerLegalVersionsTest {
       assertThat(dto.getOwnerLevel()).isEqualTo(LegalTextVersionDTO.OwnerLevelEnum.DEPARTMENT);
       assertThat(dto.getOwnerId()).isEqualTo(4711L);
       assertThat(dto.getContent()).contains("Fassung");
-      assertThat(dto.getPublishedAt()).isEqualTo("2026-05-01T09:00");
+      assertThat(dto.getPublishedAt()).isEqualTo("2026-05-01T09:00:00");
       assertThat(dto.getPublishedBy()).isEqualTo("admin-uuid");
-      assertThat(dto.getSupersededAt()).isEqualTo("2026-09-01T00:00");
+      assertThat(dto.getSupersededAt()).isEqualTo("2026-09-01T00:00:00");
     });
   }
 
@@ -87,6 +99,64 @@ class AgencyAdminControllerLegalVersionsTest {
 
     assertThat(response.getBody()).singleElement().satisfies(dto ->
         assertThat(dto.getSupersededAt()).isNull());
+  }
+
+  /**
+   * The wire shape is fixed at 19 characters whatever the seconds happen to be.
+   * {@code LocalDateTime.toString()} used to drop a zero seconds component and append fractional
+   * seconds when present, so the same field changed shape with its value and broke strict parsers
+   * and string comparisons.
+   */
+  @ParameterizedTest(name = "{0} is serialised as {1}")
+  @MethodSource("timestampsAndTheirWireForm")
+  void getDepartmentLegalTextVersions_Should_serialiseTimestampsInOneFixedShape(
+      LocalDateTime publishedAt, String expectedWireForm) {
+    when(legalTextVersionAdminService.listDepartmentVersions(7L, 42L, LegalTextKind.DPP))
+        .thenReturn(List.of(view(LegalTextLevel.DEPARTMENT, publishedAt, publishedAt)));
+
+    var response = controller.getDepartmentLegalTextVersions(7L, 42L, "DPP");
+
+    assertThat(response.getBody()).singleElement().satisfies(dto -> {
+      assertThat(dto.getPublishedAt()).isEqualTo(expectedWireForm);
+      assertThat(dto.getSupersededAt()).isEqualTo(expectedWireForm);
+    });
+  }
+
+  private static Stream<Arguments> timestampsAndTheirWireForm() {
+    return Stream.of(
+        // zero seconds - the case LocalDateTime.toString() shortened to "2026-05-01T09:00"
+        Arguments.of(LocalDateTime.of(2026, 5, 1, 9, 0), "2026-05-01T09:00:00"),
+        // the OpenAPI example, already 19 characters
+        Arguments.of(LocalDateTime.of(2026, 8, 16, 13, 12, 8), "2026-08-16T13:12:08"),
+        // sub-second precision is truncated: published_at is a MariaDB datetime, which cannot
+        // store it, so emitting it would advertise a precision the store does not have
+        Arguments.of(
+            LocalDateTime.of(2026, 8, 16, 13, 12, 8, 123_000_000), "2026-08-16T13:12:08"));
+  }
+
+  /**
+   * The OpenAPI declares {@code kind} as an enum but the generator emits a plain String, so an
+   * unparseable value used to reach {@code LegalTextKind.valueOf} and surface as a 500. A caller
+   * typo is a 400, and the message names the accepted values.
+   */
+  @Test
+  void getDepartmentLegalTextVersions_Should_rejectUnknownKind_withBadRequest() {
+    assertThatThrownBy(() -> controller.getDepartmentLegalTextVersions(7L, 42L, "DDP"))
+        .isInstanceOf(BadRequestException.class)
+        .hasMessageContaining("DPP")
+        .hasMessageContaining("IMPRINT");
+
+    verifyNoInteractions(legalTextVersionAdminService);
+  }
+
+  @Test
+  void getAgencyLegalTextVersions_Should_rejectUnknownKind_withBadRequest() {
+    assertThatThrownBy(() -> controller.getAgencyLegalTextVersions(7L, ""))
+        .isInstanceOf(BadRequestException.class)
+        .hasMessageContaining("DPP")
+        .hasMessageContaining("IMPRINT");
+
+    verifyNoInteractions(legalTextVersionAdminService);
   }
 
   @Test
