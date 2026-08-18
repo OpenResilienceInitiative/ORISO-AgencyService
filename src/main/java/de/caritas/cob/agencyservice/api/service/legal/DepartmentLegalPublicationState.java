@@ -10,11 +10,18 @@ import lombok.NoArgsConstructor;
  * Whether a department (Fachbereich = agency × topic) has left the inherited legal text, i.e.
  * carries a published one of its own.
  *
- * <p>Two reads answer this question: the public agency read (registration search) and the admin
- * read (the Fachbereich switcher in the legal editors, ORISO-Admin#583). They must agree — an
- * admin publishing a correction to the agency-wide text needs to know who will <em>not</em>
- * receive it, and a switcher that disagrees with what help-seekers actually see is worse than no
- * marker at all. The resolution therefore lives here once instead of in each caller.
+ * <p>This is the <b>admin</b> predicate (the Fachbereich switcher in the legal editors,
+ * ORISO-Admin#583): an admin publishing a correction to the agency-wide text needs to know who
+ * will <em>not</em> receive it.
+ *
+ * <p><b>Not to be used for the public agency read.</b> That one asks the opposite question — "is a
+ * document in force for this department at all", resolved across the four ADR-021 levels — because
+ * its consumer decides whether to offer the text to a help-seeker; see
+ * {@code AgencyService#hasPublishedDpp}. Answering "of its own" there was the defect
+ * CONTEXT-legal-documents records: a department reported {@code false} while {@code /legal}
+ * returned an inherited document. Conversely, answering "in force" here would mark every
+ * department of an agency that has any agency-wide text and make the marker useless. Both OpenAPI
+ * specs state which of the two their field is.
  *
  * <p>ADR-014 resolution order: a referenced shared {@link LegalText} fully replaces the inline
  * column. Reading the inline column first would report stale state after a write-through

@@ -1,0 +1,15 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+    <!-- ADR-021 decision 3: generic legal-text publication history (DPP, imprint, future kinds)
+         on the department, agency and shared-object levels. Purely additive: nothing reads or
+         writes it until a publish happens, and existing rows get no backfilled history because a
+         guessed publication date would be worse than an honest gap (see #212). -->
+    <changeSet author="oriso" id="createLegalTextVersion">
+        <sqlFile path="db/changelog/changeset/0031_legal_text_version/createLegalTextVersion.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0031_legal_text_version/createLegalTextVersion-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

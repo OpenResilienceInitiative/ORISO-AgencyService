@@ -20,8 +20,12 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundExceptio
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
+import de.caritas.cob.agencyservice.api.admin.service.legal.ConsentTextService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionService;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
@@ -36,6 +40,7 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
@@ -72,6 +77,8 @@ public class AgencyAdminService {
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
   private final @NonNull TransactionOperations agencyCreationTransaction;
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
+  private final @NonNull LegalTextVersionService legalTextVersionService;
+  private final @NonNull ConsentTextService consentTextService;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -265,11 +272,58 @@ public class AgencyAdminService {
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
     var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
     applySettingsUpdate(updateAgencyDTO);
+    // Read the stored wording before the merge overwrites it: what makes an agency-level save a
+    // publish is that the wording CHANGED, and afterwards there is nothing left to compare against.
+    final var storedDpp = agency.getContentDpp();
+    final var storedConsent = agency.getConsentText();
+    final var storedImprint = agency.getContentImprint();
     var updatedAgency = agencyRepository.save(mergeAgencies(agency, updateAgencyDTO));
     enrichWithAgencyTopicsIfTopicFeatureEnabled(updatedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(updatedAgency);
     agencyRepository.flush();
+    recordAgencyLegalTextVersions(updatedAgency, storedDpp, storedConsent, storedImprint);
     return buildAgencyAdminFullResponse(updatedAgency);
+  }
+
+  /**
+   * ADR-021 decision 3 on the Beratungsstelle level (level 3).
+   *
+   * <p>That level deliberately carries <b>no publication status</b> — CONTEXT-legal-documents puts
+   * it as "what is stored, applies", and every Fachbereich inherits it until it publishes one of
+   * its own. There is consequently no publish button to hang a snapshot on, so <em>a save is a
+   * publish here</em>: whatever an agency update leaves stored is the wording in force from that
+   * moment, and that is precisely what the history has to record.
+   *
+   * <p><b>Only an actual change is a publish.</b> Comparing against the previously stored wording
+   * is what makes that true, and {@link LegalTextVersionService#recordPublication} deduplicating
+   * against the open version is not enough on its own: changeset 0031 deliberately backfills no
+   * history, so for every agency that already had legal texts there IS no open version to
+   * deduplicate against. The first unrelated update — a phone number, the opening hours — would
+   * otherwise snapshot the untouched old wording stamped with the current time and assert that the
+   * policy came into force at that moment. A date invented for a document nobody edited is exactly
+   * the false evidence #212 refuses to backfill.
+   */
+  private void recordAgencyLegalTextVersions(
+      Agency agency, String storedDpp, String storedConsent, String storedImprint) {
+    if (!Objects.equals(storedDpp, agency.getContentDpp())
+        || !Objects.equals(storedConsent, agency.getConsentText())) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.AGENCY,
+          agency.getId(),
+          LegalTextKind.DPP,
+          agency.getTenantId(),
+          agency.getContentDpp(),
+          agency.getConsentText());
+    }
+    if (!Objects.equals(storedImprint, agency.getContentImprint())) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.AGENCY,
+          agency.getId(),
+          LegalTextKind.IMPRINT,
+          agency.getTenantId(),
+          agency.getContentImprint(),
+          null);
+    }
   }
 
   private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {
@@ -303,6 +357,21 @@ public class AgencyAdminService {
     return sentContent == null || sentContent.isEmpty()
         ? storedContent
         : legalContentSanitizer.sanitizeToJson(sentContent);
+  }
+
+  /**
+   * ADR-021 decision 4: the agency-wide consent sentence is a field of the agency-wide DPP, and
+   * follows the same "absent keeps, empty clears" rule as the policy itself.
+   *
+   * <p>The mandatory-token validator always runs on a submitted sentence, because this level has no
+   * publication status: what is stored is in force (ADR-021 decision 2 / CONTEXT-legal-documents).
+   * There is no draft state in which an incomplete sentence could safely rest here.
+   */
+  private String resolveConsentTextForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    return consentTextService.resolveForUpdate(
+        agency.getConsentText(),
+        legalContent(updateAgencyDTO, AgencyLegalContentDTO::getConsentText),
+        true);
   }
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
@@ -387,7 +456,8 @@ public class AgencyAdminService {
         .contentImprint(
             resolveLegalTextForUpdate(
                 agency.getContentImprint(),
-                legalContent(updateAgencyDTO, AgencyLegalContentDTO::getImpressum)));
+                legalContent(updateAgencyDTO, AgencyLegalContentDTO::getImpressum)))
+        .consentText(resolveConsentTextForUpdate(agency, updateAgencyDTO));
 
     applyDataProtectionUpdate(agency, updateAgencyDTO, agencyBuilder);
 
