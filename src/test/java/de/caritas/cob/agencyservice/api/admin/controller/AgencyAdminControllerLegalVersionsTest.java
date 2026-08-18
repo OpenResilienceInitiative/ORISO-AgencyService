@@ -1,6 +1,8 @@
 package de.caritas.cob.agencyservice.api.admin.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
@@ -15,6 +17,7 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminServic
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionView;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.model.LegalTextVersionDTO;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
@@ -129,6 +132,31 @@ class AgencyAdminControllerLegalVersionsTest {
         // store it, so emitting it would advertise a precision the store does not have
         Arguments.of(
             LocalDateTime.of(2026, 8, 16, 13, 12, 8, 123_000_000), "2026-08-16T13:12:08"));
+  }
+
+  /**
+   * The OpenAPI declares {@code kind} as an enum but the generator emits a plain String, so an
+   * unparseable value used to reach {@code LegalTextKind.valueOf} and surface as a 500. A caller
+   * typo is a 400, and the message names the accepted values.
+   */
+  @Test
+  void getDepartmentLegalTextVersions_Should_rejectUnknownKind_withBadRequest() {
+    assertThatThrownBy(() -> controller.getDepartmentLegalTextVersions(7L, 42L, "DDP"))
+        .isInstanceOf(BadRequestException.class)
+        .hasMessageContaining("DPP")
+        .hasMessageContaining("IMPRINT");
+
+    verifyNoInteractions(legalTextVersionAdminService);
+  }
+
+  @Test
+  void getAgencyLegalTextVersions_Should_rejectUnknownKind_withBadRequest() {
+    assertThatThrownBy(() -> controller.getAgencyLegalTextVersions(7L, ""))
+        .isInstanceOf(BadRequestException.class)
+        .hasMessageContaining("DPP")
+        .hasMessageContaining("IMPRINT");
+
+    verifyNoInteractions(legalTextVersionAdminService);
   }
 
   @Test

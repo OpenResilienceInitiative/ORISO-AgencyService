@@ -538,7 +538,7 @@ public class AgencyAdminController implements AgencyadminApi {
       Long agencyId, Long topicId, String kind) {
     var views =
         legalTextVersionAdminService.listDepartmentVersions(
-            agencyId, topicId, LegalTextKind.valueOf(kind));
+            agencyId, topicId, parseLegalTextKind(kind));
     return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
   }
 
@@ -549,8 +549,25 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<List<LegalTextVersionDTO>> getAgencyLegalTextVersions(
       Long agencyId, String kind) {
-    var views = legalTextVersionAdminService.listAgencyVersions(agencyId, LegalTextKind.valueOf(kind));
+    var views =
+        legalTextVersionAdminService.listAgencyVersions(agencyId, parseLegalTextKind(kind));
     return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
+  }
+
+  /**
+   * The OpenAPI document constrains {@code kind} to an enum, but the generator emits it as a plain
+   * {@code String}, so nothing rejects a bad value before it reaches us. Left to
+   * {@code LegalTextKind.valueOf}, a typo raises {@link IllegalArgumentException}, which
+   * {@code ApiResponseEntityExceptionHandler} maps to 500 — blaming the server for the caller's
+   * mistake and burying it in the error budget. It is a 400, and the message names what is
+   * accepted so the caller can fix it without reading the spec.
+   */
+  private LegalTextKind parseLegalTextKind(String kind) {
+    try {
+      return LegalTextKind.valueOf(kind);
+    } catch (IllegalArgumentException e) {
+      throw new BadRequestException("kind must be one of DPP, IMPRINT");
+    }
   }
 
   /** One archived version, verbatim; authorised against the version's stored owner. */
