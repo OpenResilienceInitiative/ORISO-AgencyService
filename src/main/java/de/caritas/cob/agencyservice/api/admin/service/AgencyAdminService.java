@@ -50,6 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -265,10 +266,20 @@ public class AgencyAdminService {
   /**
    * Updates an agency in the database.
    *
+   * <p>Transactional because the agency row and its ADR-021 publication history have to move
+   * together. Without a transaction spanning both, {@link LegalTextVersionService#recordPublication}
+   * opens its own after the agency save has already committed, so a failure writing the snapshot
+   * rolls back only the snapshot: the caller sees a 500 for an update that actually succeeded, and
+   * the agency is left carrying new legal wording with no history row to say when it came into
+   * force — the one thing this history exists to answer. Every sibling publish path
+   * ({@code DepartmentImprintService}, {@code DepartmentDataProtectionService},
+   * {@code LegalTextAdminService}) is transactional for the same reason.
+   *
    * @param agencyId        the id of the agency to update
    * @param updateAgencyDTO {@link UpdateAgencyDTO}
    * @return an {@link AgencyAdminFullResponseDTO} instance
    */
+  @Transactional
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
     var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
     applySettingsUpdate(updateAgencyDTO);
