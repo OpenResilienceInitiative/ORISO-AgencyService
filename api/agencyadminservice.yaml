@@ -1892,7 +1892,14 @@ components:
             that is the point: one version pointer covers both.
         publishedAt:
           type: string
-          description: When this wording came into force
+          description: >
+            When this wording came into force, as local date-time without offset, always in the
+            fixed 19-character form `yyyy-MM-ddTHH:mm:ss` — the seconds are never omitted, so a
+            strict parser and a plain string comparison both hold.
+
+            Intentionally a plain string and not `format: date-time`: the value has no offset, and
+            declaring an offset-less local date-time as date-time is what broke ORISO-UserService
+            #872/#874 under the Jackson 3 tightening.
           example: "2026-08-16T13:12:08"
         publishedBy:
           type: string
@@ -1903,7 +1910,9 @@ components:
         supersededAt:
           type: string
           nullable: true
-          description: When a newer version replaced this one; null = still in force
+          description: >
+            When a newer version replaced this one; null = still in force. Same fixed
+            19-character `yyyy-MM-ddTHH:mm:ss` form as `publishedAt`.
           example: "2026-09-01T09:00:00"
 
     CreateLegalTextDTO:

@@ -44,6 +44,8 @@ import de.caritas.cob.agencyservice.api.model.Sort;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.generated.api.admin.controller.AgencyadminApi;
 import io.swagger.annotations.Api;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +64,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Api(tags = "admin-agency-controller")
 @RequiredArgsConstructor
 public class AgencyAdminController implements AgencyadminApi {
+
+  /** Fixed wire shape for the ADR-021 version timestamps; see {@code formatVersionTimestamp}. */
+  private static final DateTimeFormatter LEGAL_TEXT_VERSION_TIMESTAMP =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
   private final @NonNull AgencyAdminSearchService agencyAdminSearchService;
   private final @NonNull AgencyPostcodeRangeAdminService agencyPostcodeRangeAdminService;
@@ -532,7 +538,7 @@ public class AgencyAdminController implements AgencyadminApi {
       Long agencyId, Long topicId, String kind) {
     var views =
         legalTextVersionAdminService.listDepartmentVersions(
-            agencyId, topicId, LegalTextKind.valueOf(kind));
+            agencyId, topicId, parseLegalTextKind(kind));
     return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
   }
 
@@ -543,8 +549,25 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<List<LegalTextVersionDTO>> getAgencyLegalTextVersions(
       Long agencyId, String kind) {
-    var views = legalTextVersionAdminService.listAgencyVersions(agencyId, LegalTextKind.valueOf(kind));
+    var views =
+        legalTextVersionAdminService.listAgencyVersions(agencyId, parseLegalTextKind(kind));
     return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
+  }
+
+  /**
+   * The OpenAPI document constrains {@code kind} to an enum, but the generator emits it as a plain
+   * {@code String}, so nothing rejects a bad value before it reaches us. Left to
+   * {@code LegalTextKind.valueOf}, a typo raises {@link IllegalArgumentException}, which
+   * {@code ApiResponseEntityExceptionHandler} maps to 500 — blaming the server for the caller's
+   * mistake and burying it in the error budget. It is a 400, and the message names what is
+   * accepted so the caller can fix it without reading the spec.
+   */
+  private LegalTextKind parseLegalTextKind(String kind) {
+    try {
+      return LegalTextKind.valueOf(kind);
+    } catch (IllegalArgumentException e) {
+      throw new BadRequestException("kind must be one of DPP, IMPRINT");
+    }
   }
 
   /** One archived version, verbatim; authorised against the version's stored owner. */
@@ -563,9 +586,27 @@ public class AgencyAdminController implements AgencyadminApi {
         .ownerId(view.ownerId())
         .content(view.content())
         .consentText(view.consentText())
-        .publishedAt(view.publishedAt() == null ? null : view.publishedAt().toString())
+        .publishedAt(formatVersionTimestamp(view.publishedAt()))
         .publishedBy(view.publishedBy())
-        .supersededAt(view.supersededAt() == null ? null : view.supersededAt().toString());
+        .supersededAt(formatVersionTimestamp(view.supersededAt()));
+  }
+
+  /**
+   * The version timestamps go on the wire in one fixed shape, always 19 characters.
+   *
+   * <p>{@code LocalDateTime.toString()} drops the seconds when they are zero and appends fractional
+   * seconds when they are not, so the same field arrived as {@code 2026-05-01T09:00} or
+   * {@code 2026-08-16T13:12:08} depending on the value — enough to break a strict parser or any
+   * consumer comparing the strings. {@code published_at}/{@code superseded_at} are MariaDB
+   * {@code datetime} columns with no sub-second precision, so pinning the pattern to whole seconds
+   * discards nothing that survives a round-trip.
+   *
+   * <p>Deliberately a formatted {@code String} and not an OpenAPI {@code format: date-time} field:
+   * these are offset-less {@link LocalDateTime}s, and declaring them as date-time is what broke
+   * ORISO-UserService #872/#874 under the Jackson 3 tightening.
+   */
+  private String formatVersionTimestamp(LocalDateTime timestamp) {
+    return timestamp == null ? null : LEGAL_TEXT_VERSION_TIMESTAMP.format(timestamp);
   }
 
   private LegalTextAdminDTO toLegalTextAdminDto(

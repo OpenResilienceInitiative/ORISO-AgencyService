@@ -9,11 +9,15 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mariadb.MariaDBContainer;
 
 /**
  * Regression guard for the opt-in demo baseline changeset
@@ -39,27 +43,14 @@ import org.springframework.test.context.TestPropertySource;
  * {@code seed,demo-baseline} contexts (so the base schema and the demo baseline are both built by
  * Liquibase), then asserts the baseline landed and that a sequence-driven insert does not collide.
  *
- * <p>Like {@link LiquibaseChangelogDriftIT} the test is gated on {@code LIQUIBASE_IT_DB_URL} and is
- * skipped on the normal H2-based {@code testing} build. Provide a fresh MariaDB, e.g.:
- *
- * <pre>
- *   docker run -d --name demo-baseline-mariadb -p 3313:3306 \
- *     -e MARIADB_ROOT_PASSWORD=root -e MARIADB_DATABASE=agencyservice mariadb:10.11
- *
- *   LIQUIBASE_IT_DB_URL="jdbc:mariadb://127.0.0.1:3313/agencyservice" \
- *   LIQUIBASE_IT_DB_USERNAME=root \
- *   LIQUIBASE_IT_DB_PASSWORD=root \
- *   ./mvnw -Dtest=DemoBaselineChangesetIT -DfailIfNoTests=false test
- * </pre>
+ * <p>The required CI contract owns this test and starts an isolated MariaDB 10.11 container. It
+ * therefore cannot report green by skipping when a manually supplied database URL is absent.
  */
 @SpringBootTest(classes = AgencyServiceApplication.class)
 @ActiveProfiles("dev")
-@EnabledIfEnvironmentVariable(named = "LIQUIBASE_IT_DB_URL", matches = ".+")
+@Testcontainers
 @TestPropertySource(
     properties = {
-      "spring.datasource.url=${LIQUIBASE_IT_DB_URL}",
-      "spring.datasource.username=${LIQUIBASE_IT_DB_USERNAME:root}",
-      "spring.datasource.password=${LIQUIBASE_IT_DB_PASSWORD:root}",
       "spring.datasource.driver-class-name=org.mariadb.jdbc.Driver",
       "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MariaDBDialect",
       // Liquibase owns the schema; build the base schema (seed) AND the opt-in demo baseline.
@@ -84,6 +75,17 @@ import org.springframework.test.context.TestPropertySource;
       "user.admin.service.api.url=http://localhost:8082"
     })
 class DemoBaselineChangesetIT {
+
+  @Container
+  static final MariaDBContainer mariaDb =
+      new MariaDBContainer("mariadb:10.11").withDatabaseName("agencyservice");
+
+  @DynamicPropertySource
+  static void mariaDbProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", mariaDb::getJdbcUrl);
+    registry.add("spring.datasource.username", mariaDb::getUsername);
+    registry.add("spring.datasource.password", mariaDb::getPassword);
+  }
 
   /** The demo agency id reserved by the baseline changeset (0025). */
   private static final long DEMO_AGENCY_ID = 246L;

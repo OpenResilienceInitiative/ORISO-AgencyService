@@ -6,6 +6,7 @@ import static de.caritas.cob.agencyservice.testHelper.TestConstants.AGENCY_ID;
 import static org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,9 +25,12 @@ import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.DepartmentLegalService;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
+import de.caritas.cob.agencyservice.config.resttemplate.CustomResponseErrorHandler;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverter;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverterProperties;
+import java.io.ByteArrayInputStream;
+import java.net.URI;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,7 +43,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.hateoas.client.LinkDiscoverers;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.client.HttpClientErrorException;
@@ -183,6 +189,24 @@ public class ResponseEntityExceptionHandlerIT {
     mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
         .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isEarlyHints());
+  }
+
+  @Test
+  public void handleException_Should_PreserveForbidden_When_ResponseStatusExceptionIsThrown()
+      throws Exception {
+
+    ClientHttpResponse downstreamResponse = mock(ClientHttpResponse.class);
+    when(downstreamResponse.getStatusCode()).thenReturn(HttpStatus.FORBIDDEN);
+    when(downstreamResponse.getBody()).thenReturn(new ByteArrayInputStream(new byte[0]));
+    when(agencyService.getAgencies(any())).thenAnswer(invocation -> {
+      new CustomResponseErrorHandler().handleError(
+          URI.create("https://downstream.example/agencies"), HttpMethod.GET, downstreamResponse);
+      return null;
+    });
+
+    mvc.perform(get(PATH_GET_AGENCIES_WITH_IDS + AGENCY_ID)
+        .accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isForbidden());
   }
 
   @Test
