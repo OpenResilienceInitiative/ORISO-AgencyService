@@ -87,11 +87,14 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.OPTIONS, "/topic/public", "/topic/public/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/topic/public", "/topic/public/**").permitAll()
             .requestMatchers("/agencies").permitAll()
-            .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies")
+            .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies", "/agencyadmin/agencies/")
             .hasAuthority(AuthorityValue.SEARCH_AGENCIES)
-            .requestMatchers("/agencies/by-tenant")
+            // Both variants are required: Spring Boot 4 defaults setUseTrailingSlashMatch(false),
+            // and the later "/agencies/**" permitAll would otherwise let "/agencies/by-tenant/"
+            // through anonymously — bypassing SEARCH_AGENCIES_WITHIN_TENANT.
+            .requestMatchers("/agencies/by-tenant", "/agencies/by-tenant/")
             .hasAuthority(AuthorityValue.SEARCH_AGENCIES_WITHIN_TENANT)
-            .requestMatchers("/agencyadmin/agencies/tenant/*")
+            .requestMatchers("/agencyadmin/agencies/tenant/*", "/agencyadmin/agencies/tenant/*/")
             .access(new WebExpressionAuthorizationManager("hasAuthority('"
                 + AuthorityValue.AGENCY_ADMIN + "') and hasAuthority('"
                 + AuthorityValue.TENANT_ADMIN + "')"))
