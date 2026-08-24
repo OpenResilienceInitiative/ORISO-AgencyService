@@ -1,10 +1,12 @@
 package de.caritas.cob.agencyservice.api.admin.service.agency;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.caritas.cob.agencyservice.api.model.AgencyAdminDepartmentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
@@ -14,7 +16,10 @@ import de.caritas.cob.agencyservice.api.model.HalLink.MethodEnum;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
 import de.caritas.cob.agencyservice.api.repository.agency.Gender;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
+import java.util.List;
 import org.jeasy.random.EasyRandom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +49,52 @@ class AgencyAdminFullResponseDTOBuilderTest {
     var result = agencyAdminFullResponseDTOBuilder.fromAgency();
 
     assertBaseDTOAttributesAreMapped(result);
+  }
+
+  /**
+   * ORISO-Admin#583: the Fachbereich switcher marks who has left the inherited text. The admin
+   * read is the one the admin page uses, so the flags have to be on THIS response — reaching
+   * across to the public agency read just to render a marker is the wrong shape.
+   */
+  @Test
+  void fromAgency_Should_Report_WhichDepartmentsCarryTheirOwnPublishedTexts() {
+    var withOwnDpp = AgencyTopic.builder()
+        .topicId(7L)
+        .contentDpp("<p>eigene Richtlinie</p>")
+        .publicationStatus(PublicationStatus.PUBLISHED)
+        .build();
+    var stillInheriting = AgencyTopic.builder()
+        .topicId(8L)
+        .contentDpp("<p>noch Entwurf</p>")
+        .publicationStatus(PublicationStatus.DRAFT)
+        .build();
+    var withOwnImprint = AgencyTopic.builder()
+        .topicId(9L)
+        .contentImprint("<p>eigenes Impressum</p>")
+        .publicationStatusImprint(PublicationStatus.PUBLISHED)
+        .build();
+    agency.setAgencyTopics(List.of(withOwnDpp, stillInheriting, withOwnImprint));
+
+    var departments = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency()
+        .getEmbedded().getDepartments();
+
+    assertThat(departments).hasSize(3);
+    assertThat(departments).extracting(
+            AgencyAdminDepartmentDTO::getTopicId,
+            AgencyAdminDepartmentDTO::getHasPublishedDpp,
+            AgencyAdminDepartmentDTO::getHasPublishedImprint)
+        .containsExactly(
+            tuple(7L, true, false),
+            tuple(8L, false, false),
+            tuple(9L, false, true));
+  }
+
+  @Test
+  void fromAgency_Should_Return_EmptyDepartments_When_TheAgencyHasNoTopics() {
+    agency.setAgencyTopics(null);
+
+    assertThat(new AgencyAdminFullResponseDTOBuilder(agency).fromAgency()
+        .getEmbedded().getDepartments()).isEmpty();
   }
 
   private void assertBaseDTOAttributesAreMapped(AgencyAdminFullResponseDTO result) {

@@ -26,7 +26,9 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.api.service.legal.DepartmentLegalPublicationState;
 import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService;
 import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import java.time.LocalDateTime;
@@ -73,6 +75,8 @@ public class AgencyService {
   private final @NonNull AgencySettingsService agencySettingsService;
 
   private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
+
+  private final @NonNull LegalTextInheritanceResolver legalTextInheritanceResolver;
 
   private final @NonNull AgencyEffectivePermissionSettingsApplier
       effectivePermissionSettingsApplier;
@@ -528,9 +532,19 @@ public class AgencyService {
    * agencyTopics} association (the same one {@code topicIds} is built from), so no additional
    * query is issued per agency or topic.
    *
-   * <p>ADR-014: like {@link DepartmentLegalService}, a referenced shared legal-text object fully
-   * replaces the inline column — the flags must follow the same resolution order, otherwise the
-   * registration search would report stale inline state after a write-through publish/draft-save.
+   * <p><b>Two flags, two questions — deliberately not the same predicate.</b> This public flag
+   * answers "is a data protection policy in force for this department at all", resolved across the
+   * whole ADR-021 ladder, because its consumer decides whether to offer the document to a
+   * help-seeker. Reporting "of its own" here is the defect CONTEXT-legal-documents records: a
+   * department returned {@code false} while {@code /legal} returned an inherited document, so the
+   * client hid a text that existed.
+   *
+   * <p>The admin read (#259, ORISO-Admin#583) asks the opposite question — "who has <em>left</em>
+   * the inherited text", i.e. who will not receive a correction to the agency-wide document — and
+   * therefore keeps {@link DepartmentLegalPublicationState}. Resolvability there would mark every
+   * department of an agency that has any agency-wide text, which is exactly the marker being
+   * useless. Neither predicate is a bug to be "fixed" into the other; both descriptions in the
+   * OpenAPI specs say which one they are.
    */
   private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic,
       Agency agency) {
@@ -552,26 +566,27 @@ public class AgencyService {
     return departmentValue != null ? departmentValue : agencyValue;
   }
 
+  /**
+   * Whether a data protection policy is in force for this department <b>at all</b>, wherever on the
+   * ADR-021 ladder it comes from.
+   *
+   * <p>Measured defect, fixed here (CONTEXT-legal-documents, "known traps"): this used to be
+   * computed from the department level only, while {@code DepartmentLegalService} already fell back
+   * to the agency-wide text. A department could therefore report {@code hasPublishedDpp: false}
+   * while {@code /legal} returned content, and a client trusting the flag hid a document that
+   * existed. Both now ask the same resolver, so the public flag cannot disagree with the public
+   * endpoint.
+   *
+   * <p>This is deliberately <b>not</b> {@link DepartmentLegalPublicationState}, which #259 uses for
+   * the admin read. See {@link #convertToAgencyDepartmentDTO} for why the two differ.
+   */
   private boolean hasPublishedDpp(AgencyTopic agencyTopic) {
-    LegalText referenced = agencyTopic.getDpp();
-    if (referenced != null) {
-      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return hasPublishedContent(agencyTopic.getContentDpp(), agencyTopic.getPublicationStatus());
+    return legalTextInheritanceResolver.resolveDpp(agencyTopic).isPresent();
   }
 
+  /** Same fix for the imprint half — an inherited imprint is reachable and must be reported so. */
   private boolean hasPublishedImprint(AgencyTopic agencyTopic) {
-    LegalText referenced = agencyTopic.getImprint();
-    if (referenced != null) {
-      return hasPublishedContent(referenced.getContent(), referenced.getPublicationStatus());
-    }
-    return hasPublishedContent(
-        agencyTopic.getContentImprint(), agencyTopic.getPublicationStatusImprint());
-  }
-
-  private boolean hasPublishedContent(String content, PublicationStatus status) {
-    var hasContent = content != null && !content.isBlank();
-    return PublicationStatus.PUBLISHED == status && hasContent;
+    return legalTextInheritanceResolver.resolveImprint(agencyTopic).isPresent();
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

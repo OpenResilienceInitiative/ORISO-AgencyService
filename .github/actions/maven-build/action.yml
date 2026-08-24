@@ -15,44 +15,58 @@ runs:
       cache: maven
 
   # Blocking unit-test gate (Test Quality Audit 2026-07-04, item 3).
-  # Runs the surefire `unit-tests` execution (test phase, **/*Test) and fails the
-  # build if any report shows failures/errors — or if NO reports were produced at
-  # all (a green build with zero reports means tests were silently skipped).
+  # Runs the surefire `unit-tests` execution (test phase, **/*Test). The shared
+  # report guard fails on failures, errors, skips, zero reports, or zero executed
+  # tests, so a green Maven exit cannot hide an incomplete suite.
   - name: Run Maven tests
     shell: bash
     run: |
       ./mvnw -B test
-      python3 - <<'PY'
-      from pathlib import Path
-      import sys
-      import xml.etree.ElementTree as ET
+      python3 scripts/ci/verify-test-reports.py
 
-      reports = sorted(Path("target/surefire-reports").glob("TEST-*.xml"))
-      if not reports:
-          print("::error::Zero surefire reports found — tests were silently skipped or never ran.")
-          sys.exit(1)
+  # jacoco:report is bound to the `test` phase behind surefire, so a green suite has
+  # already written the report and this step has nothing to do. Only a red suite halts
+  # the build before the goal, and only then is it invoked directly against the
+  # execution data the prepare-agent JVM left behind.
+  #
+  # That direct invocation is best-effort: run from the command line the goal resolves
+  # the plugin's reporting dependencies, which the lifecycle-bound execution never needs
+  # and which do not reliably resolve from a restored runner cache. Coverage is a
+  # diagnostic, so failing to produce it must never fail the build.
+  - name: Generate coverage report
+    if: ${{ always() }}
+    shell: bash
+    run: |
+      if [ -f target/site/jacoco/jacoco.csv ]; then
+        echo "Coverage report already written during the test phase."
+      elif [ -f target/jacoco.exec ]; then
+        ./mvnw -B jacoco:report \
+          || echo "Standalone jacoco:report failed; coverage is unavailable for this run."
+      else
+        echo "No target/jacoco.exec: the run did not reach the test phase."
+      fi
 
-      total_tests = 0
-      failing_reports = []
-      for report in reports:
-          root = ET.parse(report).getroot()
-          total_tests += int(root.attrib.get("tests", 0))
-          failures = int(root.attrib.get("failures", 0))
-          errors = int(root.attrib.get("errors", 0))
-          if failures or errors:
-              failing_reports.append((report, failures, errors))
+  - name: Report coverage
+    if: ${{ always() }}
+    shell: bash
+    run: |
+      set -o pipefail
+      {
+        echo "### Coverage"
+        echo
+        python3 scripts/ci/coverage-summary.py
+      } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      print(f"Parsed {len(reports)} surefire report(s), {total_tests} tests.")
-      if total_tests == 0:
-          print("::error::Surefire reports contain zero executed tests.")
-          sys.exit(1)
-
-      if failing_reports:
-          print("Maven reported test failures/errors:")
-          for report, failures, errors in failing_reports:
-              print(f"- {report}: failures={failures}, errors={errors}")
-          sys.exit(1)
-      PY
+  # The summary carries totals and a per-package breakdown. Per-class and per-line
+  # detail lives in the HTML report, which is too large to inline.
+  - name: Upload coverage report
+    if: ${{ always() }}
+    uses: actions/upload-artifact@v4
+    with:
+      name: jacoco-coverage-report
+      path: target/site/jacoco
+      if-no-files-found: ignore
+      retention-days: 14
 
   - name: Package Java application
     shell: bash

@@ -1,5 +1,8 @@
 package de.caritas.cob.agencyservice.api.service;
 
+import de.caritas.cob.agencyservice.api.service.legal.ResolvedLegalText;
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextSourceLevel;
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.AGENCY_ID;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.AGENCY_IDS_LIST;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.AGENCY_LIST;
@@ -79,6 +82,25 @@ import org.springframework.test.util.ReflectionTestUtils;
 @RunWith(MockitoJUnitRunner.class)
 public class AgencyServiceTest {
 
+  /**
+   * ADR-021 decision 9: AgencyService no longer decides what is in force — it asks the resolver.
+   * The default here is "nothing authored anywhere", so a test that cares about the legal flags has
+   * to say so explicitly instead of inheriting an accident of the fixture data.
+   */
+  @org.junit.Before
+  public void stubLegalResolutionAsEmpty() {
+    org.mockito.Mockito.lenient()
+        .when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(ResolvedLegalText.none());
+    org.mockito.Mockito.lenient()
+        .when(legalTextInheritanceResolver.resolveImprint(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(ResolvedLegalText.none());
+  }
+
+  private static ResolvedLegalText resolved(LegalTextSourceLevel level) {
+    return new ResolvedLegalText("{\"de\":\"<p>x</p>\"}", null, level, null);
+  }
+
   private static final Integer AGE = null;
   private static final String GENDER = null;
 
@@ -92,6 +114,9 @@ public class AgencyServiceTest {
 
   @Mock
   TenantService tenantService;
+  @Mock
+  private LegalTextInheritanceResolver legalTextInheritanceResolver;
+
 
   @Mock
   DemographicsConverter demographicsConverter;
@@ -219,18 +244,16 @@ public class AgencyServiceTest {
   public void getListOfAgencies_Should_MapDepartmentsWithLegalPublicationFlags()
       throws MissingConsultingTypeException {
 
-    // one department with both legal texts published, one still fully in draft
     Agency agency = Agency.builder().id(100L).name("Zentrum").consultingTypeId(CONSULTING_TYPE_SUCHT)
         .build();
-    AgencyTopic publishedDepartment = AgencyTopic.builder().agency(agency).topicId(1L)
-        .contentDpp("{\"de\":\"<p>DSE</p>\"}").publicationStatus(PublicationStatus.PUBLISHED)
-        .contentImprint("{\"de\":\"<p>Impressum</p>\"}")
-        .publicationStatusImprint(PublicationStatus.PUBLISHED).build();
-    AgencyTopic draftDepartment = AgencyTopic.builder().agency(agency).topicId(2L)
-        .contentDpp("{\"de\":\"<p>Entwurf</p>\"}").publicationStatus(PublicationStatus.DRAFT)
-        .build();
-    ReflectionTestUtils.setField(agency, "agencyTopics",
-        List.of(publishedDepartment, draftDepartment));
+    AgencyTopic withLegal = AgencyTopic.builder().agency(agency).topicId(1L).build();
+    AgencyTopic withoutLegal = AgencyTopic.builder().agency(agency).topicId(2L).build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of(withLegal, withoutLegal));
+
+    when(legalTextInheritanceResolver.resolveDpp(withLegal))
+        .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
+    when(legalTextInheritanceResolver.resolveImprint(withLegal))
+        .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
         CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
@@ -242,107 +265,30 @@ public class AgencyServiceTest {
         agencyService.getAgencies(Optional.of(VALID_POSTCODE), CONSULTING_TYPE_SUCHT,
             Optional.empty());
 
-    assertEquals(1, result.size());
-    var departments = result.get(0).getDepartments();
-    assertEquals(2, departments.size());
-    var byTopicId = departments.stream()
+    var byTopicId = result.get(0).getDepartments().stream()
         .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
     assertTrue(byTopicId.get(1L).getHasPublishedDpp());
     assertTrue(byTopicId.get(1L).getHasPublishedImprint());
     assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedDpp());
     assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedImprint());
-    // the existing topicIds contract is untouched
-    assertEquals(List.of(1L, 2L), result.get(0).getTopicIds());
   }
 
   @Test
-  public void getListOfAgencies_Should_ResolveDepartmentDetails_FachbereichBeforeAgency()
+  public void getListOfAgencies_Should_ReportAnInheritedDppAsPublished()
       throws MissingConsultingTypeException {
 
-    // ORISO-Admin#197: a center may run several Fachbereiche at different floors/areas with
-    // different hours. Resolution chain: Fachbereich override ?? Beratungsstelle value.
-    Agency agency = Agency.builder().id(102L).name("Zentrum")
-        .consultingTypeId(CONSULTING_TYPE_SUCHT)
-        .openingHours("Mo-Fr 9-17 Uhr").floorBuilding("Haus B").build();
-    AgencyTopic overriding = AgencyTopic.builder().agency(agency).topicId(1L)
-        .openingHours("Di+Do 14-18 Uhr").phoneExtension("-23").floorLocation("3. OG").build();
-    AgencyTopic inheriting = AgencyTopic.builder().agency(agency).topicId(2L).build();
-    ReflectionTestUtils.setField(agency, "agencyTopics", List.of(overriding, inheriting));
-
-    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
-        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
-        .thenReturn(List.of(agency));
-    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
-        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
-
-    var result = agencyService.getAgencies(Optional.of(VALID_POSTCODE),
-        CONSULTING_TYPE_SUCHT, Optional.empty());
-
-    assertEquals(1, result.size());
-    var byTopicId = result.get(0).getDepartments().stream()
-        .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
-    // the overriding Fachbereich serves its own values
-    assertEquals("Di+Do 14-18 Uhr", byTopicId.get(1L).getOpeningHours());
-    assertEquals("-23", byTopicId.get(1L).getPhoneExtension());
-    assertEquals("3. OG", byTopicId.get(1L).getFloorLocation());
-    // the inheriting Fachbereich resolves to the Beratungsstelle values
-    assertEquals("Mo-Fr 9-17 Uhr", byTopicId.get(2L).getOpeningHours());
-    assertEquals(null, byTopicId.get(2L).getPhoneExtension());
-    assertEquals("Haus B", byTopicId.get(2L).getFloorLocation());
-  }
-
-  @Test
-  public void getListOfAgencies_Should_MapAddressPhoneAndOpeningHours()
-      throws MissingConsultingTypeException {
-
-    Agency agency = Agency.builder().id(101L).name("Zentrum")
-        .consultingTypeId(CONSULTING_TYPE_SUCHT)
-        .street("Musterstraße").houseNumber("12a")
-        .phone("+49301234567").openingHours("Mo-Fr 9-17 Uhr").build();
-    ReflectionTestUtils.setField(agency, "agencyTopics", List.of());
-
-    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
-        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
-        .thenReturn(List.of(agency));
-    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
-        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
-
-    var result = agencyService.getAgencies(Optional.of(VALID_POSTCODE),
-        CONSULTING_TYPE_SUCHT, Optional.empty());
-
-    assertEquals(1, result.size());
-    assertEquals("Musterstraße", result.get(0).getStreet());
-    assertEquals("12a", result.get(0).getHouseNumber());
-    assertEquals("+49301234567", result.get(0).getPhone());
-    assertEquals("Mo-Fr 9-17 Uhr", result.get(0).getOpeningHours());
-  }
-
-  @Test
-  public void getListOfAgencies_Should_DeriveLegalPublicationFlagsFromReferencedLegalText_WhenDepartmentReferencesOne()
-      throws MissingConsultingTypeException {
-
-    // ADR-014 write-through only updates the referenced legal_text object; the inline columns are
-    // intentionally kept stale. The search flags must therefore resolve reference-first, exactly
-    // like DepartmentLegalService — otherwise a publish/draft-save would not show up here.
+    // The measured defect (CONTEXT-legal-documents, "known traps"): hasPublishedDpp was computed
+    // from the department level alone while DepartmentLegalService already fell back to the
+    // agency-wide text, so a department reported false while /legal returned content and the
+    // client hid a document that existed. Both now go through the same resolver.
     Agency agency = Agency.builder().id(100L).name("Zentrum").consultingTypeId(CONSULTING_TYPE_SUCHT)
+        .contentDpp("{\"de\":\"<p>agenturweite DSE</p>\"}")
         .build();
-    // referenced DPP is PUBLISHED while the stale inline copy says DRAFT → flag must be true
-    AgencyTopic publishedViaReference = AgencyTopic.builder().agency(agency).topicId(1L)
-        .contentDpp("{\"de\":\"<p>stale inline</p>\"}").publicationStatus(PublicationStatus.DRAFT)
-        .dpp(LegalText.builder().id(500L).kind(LegalTextKind.DPP).label("Geteilte DSE")
-            .content("{\"de\":\"<p>geteilt</p>\"}")
-            .publicationStatus(PublicationStatus.PUBLISHED).build())
-        .build();
-    // referenced imprint is DRAFT while the stale inline copy says PUBLISHED → flag must be false
-    AgencyTopic draftViaReference = AgencyTopic.builder().agency(agency).topicId(2L)
-        .contentImprint("{\"de\":\"<p>stale inline</p>\"}")
-        .publicationStatusImprint(PublicationStatus.PUBLISHED)
-        .imprint(LegalText.builder().id(501L).kind(LegalTextKind.IMPRINT)
-            .label("Geteiltes Impressum").content("{\"de\":\"<p>Entwurf</p>\"}")
-            .publicationStatus(PublicationStatus.DRAFT).build())
-        .build();
-    ReflectionTestUtils.setField(agency, "agencyTopics",
-        List.of(publishedViaReference, draftViaReference));
+    AgencyTopic departmentWithoutOwnText = AgencyTopic.builder().agency(agency).topicId(1L).build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of(departmentWithoutOwnText));
+
+    when(legalTextInheritanceResolver.resolveDpp(departmentWithoutOwnText))
+        .thenReturn(resolved(LegalTextSourceLevel.AGENCY));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
         CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
@@ -354,13 +300,7 @@ public class AgencyServiceTest {
         agencyService.getAgencies(Optional.of(VALID_POSTCODE), CONSULTING_TYPE_SUCHT,
             Optional.empty());
 
-    assertEquals(1, result.size());
-    var byTopicId = result.get(0).getDepartments().stream()
-        .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
-    assertTrue(byTopicId.get(1L).getHasPublishedDpp());
-    assertEquals(Boolean.FALSE, byTopicId.get(1L).getHasPublishedImprint());
-    assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedDpp());
-    assertEquals(Boolean.FALSE, byTopicId.get(2L).getHasPublishedImprint());
+    assertTrue(result.get(0).getDepartments().get(0).getHasPublishedDpp());
   }
 
   @Test

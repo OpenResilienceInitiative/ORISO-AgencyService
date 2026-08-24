@@ -30,9 +30,9 @@
     <openapi.generator.maven.version>7.17.0</openapi.generator.maven.version>
     <jackson-databind-nullable.version>0.2.3</jackson-databind-nullable.version>
     <jakarta.ws.rs-api.version>3.1.0</jakarta.ws.rs-api.version>
-    <commons-lang3.version>3.11</commons-lang3.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
     <liquibase-maven-plugin.version>4.23.2</liquibase-maven-plugin.version>
-    <h2.version>1.4.200</h2.version>
+    <h2.version>2.2.220</h2.version>
     <powermock-module-junit4.version>2.0.9</powermock-module-junit4.version>
     <easy-random-core.version>5.0.0</easy-random-core.version>
     <spring-boot-autoconfigure.version>4.0.7</spring-boot-autoconfigure.version>
@@ -41,7 +41,13 @@
     <springfox.version>2.9.2</springfox.version>
     <springfox-swagger-ui.version>2.10.0</springfox-swagger-ui.version>
     <spring-security-oauth2-test-webmvc-addons.version>3.0.1</spring-security-oauth2-test-webmvc-addons.version>
+    <httpcore5.version>5.4.3</httpcore5.version>
     <mockito.version>5.20.0</mockito.version>
+    <!-- Filled in by jacoco:prepare-agent and consumed by surefire's argLine below.
+         Declared empty here so a run that never reaches prepare-agent (`-DskipTests`,
+         or an invocation of surefire on its own) still resolves the placeholder
+         instead of handing the JVM a literal `@{jacocoArgLine}`. -->
+    <jacocoArgLine></jacocoArgLine>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <hibernate.search.version>6.1.1.Final</hibernate.search.version>
@@ -51,6 +57,18 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- Spring Boot 4.0.7 manages 5.3.6, which is affected by CVE-2026-54399
+           and CVE-2026-54428. Keep both transport modules on the fixed release. -->
+      <dependency>
+        <groupId>org.apache.httpcomponents.core5</groupId>
+        <artifactId>httpcore5</artifactId>
+        <version>${httpcore5.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents.core5</groupId>
+        <artifactId>httpcore5-h2</artifactId>
+        <version>${httpcore5.version}</version>
+      </dependency>
       <!-- swagger-parser drags in commons-io 2.11.0 (CVE-2024-47554); force a fixed release. -->
       <dependency>
         <groupId>commons-io</groupId>
@@ -364,7 +382,7 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.12</version>
+      <version>4.13.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -383,6 +401,16 @@
       <groupId>org.wiremock</groupId>
       <artifactId>wiremock-standalone</artifactId>
       <version>3.3.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mariadb</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -710,7 +738,12 @@
         </artifactId> <!-- surefire plugin version managed by Spring Boot -->
         <configuration>
           <skipTests>true</skipTests>
-          <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+          <!-- @{jacocoArgLine} is late-replaced by surefire with the value
+               jacoco:prepare-agent set. It has to be spliced in here rather than left to
+               JaCoCo's default: JaCoCo writes the `argLine` PROPERTY, but this explicit
+               <argLine> configuration overrides that property outright, so without this the
+               coverage agent would be dropped silently and every report would read 0%. -->
+          <argLine>@{jacocoArgLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
         </configuration>
         <executions>
           <execution>
@@ -742,6 +775,45 @@
                 <include>**/*IT.*</include>
               </includes>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Coverage for the CI run summary. `report` is bound to the `test` phase so it runs
+           behind the surefire `unit-tests` execution; the integration-test execution appends
+           to the same exec file afterwards, so the reported figure is the unit-suite floor
+           rather than the whole picture. `prepare-agent` publishes its JVM flags as
+           `jacocoArgLine` instead of the default `argLine`, because surefire here sets an
+           explicit <argLine> for the Mockito agent that would otherwise override it — see
+           the property and the surefire configuration above. Generated and inner classes are
+           excluded: they inflate the denominator without being anything a test could
+           meaningfully reach. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.10</version>
+        <configuration>
+          <excludes>
+            <exclude>**/*generated*/**</exclude>
+            <exclude>**/org/openapitools/**</exclude>
+            <exclude>**/*$*</exclude>
+          </excludes>
+        </configuration>
+        <executions>
+          <execution>
+            <id>prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+            <configuration>
+              <propertyName>jacocoArgLine</propertyName>
+            </configuration>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>

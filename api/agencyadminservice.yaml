@@ -632,6 +632,141 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/legal-versions:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        The publication history of a department's (Fachbereich = agency x topic) data privacy
+        policy or imprint, newest first (ADR-021 decision 3). Each entry is an immutable snapshot
+        of the wording as published, with who published it and when, and until when it was in
+        force (supersededAt null = still in force). A draft-save creates no entry.
+        [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own agencies]
+      operationId: getDepartmentLegalTextVersions
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: kind
+          in: query
+          description: Which document's history to list
+          required: true
+          schema:
+            type: string
+            enum: [ DPP, IMPRINT ]
+      responses:
+        200:
+          description: OK - publication history, newest first (empty if never published)
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LegalTextVersionDTO'
+        400:
+          description: BAD REQUEST - caller may not access this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-versions:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        The publication history of a Beratungsstelle's agency-wide data privacy policy or imprint,
+        newest first (ADR-021 decision 3). The agency level carries no publication status ("what is
+        stored, applies"), so a save is a publish there and every agency update that changes the
+        wording adds an entry; an update that leaves it unchanged does not.
+        [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own agencies]
+      operationId: getAgencyLegalTextVersions
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: kind
+          in: query
+          description: Which document's history to list
+          required: true
+          schema:
+            type: string
+            enum: [ DPP, IMPRINT ]
+      responses:
+        200:
+          description: OK - publication history, newest first (empty if never published)
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LegalTextVersionDTO'
+        400:
+          description: BAD REQUEST - caller may not access this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - agency not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/legal-versions/{versionId}:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        One archived legal-text version, verbatim (ADR-021 decision 3). Authorization is derived
+        from the version's stored owner, so a version id is not a capability for another
+        Beratungsstelle's or Träger's document.
+        [Authorization: Role: agency-admin or restricted-agency-admin scoped to its own agencies]
+      operationId: getLegalTextVersion
+      parameters:
+        - name: versionId
+          in: path
+          description: Surrogate id of the archived version
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - the archived version
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/LegalTextVersionDTO'
+        400:
+          description: BAD REQUEST - caller may not access this version's owner
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - version not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/agencies/{agencyId}/topics/{topicId}/imprint:
     get:
       tags:
@@ -1190,6 +1325,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TopicDTO'
+        departments:
+          type: array
+          description: >
+            The agency's departments (one per assigned topic) with the publication state of
+            their own legal texts. Lets the admin UI mark, in the Fachbereich switcher, which
+            departments have left the inherited text and will therefore not receive a change
+            to the agency-wide one (ORISO-Admin#583). Optional - older clients ignore it.
+          items:
+            $ref: '#/components/schemas/AgencyAdminDepartmentDTO'
         demographics:
           $ref: '#/components/schemas/DemographicsDTO'
         createDate:
@@ -1222,6 +1366,35 @@ components:
           $ref: '#/components/schemas/Settings'
           description: Agency settings including platform-level agencyAdminControls
 
+    AgencyAdminDepartmentDTO:
+      type: object
+      description: >
+        One department (Fachbereich = agency x topic) and whether it carries published legal
+        texts of its own. Deliberately smaller than the public AgencyDepartmentDTO: the admin
+        read answers "who has left the inherited text", not the contact-detail overrides the
+        registration search needs.
+      properties:
+        topicId:
+          type: integer
+          format: int64
+          example: 7
+        hasPublishedDpp:
+          type: boolean
+          description: >-
+            true if the department carries a published data privacy policy of its OWN, i.e. it has
+            left the inherited text and will not receive a correction made to the agency-wide
+            document. Intentionally NOT the public AgencyDepartmentDTO.hasPublishedDpp, which
+            reports whether any policy is in force across the ADR-021 levels: resolvability here
+            would mark every department of an agency that has any agency-wide text and make the
+            switcher's marker meaningless.
+          example: true
+        hasPublishedImprint:
+          type: boolean
+          description: >-
+            true if the department carries a published imprint of its own. Same "of its own" vs.
+            "in force" distinction as hasPublishedDpp.
+          example: false
+
     AgencyLegalContentDTO:
       type: object
       description: >
@@ -1245,6 +1418,23 @@ components:
           additionalProperties:
             type: string
           example: { "de": "<p>Impressum</p>" }
+        consentText:
+          type: object
+          description: >
+            ADR-021 decision 4: the consent sentence belonging to the agency-wide data privacy
+            policy, per language code. Not a document of its own — it shares the policy's history.
+
+            Tokens use the `{{key}}` dialect, never Freemarker `${key}`: Träger-authored text must
+            never reach a template engine that can invoke object methods. `{{Beratungsstelle}}` and
+            `{{Thema}}` are substituted server-side, `{{legal_links}}` is left standing for the
+            client, which owns the link targets.
+
+            A stored sentence must contain `{{legal_links}}`; publishing one without it is rejected
+            with a 400. The cookie/authentication notice is NOT part of this text — it is a fixed
+            addendum rendered by the client.
+          additionalProperties:
+            type: string
+          example: { "de": "Ich habe die {{legal_links}} gelesen." }
 
     DataProtectionDTO:
         type: object
@@ -1640,6 +1830,13 @@ components:
           type: string
           nullable: true
           description: Stored multilingual content as a JSON language->HTML map string
+        consentText:
+          type: string
+          nullable: true
+          description: >
+            For DPP texts, the consent sentence stored with the policy (ADR-021 decision 4), as a
+            JSON language->text map string. Always null for imprints, which are an information duty
+            and never consent-bearing.
         publicationStatus:
           type: string
           enum: [ DRAFT, PUBLISHED ]
@@ -1647,6 +1844,76 @@ components:
           type: integer
           format: int64
           description: How many departments currently reference this text
+
+    LegalTextVersionDTO:
+      type: object
+      description: >
+        One immutable snapshot of a legal text as it was published (ADR-021 decision 3).
+
+        Identity is the surrogate `id`, never `publishedAt`: MariaDB `datetime` has no sub-second
+        precision, and keying versions by their timestamp is what forced the AVV work to truncate
+        to seconds and made equality matches fail silently.
+      required:
+        - id
+        - kind
+        - ownerLevel
+        - ownerId
+        - publishedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Surrogate identity of this version — the only key clients should use
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        ownerLevel:
+          type: string
+          description: >
+            Which level of the ADR-021 ladder this document belongs to. DEPARTMENT = Fachbereich
+            (agency_topic), AGENCY = Beratungsstelle, SHARED = an ADR-014 shared legal-text object.
+            The Träger and platform-operator levels live in ORISO-TenantService.
+          enum: [ DEPARTMENT, AGENCY, SHARED ]
+        ownerId:
+          type: integer
+          format: int64
+          description: Id of the owning row, interpreted per ownerLevel
+        content:
+          type: string
+          nullable: true
+          description: The wording as published, verbatim - a JSON language->HTML map string
+        consentText:
+          type: string
+          nullable: true
+          description: >
+            The consent sentence as published alongside the policy (ADR-021 decision 4), a JSON
+            language->text map string. Null for imprints and for policies without one. Changing
+            only the consent wording still produces a new version whose body may be identical —
+            that is the point: one version pointer covers both.
+        publishedAt:
+          type: string
+          description: >
+            When this wording came into force, as local date-time without offset, always in the
+            fixed 19-character form `yyyy-MM-ddTHH:mm:ss` — the seconds are never omitted, so a
+            strict parser and a plain string comparison both hold.
+
+            Intentionally a plain string and not `format: date-time`: the value has no offset, and
+            declaring an offset-less local date-time as date-time is what broke ORISO-UserService
+            #872/#874 under the Jackson 3 tightening.
+          example: "2026-08-16T13:12:08"
+        publishedBy:
+          type: string
+          nullable: true
+          description: >
+            Keycloak user id of the publisher, or null where no authenticated publisher was
+            recorded. Null is an honest unknown, never a guessed value (#212).
+        supersededAt:
+          type: string
+          nullable: true
+          description: >
+            When a newer version replaced this one; null = still in force. Same fixed
+            19-character `yyyy-MM-ddTHH:mm:ss` form as `publishedAt`.
+          example: "2026-09-01T09:00:00"
 
     CreateLegalTextDTO:
       type: object
@@ -1666,6 +1933,14 @@ components:
             Keys with the __meta suffix carry JSON translation metadata instead of HTML.
           additionalProperties:
             type: string
+        consentText:
+          type: object
+          description: >
+            DPP only: the consent sentence stored with this policy (ADR-021 decision 4), per
+            language code. Publishing a sentence without the `{{legal_links}}` token is rejected
+            with a 400.
+          additionalProperties:
+            type: string
         publish:
           type: boolean
           description: 'true = mark PUBLISHED; false/absent = keep as DRAFT'
@@ -1683,6 +1958,14 @@ components:
           type: object
           description: Language code (e.g. de, en) to HTML text (multilingual map).
             Keys with the __meta suffix carry JSON translation metadata instead of HTML.
+          additionalProperties:
+            type: string
+        consentText:
+          type: object
+          description: >
+            DPP only: the consent sentence stored with this policy (ADR-021 decision 4), per
+            language code. Publishing a sentence without the `{{legal_links}}` token is rejected
+            with a 400.
           additionalProperties:
             type: string
         publish:
@@ -1751,6 +2034,28 @@ components:
           example:
             de: '<p>Datenschutzerklärung des Fachbereichs ...</p>'
             en: '<p>Data privacy policy of the department ...</p>'
+        consentText:
+          type: object
+          description: >
+            ADR-021 decision 4: the consent sentence a help-seeker ticks, stored WITH this policy
+            rather than as a legal text of its own, per language code. It therefore shares this
+            policy's publication status and its version history.
+
+            Tokens use the `{{key}}` dialect, never Freemarker `${key}` — Träger-authored text must
+            never reach a template engine where `${...}` can invoke object methods (ADR-021
+            decision 6). `{{Beratungsstelle}}` and `{{Thema}}` are substituted server-side;
+            `{{legal_links}}` is left standing for the client, which owns the link targets.
+
+            Publishing a sentence that does not contain `{{legal_links}}` is rejected with a 400:
+            that validator, not a legal stacking rule, is what keeps the platform's mandatory
+            disclosures reachable when a Träger replaces the default sentence.
+
+            Omit or send empty to keep the platform's default sentence. The cookie/authentication
+            notice is not part of this text and is never stored.
+          additionalProperties:
+            type: string
+          example:
+            de: 'Ich habe die {{legal_links}} der {{Beratungsstelle}} gelesen.'
         publish:
           type: boolean
           description: 'true = mark PUBLISHED (final legal document); false/absent = keep as DRAFT (draft-save)'
@@ -1777,6 +2082,12 @@ components:
           type: string
           nullable: true
           description: Stored multilingual content as a JSON language->HTML map string; null if never authored
+        consentText:
+          type: string
+          nullable: true
+          description: >
+            Stored consent sentence as a JSON language->text map string; null when the Träger
+            authored none, in which case the platform's default sentence applies.
         publicationStatus:
           type: string
           description: Current publication status of the department's data privacy policy

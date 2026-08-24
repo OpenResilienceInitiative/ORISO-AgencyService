@@ -1,5 +1,6 @@
 package de.caritas.cob.agencyservice.api.service;
 
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +37,9 @@ public class AgencyServiceTenantAwareTest {
 
   @Mock
   ConsultingTypeManager consultingTypeManager;
+  @Mock
+  private LegalTextInheritanceResolver legalTextInheritanceResolver;
+
 
   @Mock
   DemographicsConverter demographicsConverter;

@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS AGENCY_POSTCODE_RANGE;
 DROP TABLE IF EXISTS AGENCY_TOPIC;
+DROP TABLE IF EXISTS LEGAL_TEXT_VERSION;
 DROP TABLE IF EXISTS LEGAL_TEXT;
 DROP TABLE IF EXISTS AGENCY;
 DROP TABLE IF EXISTS AGENCY_ADMIN_CONTROL;
@@ -7,6 +8,7 @@ DROP TABLE IF EXISTS DIOCESE;
 
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_POSTCODE_RANGE;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_TOPIC;
+DROP SEQUENCE IF EXISTS SEQUENCE_LEGAL_TEXT_VERSION;
 DROP SEQUENCE IF EXISTS SEQUENCE_LEGAL_TEXT;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY;
 DROP SEQUENCE IF EXISTS SEQUENCE_AGENCY_ADMIN_CONTROL;
@@ -50,6 +52,8 @@ create table AGENCY
     SETTINGS longtext null default null,
     CONTENT_DPP longtext null default null,
     CONTENT_IMPRINT longtext null default null,
+    -- ADR-021 decision 4 (changeset 0032): the consent sentence is a field of the DPP.
+    CONSENT_TEXT longtext null default null,
     primary key (ID)
 );
 CREATE SEQUENCE SEQUENCE_AGENCY
@@ -81,12 +85,33 @@ create table LEGAL_TEXT
     KIND               varchar(20) not null,
     LABEL              varchar(255) not null,
     CONTENT            longtext    null,
+    CONSENT_TEXT       longtext    null,
     PUBLICATION_STATUS varchar(20) not null default 'DRAFT',
     CREATE_DATE        timestamp,
     UPDATE_DATE        timestamp,
     primary key (ID)
 );
 CREATE SEQUENCE SEQUENCE_LEGAL_TEXT
+    START WITH 100000
+    INCREMENT BY 1;
+
+-- ADR-021 decision 3 (Liquibase changeset 0031_legal_text_version): the immutable publication
+-- history, generic over kind and level. Identity is the surrogate ID, never PUBLISHED_AT.
+create table LEGAL_TEXT_VERSION
+(
+    ID            bigint      not null,
+    TENANT_ID     bigint      null,
+    KIND          varchar(20) not null,
+    OWNER_LEVEL   varchar(20) not null,
+    OWNER_ID      bigint      not null,
+    CONTENT       longtext    null,
+    CONSENT_TEXT  longtext    null,
+    PUBLISHED_AT  timestamp   not null,
+    PUBLISHED_BY  varchar(255) null,
+    SUPERSEDED_AT timestamp   null,
+    primary key (ID)
+);
+CREATE SEQUENCE SEQUENCE_LEGAL_TEXT_VERSION
     START WITH 100000
     INCREMENT BY 1;
 
@@ -106,6 +131,7 @@ create table AGENCY_TOPIC
     OPENING_HOURS   varchar(1000) null,
     PHONE_EXTENSION varchar(50)   null,
     FLOOR_LOCATION  varchar(100)  null,
+    CONSENT_TEXT    longtext      null,
     primary key (ID),
     foreign key (AGENCY_ID) references AGENCY (ID),
     foreign key (DPP_ID) references LEGAL_TEXT (ID),

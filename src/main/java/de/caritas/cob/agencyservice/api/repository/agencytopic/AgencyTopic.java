@@ -91,6 +91,17 @@ public class AgencyTopic {
   @Column(name = "publication_status", nullable = false)
   private PublicationStatus publicationStatus = PublicationStatus.DRAFT;
 
+  /**
+   * ADR-021 decision 4: the consent sentence a help-seeker ticks is a FIELD OF THE DPP, not a legal
+   * text of its own - so it shares {@link #publicationStatus} and the DPP's version history, and
+   * "which consent belonged to which policy" is answered by "the same version".
+   *
+   * <p>JSON language to text map, like {@link #contentDpp}. Tokens use the {@code {{key}}} dialect
+   * and must never pass through Freemarker (ADR-021 decision 6).
+   */
+  @Column(name = "consent_text")
+  private String consentText;
+
   /** This department's (Fachbereich) own imprint (Impressum) text. */
   @Column(name = "content_imprint")
   private String contentImprint;
