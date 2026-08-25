@@ -24,13 +24,13 @@ chmod +x mvnw
 ## Configuration
 
 ### Database Connection
-**MariaDB ClusterIP:** `10.43.123.72:3306`
+Point the service at the cluster's MariaDB service; the address is environment-specific and lives in the environment's secret store, not here.
 
 ```properties
-# application-local.properties
-spring.datasource.url=jdbc:mariadb://10.43.123.72:3306/agencyservice
-spring.datasource.username=agencyservice
-spring.datasource.password=agencyservice
+# application-local.properties — supply real values from the environment
+spring.datasource.url=jdbc:mariadb://<mariadb-host>:3306/agencyservice
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
 ```
 
 ### Liquibase
@@ -53,14 +53,12 @@ keycloak.resource=agency-service
 - **Port:** `8084`
 - **Profile:** `local`
 - **Liquibase:** DISABLED - schemas managed in ORISO-Database
-- **Database:** Uses MariaDB ClusterIP (NOT localhost)
+- **Database:** Uses the cluster's MariaDB service (NOT localhost)
 - **Host Network:** Enabled in Kubernetes for direct localhost access
 - **Caching:** Ehcache enabled for agency data
 
 ## Kubernetes Deployment Path
-```
-/home/caritas/Desktop/online-beratung/caritas-workspace/ORISO-AgencyService
-```
+The deploy host keeps the working copy under the operator's home directory; the exact path is environment-specific and documented in the deployment runbook.
 
 ## Health Check
 ```bash
@@ -68,8 +66,8 @@ curl http://localhost:8084/actuator/health
 ```
 
 ## Dependencies
-- Java 17
-- Spring Boot 2.7.14
+- Java 21
+- Spring Boot 4.0.1
 - MariaDB
 - Keycloak
 - Ehcache
