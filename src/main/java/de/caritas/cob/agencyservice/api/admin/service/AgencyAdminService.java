@@ -129,11 +129,30 @@ public class AgencyAdminService {
   /**
    * Returns the {@link Agency} for the provided agency ID.
    *
+   * <p>Platform-admin contexts (no bound tenant, or the technical tenant sentinel {@code 0L})
+   * bypass the tenant-aware repository so that the detail lookup matches what the admin search
+   * already exposes. Without this the two paths disagree — the search widens for the same
+   * "sees all tenants" signal used here, but the tenant-aware {@code findById} still runs
+   * through the Hibernate {@code tenantFilter}, so a Platform Admin can be shown an agency
+   * they cannot open (#265).
+   *
    * @param agencyId the agency ID
    * @return {@link Agency}
    */
   public Agency findAgencyById(Long agencyId) {
+    if (isCrossTenantAdminContext()) {
+      return agencyTenantUnawareRepository.findById(agencyId)
+          .orElseThrow(NotFoundException::new);
+    }
     return agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
+  }
+
+  private boolean isCrossTenantAdminContext() {
+    Long tenantId = authenticatedUser.getTenantId();
+    if (tenantId == null) {
+      tenantId = TenantContext.getCurrentTenant();
+    }
+    return tenantId == null || tenantId.equals(0L);
   }
 
   /**
