@@ -147,6 +147,13 @@ class AgencyAdminServiceTest {
 
   @BeforeEach
   public void setup() {
+    // Mockito's @InjectMocks cannot decide between the two mocks for the
+    // AgencyRepository-typed constructor parameter (AgencyTenantUnawareRepository is a subtype),
+    // so it can silently wire the tenant-unaware mock into the tenant-aware field and the stubs
+    // then no-op. Pin both fields explicitly.
+    ReflectionTestUtils.setField(agencyAdminService, "agencyRepository", agencyRepository);
+    ReflectionTestUtils.setField(
+        agencyAdminService, "agencyTenantUnawareRepository", agencyTenantUnawareRepository);
     ReflectionTestUtils.setField(agencyAdminService, "agencyTopicEnrichmentService", agencyTopicEnrichmentService);
     ReflectionTestUtils.setField(agencyAdminService, "demographicsConverter", demographicsConverter);
 
