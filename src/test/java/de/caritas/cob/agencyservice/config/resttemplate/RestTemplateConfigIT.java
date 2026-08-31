@@ -14,8 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.autoconfigure.RestTemplateAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 @SpringBootTest(
     classes = {RestTemplateConfig.class, RestTemplateAutoConfiguration.class},
@@ -53,5 +55,19 @@ class RestTemplateConfigIT {
 
     long elapsed = System.currentTimeMillis() - start;
     assertThat(elapsed).isLessThan(MAX_ELAPSED_MS);
+  }
+
+  @Test
+  void restTemplate_shouldPreserveForbiddenStatusFromDownstream() {
+    wireMockServer.stubFor(
+        get(urlEqualTo("/forbidden"))
+            .willReturn(aResponse().withStatus(HttpStatus.FORBIDDEN.value()).withBody("denied")));
+    String url = "http://localhost:" + wireMockServer.port() + "/forbidden";
+
+    ResponseStatusException exception =
+        assertThrows(
+            ResponseStatusException.class, () -> restTemplate.getForObject(url, String.class));
+
+    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 }

@@ -1,5 +1,7 @@
 package de.caritas.cob.agencyservice.api.admin.service;
 
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_ID_NOT_AVAILABLE;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_DEFAULT_AGENCY;
 import static de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.AGENCY_IS_ALREADY_TEAM_AGENCY;
@@ -10,10 +12,13 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,7 +33,9 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConvert
 import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.admin.service.legal.ConsentTextService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionService;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalContentDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
@@ -40,6 +47,7 @@ import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
+import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
@@ -73,7 +81,10 @@ class AgencyAdminServiceTest {
   AgencyAdminService agencyAdminService;
 
   @Mock
-  AgencyTenantUnawareRepository agencyRepository;
+  AgencyRepository agencyRepository;
+
+  @Mock
+  AgencyTenantUnawareRepository agencyTenantUnawareRepository;
 
   @Mock
   UserAdminService userAdminService;
@@ -86,6 +97,12 @@ class AgencyAdminServiceTest {
 
   @Mock
   LegalContentSanitizer legalContentSanitizer;
+
+  @Mock
+  LegalTextVersionService legalTextVersionService;
+
+  @Mock
+  ConsentTextService consentTextService;
 
   @Mock
   AgencyTopicRepository agencyTopicRepository;
@@ -130,6 +147,13 @@ class AgencyAdminServiceTest {
 
   @BeforeEach
   public void setup() {
+    // Mockito's @InjectMocks cannot decide between the two mocks for the
+    // AgencyRepository-typed constructor parameter (AgencyTenantUnawareRepository is a subtype),
+    // so it can silently wire the tenant-unaware mock into the tenant-aware field and the stubs
+    // then no-op. Pin both fields explicitly.
+    ReflectionTestUtils.setField(agencyAdminService, "agencyRepository", agencyRepository);
+    ReflectionTestUtils.setField(
+        agencyAdminService, "agencyTenantUnawareRepository", agencyTenantUnawareRepository);
     ReflectionTestUtils.setField(agencyAdminService, "agencyTopicEnrichmentService", agencyTopicEnrichmentService);
     ReflectionTestUtils.setField(agencyAdminService, "demographicsConverter", demographicsConverter);
 
@@ -140,6 +164,11 @@ class AgencyAdminServiceTest {
 
     Mockito.lenient().when(agencySettingsService.toSettings(any())).thenReturn(new Settings());
     Mockito.lenient().when(agencySettingsService.toSettingsJson(any())).thenReturn("{}");
+
+    // Default: a tenant-scoped admin. Tests covering the Platform Admin path
+    // (see findAgencyById_Should_useTenantUnawareRepository_*) override this
+    // to null or 0L explicitly (#265).
+    Mockito.lenient().when(authenticatedUser.getTenantId()).thenReturn(1L);
     Mockito.lenient().when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
         .thenAnswer(invocation -> invocation.getArgument(0) != null
             ? invocation.getArgument(0)
@@ -247,6 +276,79 @@ class AgencyAdminServiceTest {
     assertEquals(agency.getConsultingTypeId(), passedConsultingTypeId);
   }
 
+  @Test
+  void updateAgency_Should_KeepStoredDataProtectionAndOffline_WhenPayloadOmitsThem() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOffline(true);
+    agency.setDataProtectionResponsibleEntity(DataProtectionResponsibleEntity.DATA_PROTECTION_OFFICER);
+    DataProtectionContactDTO dataProtectionContactDTO =
+        this.easyRandom.nextObject(DataProtectionContactDTO.class);
+    agency.setDataProtectionOfficerContactData(JsonConverter.convertToJson(dataProtectionContactDTO));
+    agency.setDataProtectionAlternativeContactData(null);
+    agency.setDataProtectionAgencyResponsibleContactData(null);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOffline(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(dataProtectionConverter, never()).convertToEntity(any(), any());
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    var saved = agencyArgumentCaptor.getValue();
+    assertEquals(Boolean.TRUE, saved.isOffline());
+    assertEquals(
+        DataProtectionResponsibleEntity.DATA_PROTECTION_OFFICER,
+        saved.getDataProtectionResponsibleEntity());
+    assertEquals(
+        agency.getDataProtectionOfficerContactData(), saved.getDataProtectionOfficerContactData());
+  }
+
+  @Test
+  void updateAgency_Should_KeepStoredOpeningHours_WhenPayloadOmitsThem() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOpeningHours("Mo-Fr 9-17 Uhr");
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOpeningHours(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("Mo-Fr 9-17 Uhr", agencyArgumentCaptor.getValue().getOpeningHours());
+  }
+
+  @Test
+  void updateAgency_Should_ClearOpeningHours_WhenPayloadSendsEmptyString() {
+    // Absent keeps, empty deletes — without this the field could never be cleared.
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setOpeningHours("Mo-Fr 9-17 Uhr");
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setOpeningHours("");
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals("", agencyArgumentCaptor.getValue().getOpeningHours());
+  }
+
   private void clearDataProtection(Agency agency) {
     agency.setDataProtectionResponsibleEntity(null);
     agency.setDataProtectionAgencyResponsibleContactData(null);
@@ -333,6 +435,62 @@ class AgencyAdminServiceTest {
   }
 
   @Test
+  void
+      findAgencyById_Should_useTenantUnawareRepository_When_authenticatedUserHasNoBoundTenant() {
+    // A Platform Admin's JWT carries no tenantId claim (#265). The tenant-aware search widens
+    // for exactly this signal, so the detail lookup must match — otherwise the row is visible
+    // in the overview but returns 404 on click.
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    Agency agency = new Agency();
+    when(agencyTenantUnawareRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    Agency result = agencyAdminService.findAgencyById(AGENCY_ID);
+
+    assertThat(result, is(agency));
+    verifyNoInteractions(agencyRepository);
+  }
+
+  @Test
+  void
+      findAgencyById_Should_useTenantUnawareRepository_When_technicalTenantSentinelIsBound() {
+    // Technical/super context is represented by tenant 0 in both TenantContext and the
+    // JWT claim path. The tenant-aware repository would apply the Hibernate tenantFilter
+    // even for tenant 0 through the JPQL findById, so route through the unaware repo.
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+    Agency agency = new Agency();
+    when(agencyTenantUnawareRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    Agency result = agencyAdminService.findAgencyById(AGENCY_ID);
+
+    assertThat(result, is(agency));
+    verifyNoInteractions(agencyRepository);
+  }
+
+  @Test
+  void
+      findAgencyById_Should_useTenantAwareRepository_When_tenantScopedAdminIsBoundToTenant() {
+    // Tenant-scoped and agency-scoped administrators must remain restricted to their
+    // authorised agencies (#265 acceptance). Only Platform Admin widens.
+    when(authenticatedUser.getTenantId()).thenReturn(42L);
+    Agency agency = new Agency();
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    Agency result = agencyAdminService.findAgencyById(AGENCY_ID);
+
+    assertThat(result, is(agency));
+    verifyNoInteractions(agencyTenantUnawareRepository);
+  }
+
+  @Test
+  void
+      findAgencyById_Should_ThrowNotFoundException_When_platformAdminAndAgencyMissing() {
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    when(agencyTenantUnawareRepository.findById(AGENCY_ID)).thenReturn(Optional.empty());
+
+    assertThrows(NotFoundException.class, () -> agencyAdminService.findAgencyById(AGENCY_ID));
+  }
+
+  @Test
   void changeAgencyType_Should_throwNotFoundException_When_agencyWasNotFound() {
     when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.empty());
 
@@ -408,6 +566,55 @@ class AgencyAdminServiceTest {
     assertEquals("{\"de\":\"<p>DSE</p>\"}", agencyArgumentCaptor.getValue().getContentDpp());
     assertEquals(
         "{\"de\":\"<p>Impressum</p>\"}", agencyArgumentCaptor.getValue().getContentImprint());
+  }
+
+  @Test
+  void updateAgency_Should_recordNoVersion_When_theLegalWordingDidNotChange() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    // Changeset 0031 deliberately backfills no history, so an agency that already had legal texts
+    // has NO open version to deduplicate against. Without the change check, the first unrelated
+    // update - a phone number, the opening hours - would snapshot the untouched old wording stamped
+    // with the current time and assert the policy came into force at that moment.
+    verifyNoInteractions(legalTextVersionService);
+  }
+
+  @Test
+  void updateAgency_Should_recordAVersion_When_theLegalWordingChanged() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setId(AGENCY_ID);
+    agency.setContentDpp("{\"de\":\"<p>alt</p>\"}");
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>neu</p>")))
+        .thenReturn("{\"de\":\"<p>neu</p>\"}");
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setContent(new AgencyLegalContentDTO().privacy(Map.of("de", "<p>neu</p>")));
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    // The agency level has no publication status, so a save IS the publish - but only when the
+    // wording actually moved.
+    verify(legalTextVersionService)
+        .recordPublication(
+            eq(LegalTextLevel.AGENCY),
+            eq(AGENCY_ID),
+            eq(LegalTextKind.DPP),
+            any(),
+            eq("{\"de\":\"<p>neu</p>\"}"),
+            any());
   }
 
   @Test

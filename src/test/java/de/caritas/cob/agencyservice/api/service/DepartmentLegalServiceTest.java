@@ -2,15 +2,18 @@ package de.caritas.cob.agencyservice.api.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
-import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
-import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
-import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver;
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextSourceLevel;
+import de.caritas.cob.agencyservice.api.service.legal.ResolvedLegalText;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -20,30 +23,59 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * The public (unauthenticated) read side of ADR-003: users may only ever see PUBLISHED department
- * legal texts. The central invariant tested here is that DRAFT or never-authored content is
- * returned as {@code null} - drafts must never leak to clients.
+ * The public read side after ADR-021 decision 9: this service no longer resolves anything itself,
+ * it looks the department up, refuses deleted agencies, and hands both kinds to the one resolver
+ * that walks the whole ladder. The resolution rules themselves are covered by {@link
+ * de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolverTest}.
  */
 @ExtendWith(MockitoExtension.class)
 class DepartmentLegalServiceTest {
 
   @Mock private AgencyTopicRepository agencyTopicRepository;
+  @Mock private LegalTextInheritanceResolver legalTextInheritanceResolver;
+  @Mock private de.caritas.cob.agencyservice.api.service.legal.PublicLegalTextRenderer publicLegalTextRenderer;
 
   @InjectMocks private DepartmentLegalService service;
 
-  private AgencyTopic department(
-      String dppContent,
-      PublicationStatus dppStatus,
-      String imprintContent,
-      PublicationStatus imprintStatus) {
+  /**
+   * The renderer is stubbed to MARK what passes through it, not to pass it through unchanged.
+   *
+   * <p>A transparent pass-through would make this test blind to the thing it exists to prove: drop
+   * the render call from the service and every assertion would still hold, so the substitution step
+   * could be deleted without a single test going red. The marker means every text this service
+   * returns must have been through the renderer.
+   */
+  @org.junit.jupiter.api.BeforeEach
+  void markWhatPassesThroughTheRenderer() {
+    org.mockito.Mockito.lenient()
+        .when(
+            publicLegalTextRenderer.render(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(
+            invocation -> {
+              ResolvedLegalText resolved = invocation.getArgument(0);
+              return new ResolvedLegalText(
+                  resolved.content() == null ? null : resolved.content() + RENDERED,
+                  resolved.consentText() == null ? null : resolved.consentText() + RENDERED,
+                  resolved.sourceLevel(),
+                  resolved.versionId());
+            });
+  }
+
+  private static final String RENDERED = "|rendered";
+
+  private AgencyTopic department(LocalDateTime agencyDeleteDate) {
     var department =
         AgencyTopic.builder()
+            .id(4711L)
             .topicId(42L)
-            .agency(Agency.builder().id(7L).name("Zentrum").consultingTypeId(1).build())
-            .contentDpp(dppContent)
-            .publicationStatus(dppStatus)
-            .contentImprint(imprintContent)
-            .publicationStatusImprint(imprintStatus)
+            .agency(
+                Agency.builder()
+                    .id(7L)
+                    .name("Zentrum")
+                    .consultingTypeId(1)
+                    .deleteDate(agencyDeleteDate)
+                    .build())
             .build();
     when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 42L))
         .thenReturn(Optional.of(department));
@@ -51,197 +83,45 @@ class DepartmentLegalServiceTest {
   }
 
   @Test
-  void getPublishedDepartmentLegal_Should_returnBothContents_When_bothPublished() {
-    department(
-        "{\"de\":\"<p>DSE</p>\"}",
-        PublicationStatus.PUBLISHED,
-        "{\"de\":\"<p>Impressum</p>\"}",
-        PublicationStatus.PUBLISHED);
+  void getPublishedDepartmentLegal_Should_returnBothResolvedTexts() {
+    var department = department(null);
+    when(legalTextInheritanceResolver.resolveDpp(department))
+        .thenReturn(
+            new ResolvedLegalText(
+                "{\"de\":\"<p>DSE</p>\"}",
+                "{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}",
+                LegalTextSourceLevel.DEPARTMENT,
+                100L));
+    when(legalTextInheritanceResolver.resolveImprint(department))
+        .thenReturn(
+            new ResolvedLegalText(
+                "{\"de\":\"<p>Impressum</p>\"}", null, LegalTextSourceLevel.AGENCY, null));
 
     var view = service.getPublishedDepartmentLegal(7L, 42L);
 
-    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE</p>\"}");
-    assertThat(view.imprintContent()).isEqualTo("{\"de\":\"<p>Impressum</p>\"}");
+    // Every returned text must have gone through the substitution step.
+    assertThat(view.dpp().content()).contains("DSE").endsWith(RENDERED);
+    assertThat(view.dpp().consentText()).contains("{{legal_links}}").endsWith(RENDERED);
+    assertThat(view.dpp().sourceLevel()).isEqualTo(LegalTextSourceLevel.DEPARTMENT);
+    // The version id is what ORISO-UserService pins a recorded consent to (ADR-022 decision 2).
+    assertThat(view.dpp().versionId()).isEqualTo(100L);
+    // An inherited imprint is legitimately reachable and reported as coming from the agency level.
+    assertThat(view.imprint().sourceLevel()).isEqualTo(LegalTextSourceLevel.AGENCY);
+    assertThat(view.imprint().content()).endsWith(RENDERED);
   }
 
   @Test
-  void getPublishedDepartmentLegal_Should_neverLeakDraftContent() {
-    // both texts exist in the database but are still drafts - the public API must return null
-    department(
-        "{\"de\":\"<p>DSE Entwurf</p>\"}",
-        PublicationStatus.DRAFT,
-        "{\"de\":\"<p>Impressum Entwurf</p>\"}",
-        PublicationStatus.DRAFT);
+  void getPublishedDepartmentLegal_Should_returnNoContent_When_nothingIsAuthoredAnywhere() {
+    var department = department(null);
+    when(legalTextInheritanceResolver.resolveDpp(department)).thenReturn(ResolvedLegalText.none());
+    when(legalTextInheritanceResolver.resolveImprint(department))
+        .thenReturn(ResolvedLegalText.none());
 
     var view = service.getPublishedDepartmentLegal(7L, 42L);
 
     assertThat(view.dppContent()).isNull();
     assertThat(view.imprintContent()).isNull();
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_treatEachTextsLifecycleIndependently() {
-    // published DPP next to a draft imprint: only the published half is exposed
-    department(
-        "{\"de\":\"<p>DSE</p>\"}",
-        PublicationStatus.PUBLISHED,
-        "{\"de\":\"<p>Impressum Entwurf</p>\"}",
-        PublicationStatus.DRAFT);
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE</p>\"}");
-    assertThat(view.imprintContent()).isNull();
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_returnNull_When_publishedButNeverAuthored() {
-    // PUBLISHED status without stored content must not turn into an empty-but-present document
-    department(null, PublicationStatus.PUBLISHED, "   ", PublicationStatus.PUBLISHED);
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isNull();
-    assertThat(view.imprintContent()).isNull();
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_preferReferencedLegalText_OverInlineContent() {
-    // ADR-014: when the department references a shared legal-text object, that object is the
-    // truth — the leftover inline copy must be ignored entirely.
-    var department =
-        department(
-            "{\"de\":\"<p>alte Inline-DSE</p>\"}",
-            PublicationStatus.PUBLISHED,
-            null,
-            PublicationStatus.DRAFT);
-    department.setDpp(
-        LegalText.builder()
-            .id(100L)
-            .kind(LegalTextKind.DPP)
-            .label("Geteilte DSE")
-            .content("{\"de\":\"<p>geteilte DSE</p>\"}")
-            .publicationStatus(PublicationStatus.PUBLISHED)
-            .build());
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>geteilte DSE</p>\"}");
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_returnNull_When_referencedTextIsDraft() {
-    // a DRAFT shared object must not fall back to a published inline leftover — the reference,
-    // once set, fully replaces the inline column
-    var department =
-        department(
-            "{\"de\":\"<p>alte Inline-DSE</p>\"}",
-            PublicationStatus.PUBLISHED,
-            null,
-            PublicationStatus.DRAFT);
-    department.setDpp(
-        LegalText.builder()
-            .id(100L)
-            .kind(LegalTextKind.DPP)
-            .label("Entwurf")
-            .content("{\"de\":\"<p>Entwurf</p>\"}")
-            .publicationStatus(PublicationStatus.DRAFT)
-            .build());
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isNull();
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_resolveImprintReferenceIndependently() {
-    var department =
-        department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
-    department.setImprint(
-        LegalText.builder()
-            .id(101L)
-            .kind(LegalTextKind.IMPRINT)
-            .label("Geteiltes Impressum")
-            .content("{\"de\":\"<p>Impressum</p>\"}")
-            .publicationStatus(PublicationStatus.PUBLISHED)
-            .build());
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isNull();
-    assertThat(view.imprintContent()).isEqualTo("{\"de\":\"<p>Impressum</p>\"}");
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_fallBackToAgencyWideText_When_departmentHasNoneOfItsOwn() {
-    // ADR-014 chain tenant -> agency -> department: a Fachbereich that never authored anything
-    // shows what its Beratungsstelle publishes, not nothing.
-    var department = department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
-    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
-    department.getAgency().setContentImprint("{\"de\":\"<p>Impressum der Stelle</p>\"}");
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE der Stelle</p>\"}");
-    assertThat(view.imprintContent()).isEqualTo("{\"de\":\"<p>Impressum der Stelle</p>\"}");
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_preferOwnPublishedText_OverAgencyWideText() {
-    // Publishing is what leaves the inheritance for good.
-    var department =
-        department(
-            "{\"de\":\"<p>eigene DSE</p>\"}", PublicationStatus.PUBLISHED, null,
-            PublicationStatus.DRAFT);
-    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>eigene DSE</p>\"}");
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_keepShowingAgencyWideText_While_ownTextIsStillDraft() {
-    // The draft copy is invisible to users until it is published — until then the inherited text
-    // stays in force. A draft must never blank out a legally required document.
-    var department =
-        department(
-            "{\"de\":\"<p>Entwurf</p>\"}", PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
-    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE der Stelle</p>\"}");
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_fallBackToAgencyWideText_When_referencedTextIsDraft() {
-    var department = department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
-    department.getAgency().setContentDpp("{\"de\":\"<p>DSE der Stelle</p>\"}");
-    department.setDpp(
-        LegalText.builder()
-            .id(100L)
-            .kind(LegalTextKind.DPP)
-            .label("Entwurf")
-            .content("{\"de\":\"<p>Entwurf</p>\"}")
-            .publicationStatus(PublicationStatus.DRAFT)
-            .build());
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isEqualTo("{\"de\":\"<p>DSE der Stelle</p>\"}");
-  }
-
-  @Test
-  void getPublishedDepartmentLegal_Should_returnNull_When_neitherLevelHasText() {
-    // A blank agency column is an absent text, not an empty-but-present document.
-    var department = department(null, PublicationStatus.DRAFT, null, PublicationStatus.DRAFT);
-    department.getAgency().setContentDpp("   ");
-
-    var view = service.getPublishedDepartmentLegal(7L, 42L);
-
-    assertThat(view.dppContent()).isNull();
-    assertThat(view.imprintContent()).isNull();
+    assertThat(view.dpp().sourceLevel()).isEqualTo(LegalTextSourceLevel.NONE);
   }
 
   @Test
@@ -254,15 +134,24 @@ class DepartmentLegalServiceTest {
 
   @Test
   void getPublishedDepartmentLegal_Should_throwNotFound_When_agencyIsDeleted() {
-    var department =
-        department(
-            "{\"de\":\"<p>DSE</p>\"}",
-            PublicationStatus.PUBLISHED,
-            "{\"de\":\"<p>Impressum</p>\"}",
-            PublicationStatus.PUBLISHED);
-    department.getAgency().setDeleteDate(LocalDateTime.now());
+    department(LocalDateTime.of(2026, 1, 1, 0, 0));
 
+    // A deleted Beratungsstelle has no public surface at all, legal texts included.
     assertThatExceptionOfType(NotFoundException.class)
         .isThrownBy(() -> service.getPublishedDepartmentLegal(7L, 42L));
+  }
+
+  @Test
+  void hasResolvableDpp_Should_followTheSameChainAsTheEndpoint() {
+    var department = AgencyTopic.builder().id(4711L).topicId(42L).build();
+    when(legalTextInheritanceResolver.resolveDpp(department))
+        .thenReturn(
+            new ResolvedLegalText("{\"de\":\"x\"}", null, LegalTextSourceLevel.AGENCY, null));
+
+    // The measured defect: the flag used to look only at the department level while the endpoint
+    // already inherited, so a department reported false while /legal returned content.
+    assertThat(service.hasResolvableDpp(department)).isTrue();
+    // hasResolvableDpp asks the resolver directly - substitution is irrelevant to a yes/no flag.
+    verify(publicLegalTextRenderer, never()).render(any(), any());
   }
 }

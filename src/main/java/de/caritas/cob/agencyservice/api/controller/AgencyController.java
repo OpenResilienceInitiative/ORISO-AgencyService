@@ -10,6 +10,7 @@ import de.caritas.cob.agencyservice.api.model.DepartmentLegalDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.DepartmentLegalService;
+import de.caritas.cob.agencyservice.api.service.legal.ResolvedLegalText;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.generated.api.controller.AgenciesApi;
 import io.swagger.annotations.Api;
@@ -135,9 +136,30 @@ public class AgencyController implements AgenciesApi {
     var view = departmentLegalService.getPublishedDepartmentLegal(agencyId, topicId);
     var response =
         new DepartmentLegalDTO()
-            .dpp(new DepartmentLegalContentDTO().content(view.dppContent()))
-            .imprint(new DepartmentLegalContentDTO().content(view.imprintContent()));
+            .dpp(toContentDto(view.dpp()))
+            .imprint(toContentDto(view.imprint()));
     return new ResponseEntity<>(response, HttpStatus.OK);
+  }
+
+  /**
+   * Maps one resolved text onto the public response. The level and the version id travel with the
+   * wording: the level because a legal document without one is not a statement anyone can act on
+   * (ADR-021 decision 1), and the version id because it is what ORISO-UserService pins a recorded
+   * consent to ({@code session.consented_legal_version_id}, ADR-022 decision 2).
+   */
+  private DepartmentLegalContentDTO toContentDto(ResolvedLegalText resolved) {
+    if (resolved == null) {
+      return new DepartmentLegalContentDTO();
+    }
+    return new DepartmentLegalContentDTO()
+        .content(resolved.content())
+        .consentText(resolved.consentText())
+        .sourceLevel(
+            resolved.sourceLevel() == null
+                ? null
+                : DepartmentLegalContentDTO.SourceLevelEnum.fromValue(
+                    resolved.sourceLevel().name()))
+        .versionId(resolved.versionId());
   }
 
   /**

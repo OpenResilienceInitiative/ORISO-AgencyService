@@ -44,6 +44,9 @@ class LegalTextAdminServiceTest {
   @Mock private AgencyTopicRepository agencyTopicRepository;
   @Mock private AuthenticatedUser authenticatedUser;
   @Mock private UserAdminService userAdminService;
+  @Mock private LegalTextVersionService legalTextVersionService;
+  private final ConsentTextService consentTextService =
+      new ConsentTextService(new LegalContentSanitizer(new InputSanitizer()));
 
   private LegalTextAdminService service;
 
@@ -56,7 +59,9 @@ class LegalTextAdminServiceTest {
             agencyTopicRepository,
             new LegalContentSanitizer(new InputSanitizer()),
             authenticatedUser,
-            userAdminService);
+            userAdminService,
+            legalTextVersionService,
+            consentTextService);
   }
 
   @AfterEach
@@ -129,11 +134,9 @@ class LegalTextAdminServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
 
     var view =
-        service.createLegalText(
-            LegalTextKind.DPP,
+        service.createLegalText(LegalTextKind.DPP,
             "Standard-DSE",
-            Map.of("de", "<p onclick=\"x()\">DSE <script>bad()</script></p>"),
-            true);
+            Map.of("de", "<p onclick=\"x()\">DSE <script>bad()</script></p>"), null, true);
 
     var saved = ArgumentCaptor.forClass(LegalText.class);
     verify(legalTextRepository).save(saved.capture());
@@ -153,7 +156,7 @@ class LegalTextAdminServiceTest {
   void create_Should_rejectBlankLabel() {
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
-            () -> service.createLegalText(LegalTextKind.DPP, "  ", Map.of("de", "x"), false));
+            () -> service.createLegalText(LegalTextKind.DPP, "  ", Map.of("de", "x"), null, false));
     verify(legalTextRepository, never()).save(any());
   }
 
@@ -169,7 +172,7 @@ class LegalTextAdminServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(agencyTopicRepository.countByDpp_Id(1L)).thenReturn(2L);
 
-    var view = service.updateLegalText(1L, "Neu", Map.of("de", "<p>neu</p>"), true);
+    var view = service.updateLegalText(1L, "Neu", Map.of("de", "<p>neu</p>"), null, true);
 
     assertThat(existing.getLabel()).isEqualTo("Neu");
     assertThat(existing.getContent()).contains("neu");
@@ -185,7 +188,7 @@ class LegalTextAdminServiceTest {
         .thenReturn(Optional.of(text(1L, 9L, LegalTextKind.DPP)));
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)
-        .isThrownBy(() -> service.updateLegalText(1L, "x", Map.of("de", "x"), false));
+        .isThrownBy(() -> service.updateLegalText(1L, "x", Map.of("de", "x"), null, false));
     verify(legalTextRepository, never()).save(any());
   }
 
@@ -194,7 +197,7 @@ class LegalTextAdminServiceTest {
     when(legalTextRepository.findById(99L)).thenReturn(Optional.empty());
 
     assertThatExceptionOfType(NotFoundException.class)
-        .isThrownBy(() -> service.updateLegalText(99L, "x", Map.of("de", "x"), false));
+        .isThrownBy(() -> service.updateLegalText(99L, "x", Map.of("de", "x"), null, false));
   }
 
   // --- library CRUD is full-admin only (review: a restricted admin must not be able to change
@@ -214,7 +217,7 @@ class LegalTextAdminServiceTest {
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)
         .isThrownBy(
-            () -> service.createLegalText(LegalTextKind.DPP, "x", Map.of("de", "x"), false));
+            () -> service.createLegalText(LegalTextKind.DPP, "x", Map.of("de", "x"), null, false));
     verify(legalTextRepository, never()).save(any());
   }
 
@@ -223,7 +226,7 @@ class LegalTextAdminServiceTest {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
 
     assertThatExceptionOfType(AgencyAccessDeniedException.class)
-        .isThrownBy(() -> service.updateLegalText(1L, "x", Map.of("de", "x"), false));
+        .isThrownBy(() -> service.updateLegalText(1L, "x", Map.of("de", "x"), null, false));
     verify(legalTextRepository, never()).save(any());
   }
 
@@ -240,7 +243,7 @@ class LegalTextAdminServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(agencyTopicRepository.countByDpp_Id(1L)).thenReturn(1L);
 
-    service.updateLegalText(1L, "Nur Label", Map.of("de", "<p>x</p>"), null);
+    service.updateLegalText(1L, "Nur Label", Map.of("de", "<p>x</p>"), null, null);
 
     assertThat(existing.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
   }

@@ -48,6 +48,19 @@ class AgencyDataProtectionValidatorTest {
   }
 
   @Test
+  void validate_Should_SkipValidationService_When_DataProtectionDtoIsNull() {
+    ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder().tenantId(1L).build();
+    ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
+        false);
+
+    agencyDataProtectionValidator.validate(agencyToValidate);
+
+    Mockito.verify(tenantService, Mockito.never()).getRestrictedTenantDataByTenantId(Mockito.any());
+    Mockito.verify(agencyDataProtectionValidationService, Mockito.never())
+        .validate(agencyToValidate);
+  }
+
+  @Test
   void validate_Should_NotValidateForAgencyTenant_When_NonSingleDomainMultitenancy_And_CentralDataProtectionFeatureDisabled() {
     // given
     ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
