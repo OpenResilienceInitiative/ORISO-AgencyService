@@ -47,6 +47,7 @@ import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
+import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
@@ -80,7 +81,10 @@ class AgencyAdminServiceTest {
   AgencyAdminService agencyAdminService;
 
   @Mock
-  AgencyTenantUnawareRepository agencyRepository;
+  AgencyRepository agencyRepository;
+
+  @Mock
+  AgencyTenantUnawareRepository agencyTenantUnawareRepository;
 
   @Mock
   UserAdminService userAdminService;
@@ -143,6 +147,13 @@ class AgencyAdminServiceTest {
 
   @BeforeEach
   public void setup() {
+    // Mockito's @InjectMocks cannot decide between the two mocks for the
+    // AgencyRepository-typed constructor parameter (AgencyTenantUnawareRepository is a subtype),
+    // so it can silently wire the tenant-unaware mock into the tenant-aware field and the stubs
+    // then no-op. Pin both fields explicitly.
+    ReflectionTestUtils.setField(agencyAdminService, "agencyRepository", agencyRepository);
+    ReflectionTestUtils.setField(
+        agencyAdminService, "agencyTenantUnawareRepository", agencyTenantUnawareRepository);
     ReflectionTestUtils.setField(agencyAdminService, "agencyTopicEnrichmentService", agencyTopicEnrichmentService);
     ReflectionTestUtils.setField(agencyAdminService, "demographicsConverter", demographicsConverter);
 
@@ -153,6 +164,11 @@ class AgencyAdminServiceTest {
 
     Mockito.lenient().when(agencySettingsService.toSettings(any())).thenReturn(new Settings());
     Mockito.lenient().when(agencySettingsService.toSettingsJson(any())).thenReturn("{}");
+
+    // Default: a tenant-scoped admin. Tests covering the Platform Admin path
+    // (see findAgencyById_Should_useTenantUnawareRepository_*) override this
+    // to null or 0L explicitly (#265).
+    Mockito.lenient().when(authenticatedUser.getTenantId()).thenReturn(1L);
     Mockito.lenient()
         .when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any(), any()))
         .thenAnswer(invocation -> invocation.getArgument(0) != null
@@ -415,6 +431,62 @@ class AgencyAdminServiceTest {
   @Test
   void findAgencyById_Should_ThrowNotFoundException_WhenAgencyIsNotFound() {
     when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.empty());
+
+    assertThrows(NotFoundException.class, () -> agencyAdminService.findAgencyById(AGENCY_ID));
+  }
+
+  @Test
+  void
+      findAgencyById_Should_useTenantUnawareRepository_When_authenticatedUserHasNoBoundTenant() {
+    // A Platform Admin's JWT carries no tenantId claim (#265). The tenant-aware search widens
+    // for exactly this signal, so the detail lookup must match — otherwise the row is visible
+    // in the overview but returns 404 on click.
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    Agency agency = new Agency();
+    when(agencyTenantUnawareRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    Agency result = agencyAdminService.findAgencyById(AGENCY_ID);
+
+    assertThat(result, is(agency));
+    verifyNoInteractions(agencyRepository);
+  }
+
+  @Test
+  void
+      findAgencyById_Should_useTenantUnawareRepository_When_technicalTenantSentinelIsBound() {
+    // Technical/super context is represented by tenant 0 in both TenantContext and the
+    // JWT claim path. The tenant-aware repository would apply the Hibernate tenantFilter
+    // even for tenant 0 through the JPQL findById, so route through the unaware repo.
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+    Agency agency = new Agency();
+    when(agencyTenantUnawareRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    Agency result = agencyAdminService.findAgencyById(AGENCY_ID);
+
+    assertThat(result, is(agency));
+    verifyNoInteractions(agencyRepository);
+  }
+
+  @Test
+  void
+      findAgencyById_Should_useTenantAwareRepository_When_tenantScopedAdminIsBoundToTenant() {
+    // Tenant-scoped and agency-scoped administrators must remain restricted to their
+    // authorised agencies (#265 acceptance). Only Platform Admin widens.
+    when(authenticatedUser.getTenantId()).thenReturn(42L);
+    Agency agency = new Agency();
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    Agency result = agencyAdminService.findAgencyById(AGENCY_ID);
+
+    assertThat(result, is(agency));
+    verifyNoInteractions(agencyTenantUnawareRepository);
+  }
+
+  @Test
+  void
+      findAgencyById_Should_ThrowNotFoundException_When_platformAdminAndAgencyMissing() {
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    when(agencyTenantUnawareRepository.findById(AGENCY_ID)).thenReturn(Optional.empty());
 
     assertThrows(NotFoundException.class, () -> agencyAdminService.findAgencyById(AGENCY_ID));
   }
