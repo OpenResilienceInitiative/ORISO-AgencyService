@@ -1,264 +1,86 @@
 package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.RuntimeJsonMappingException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.Settings;
-import de.caritas.cob.agencyservice.api.repository.agencyadmincontrol.AgencyAdminControlEntity;
-import de.caritas.cob.agencyservice.api.repository.agencyadmincontrol.AgencyAdminControlRepository;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
+import de.caritas.cob.agencyservice.api.service.TenantService;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
 class AgencyAdminControlsServiceTest {
 
-  @InjectMocks
-  private AgencyAdminControlsService agencyAdminControlsService;
+  @InjectMocks private AgencyAdminControlsService service;
+  @Mock private TenantService tenantService;
+  @Mock private AgencyPermissionPolicyMapper policyMapper;
 
-  @Mock
-  private AgencyAdminControlRepository agencyAdminControlRepository;
+  @Test
+  void getControls_shouldReadOnlyTheAuthenticatedTenantsResolvedPolicy() {
+    var policies = new TenantPermissionPolicies().tenantId(7L).policies(Map.of());
+    var expected = new AgencyAdminControls();
+    when(tenantService.getPermissionPolicies(7L)).thenReturn(policies);
+    when(policyMapper.toLegacyControls(policies.getPolicies())).thenReturn(expected);
 
-  @Mock
-  private AgencyAdminControlsConverter agencyAdminControlsConverter;
-
-  private AgencyAdminControls defaultControls;
-  private AgencyAdminControlsSettings defaultSettings;
-
-  @BeforeEach
-  void setUp() {
-    defaultSettings = AgencyAdminControlsSettings.builder().permissionsPageEnabled(true).build();
-    defaultControls = new AgencyAdminControls().permissionsPageEnabled(true);
+    assertThat(service.getControls(7L)).isSameAs(expected);
+    verify(tenantService).getPermissionPolicies(7L);
   }
 
   @Test
-  void getControls_Should_ReturnParsedControls_WhenDbHasValidJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls("{\"permissionsPageEnabled\":false}", 1L)));
-    AgencyAdminControls expected =
-        new AgencyAdminControls().permissionsPageEnabled(false);
-    when(agencyAdminControlsConverter.toAgencyAdminControls(
-            argThat(settings -> Boolean.FALSE.equals(settings.getPermissionsPageEnabled()))))
-        .thenReturn(expected);
+  void getResolvedControls_shouldUseThePublicResolvedTenantContract() {
+    var policy = new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED);
+    var restricted =
+        new RestrictedTenantDTO(Map.of("featureVideoCallsEnabled", policy))
+            .id(7L)
+            .name("Tenant");
+    var expected = new AgencyAdminControls();
+    when(tenantService.getRestrictedTenantDataByTenantId(7L)).thenReturn(restricted);
+    when(policyMapper.toLegacyControls(restricted.getPermissionPolicies())).thenReturn(expected);
 
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(expected);
-    verify(agencyAdminControlsConverter, never()).createDefaultControlsSettings();
+    assertThat(service.getResolvedControls(7L)).isSameAs(expected);
   }
 
   @Test
-  void getControls_Should_ReturnDefaultControls_WhenDbHasNoRecord() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc()).thenReturn(Optional.empty());
-    stubConverterDefaults();
+  void updateControls_shouldRoundTripThroughTenantServiceWithoutLocalSingleton() {
+    var controls = new AgencyAdminControls();
+    var current = new TenantPermissionPolicies().tenantId(7L).policies(Map.of());
+    var updated = new TenantPermissionPolicies().tenantId(7L).policies(Map.of());
+    var expected = new AgencyAdminControls();
+    when(tenantService.getPermissionPolicies(7L)).thenReturn(current);
+    when(policyMapper.applyLegacyUpdate(current, controls)).thenReturn(updated);
+    when(tenantService.updatePermissionPolicies(7L, updated)).thenReturn(updated);
+    when(policyMapper.toLegacyControls(updated.getPolicies())).thenReturn(expected);
 
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(defaultControls);
-    verify(agencyAdminControlsConverter).createDefaultControlsSettings();
+    assertThat(service.updateControls(7L, controls)).isSameAs(expected);
+    verify(tenantService).updatePermissionPolicies(7L, updated);
   }
 
   @Test
-  void getControls_Should_ReturnDefaultControls_WhenDbHasEmptyStringJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls("", 1L)));
-    stubConverterDefaults();
-
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(defaultControls);
-    verify(agencyAdminControlsConverter).createDefaultControlsSettings();
+  void tenantZero_shouldNeverResolveToAnotherTenantsPolicies() {
+    assertThatThrownBy(() -> service.getControls(0L)).isInstanceOf(AccessDeniedException.class);
   }
 
   @Test
-  void getControls_Should_ReturnDefaultControls_WhenDbHasSpaceJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls(" ", 1L)));
-    stubConverterDefaults();
+  void enrichSettings_shouldKeepSettingsAndAttachTenantSpecificControls() {
+    var settings = new Settings().featureStatisticsEnabled(true);
+    var controls = new AgencyAdminControls();
+    var policies = new TenantPermissionPolicies().tenantId(8L).policies(Map.of());
+    when(tenantService.getPermissionPolicies(8L)).thenReturn(policies);
+    when(policyMapper.toLegacyControls(policies.getPolicies())).thenReturn(controls);
 
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(defaultControls);
-    verify(agencyAdminControlsConverter).createDefaultControlsSettings();
-  }
-
-  @Test
-  void getControls_Should_ReturnDefaultControls_WhenDbHasTabJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls("\t", 1L)));
-    stubConverterDefaults();
-
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(defaultControls);
-    verify(agencyAdminControlsConverter).createDefaultControlsSettings();
-  }
-
-  @Test
-  void getControls_Should_ReturnDefaultControls_WhenDbHasEmptyObjectJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls("{}", 1L)));
-    stubConverterDefaults();
-
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(defaultControls);
-    verify(agencyAdminControlsConverter).createDefaultControlsSettings();
-  }
-
-  @Test
-  void getControls_Should_ReturnDefaultControls_WhenDbHasWhitespaceWrappedEmptyObjectJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls(" {} ", 1L)));
-    stubConverterDefaults();
-
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(defaultControls);
-    verify(agencyAdminControlsConverter).createDefaultControlsSettings();
-  }
-
-  @Test
-  void getControls_Should_ReturnDefaultControls_WhenDbHasNullLiteralJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls("null", 1L)));
-    stubConverterDefaults();
-
-    AgencyAdminControls result = agencyAdminControlsService.getControls();
-
-    assertThat(result).isSameAs(defaultControls);
-    verify(agencyAdminControlsConverter).createDefaultControlsSettings();
-  }
-
-  @Test
-  void getControls_Should_ThrowRuntimeJsonMappingException_WhenDbHasInvalidJson() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(entityWithControls("{not-valid-json", 1L)));
-
-    assertThrows(RuntimeJsonMappingException.class, () -> agencyAdminControlsService.getControls());
-  }
-
-  @Test
-  void updateControls_Should_CreateNewEntity_WhenDbHasNoRecord() {
-    AgencyAdminControls input = new AgencyAdminControls().permissionsPageEnabled(false);
-    AgencyAdminControlsSettings settings =
-        AgencyAdminControlsSettings.builder().permissionsPageEnabled(false).build();
-    stubUpdateRoundTrip(input, settings);
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc()).thenReturn(Optional.empty());
-    when(agencyAdminControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-    AgencyAdminControls result = agencyAdminControlsService.updateControls(input);
-
-    assertThat(result).isSameAs(input);
-    ArgumentCaptor<AgencyAdminControlEntity> captor =
-        ArgumentCaptor.forClass(AgencyAdminControlEntity.class);
-    verify(agencyAdminControlRepository).save(captor.capture());
-    verify(agencyAdminControlRepository, times(1)).findTopByOrderByIdAsc();
-    assertThat(captor.getValue().getId()).isNull();
-    assertThat(captor.getValue().getControls()).contains("\"permissionsPageEnabled\":false");
-  }
-
-  @Test
-  void updateControls_Should_UpdateExistingEntity_WhenDbHasRecord() {
-    AgencyAdminControls input = new AgencyAdminControls().permissionsPageEnabled(false);
-    AgencyAdminControlsSettings settings =
-        AgencyAdminControlsSettings.builder().permissionsPageEnabled(false).build();
-    stubUpdateRoundTrip(input, settings);
-    AgencyAdminControlEntity existing =
-        entityWithControls("{\"permissionsPageEnabled\":true}", 1L);
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc())
-        .thenReturn(Optional.of(existing));
-    when(agencyAdminControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-    AgencyAdminControls result = agencyAdminControlsService.updateControls(input);
-
-    assertThat(result).isSameAs(input);
-    ArgumentCaptor<AgencyAdminControlEntity> captor =
-        ArgumentCaptor.forClass(AgencyAdminControlEntity.class);
-    verify(agencyAdminControlRepository).save(captor.capture());
-    verify(agencyAdminControlRepository, times(1)).findTopByOrderByIdAsc();
-    assertThat(captor.getValue().getId()).isEqualTo(1L);
-    assertThat(captor.getValue().getControls()).contains("\"permissionsPageEnabled\":false");
-  }
-
-  @Test
-  void updateControls_Should_SetUpdateDateOnSave() {
-    AgencyAdminControls input = new AgencyAdminControls().permissionsPageEnabled(false);
-    AgencyAdminControlsSettings settings =
-        AgencyAdminControlsSettings.builder().permissionsPageEnabled(false).build();
-    stubUpdateRoundTrip(input, settings);
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc()).thenReturn(Optional.empty());
-    when(agencyAdminControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-    LocalDateTime before = LocalDateTime.now(ZoneOffset.UTC);
-    agencyAdminControlsService.updateControls(input);
-    LocalDateTime after = LocalDateTime.now(ZoneOffset.UTC);
-
-    ArgumentCaptor<AgencyAdminControlEntity> captor =
-        ArgumentCaptor.forClass(AgencyAdminControlEntity.class);
-    verify(agencyAdminControlRepository).save(captor.capture());
-    assertThat(captor.getValue().getUpdateDate())
-        .isAfterOrEqualTo(before)
-        .isBeforeOrEqualTo(after);
-  }
-
-  @Test
-  void enrichSettingsWithAgencyAdminControls_Should_CreateSettingsAndEnrich_WhenSettingsIsNull() {
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc()).thenReturn(Optional.empty());
-    stubConverterDefaults();
-
-    Settings result = agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(null);
-
-    assertThat(result).isNotNull();
-    assertThat(result.getAgencyAdminControls()).isSameAs(defaultControls);
-  }
-
-  @Test
-  void enrichSettingsWithAgencyAdminControls_Should_EnrichExistingSettings_WhenSettingsIsNotNull() {
-    Settings settings = new Settings().featureStatisticsEnabled(true);
-    when(agencyAdminControlRepository.findTopByOrderByIdAsc()).thenReturn(Optional.empty());
-    stubConverterDefaults();
-
-    Settings result = agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(settings);
-
-    assertSame(settings, result);
-    assertThat(result.getFeatureStatisticsEnabled()).isTrue();
-    assertThat(result.getAgencyAdminControls()).isSameAs(defaultControls);
-  }
-
-  private void stubConverterDefaults() {
-    when(agencyAdminControlsConverter.createDefaultControlsSettings()).thenReturn(defaultSettings);
-    when(agencyAdminControlsConverter.toAgencyAdminControls(defaultSettings))
-        .thenReturn(defaultControls);
-  }
-
-  private void stubUpdateRoundTrip(
-      AgencyAdminControls input, AgencyAdminControlsSettings settings) {
-    when(agencyAdminControlsConverter.toAgencyAdminControlsSettings(input)).thenReturn(settings);
-    when(agencyAdminControlsConverter.toAgencyAdminControls(settings)).thenReturn(input);
-  }
-
-  private AgencyAdminControlEntity entityWithControls(String controlsJson, Long id) {
-    return AgencyAdminControlEntity.builder()
-        .id(id)
-        .controls(controlsJson)
-        .updateDate(LocalDateTime.now(ZoneOffset.UTC))
-        .build();
+    assertThat(service.enrichSettingsWithAgencyAdminControls(settings, 8L)).isSameAs(settings);
+    assertThat(settings.getAgencyAdminControls()).isSameAs(controls);
   }
 }

@@ -169,7 +169,8 @@ class AgencyAdminServiceTest {
     // (see findAgencyById_Should_useTenantUnawareRepository_*) override this
     // to null or 0L explicitly (#265).
     Mockito.lenient().when(authenticatedUser.getTenantId()).thenReturn(1L);
-    Mockito.lenient().when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
+    Mockito.lenient()
+        .when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any(), any()))
         .thenAnswer(invocation -> invocation.getArgument(0) != null
             ? invocation.getArgument(0)
             : new Settings());

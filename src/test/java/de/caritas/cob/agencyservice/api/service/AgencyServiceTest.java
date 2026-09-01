@@ -400,7 +400,7 @@ public class AgencyServiceTest {
     when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
     when(agencySettingsService.toSettings(any()))
         .thenReturn(new de.caritas.cob.agencyservice.api.model.Settings().featureCallsEnabled(true));
-    when(agencyAdminControlsService.getControls())
+    when(agencyAdminControlsService.getResolvedControls(any()))
         .thenReturn(
             new AgencyAdminControls()
                 .allowedPermissionToggles(
@@ -414,7 +414,7 @@ public class AgencyServiceTest {
   @Test
   public void getAgencies_With_Ids_Should_NotLeakAgencyAdminControls_OnThePublicResponse() {
     when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
-    when(agencyAdminControlsService.getControls())
+    when(agencyAdminControlsService.getResolvedControls(any()))
         .thenReturn(
             new AgencyAdminControls()
                 .allowedPermissionToggles(
