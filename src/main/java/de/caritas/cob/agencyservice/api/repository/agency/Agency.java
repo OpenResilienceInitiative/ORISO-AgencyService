@@ -111,6 +111,14 @@ public class Agency implements TenantAware {
   @Column(name = "opening_hours")
   private String openingHours;
 
+  /** WGS84 latitude, nullable until an agency is geocoded (#278). */
+  @Column(name = "lat")
+  private Double lat;
+
+  /** WGS84 longitude, nullable until an agency is geocoded (#278). */
+  @Column(name = "lng")
+  private Double lng;
+
   @Column(name = "is_team_agency", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
   @JdbcTypeCode(Types.TINYINT)
