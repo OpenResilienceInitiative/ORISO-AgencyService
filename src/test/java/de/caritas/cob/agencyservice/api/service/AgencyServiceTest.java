@@ -40,6 +40,8 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestExcept
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
+import de.caritas.cob.agencyservice.api.model.AgencyAdminAllowedPermissionToggles;
+import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
@@ -106,6 +108,11 @@ public class AgencyServiceTest {
   @Mock
   AgencyAdminControlsService agencyAdminControlsService;
 
+  @org.mockito.Spy
+  private final de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier
+      effectivePermissionSettingsApplier =
+          new de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier();
+
   @Mock
   ApplicationSettingsService applicationSettingsService;
 
@@ -123,10 +130,6 @@ public class AgencyServiceTest {
     ensureAgencyTopics(AGENCY_ONLINE_U25);
     ensureAgencyTopics(AGENCY_OFFLINE);
     when(agencySettingsService.toSettings(any())).thenReturn(new de.caritas.cob.agencyservice.api.model.Settings());
-    when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
-        .thenAnswer(invocation -> invocation.getArgument(0) != null
-            ? invocation.getArgument(0)
-            : new de.caritas.cob.agencyservice.api.model.Settings());
   }
 
   private void ensureAgencyTopics(Agency agency) {
@@ -356,6 +359,39 @@ public class AgencyServiceTest {
     assertEquals(AGENCY_RESPONSE_DTO.getConsultingType(), result.getConsultingType());
     assertThat(agencyService.getAgencies(Collections.singletonList(AGENCY_ID)),
         everyItem(instanceOf(AgencyResponseDTO.class)));
+  }
+
+  @Test
+  public void getAgencies_With_Ids_Should_ForceFeatureOff_When_PlatformDisallowsIt() {
+    when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
+    when(agencySettingsService.toSettings(any()))
+        .thenReturn(new de.caritas.cob.agencyservice.api.model.Settings().featureCallsEnabled(true));
+    when(agencyAdminControlsService.getControls())
+        .thenReturn(
+            new AgencyAdminControls()
+                .allowedPermissionToggles(
+                    new AgencyAdminAllowedPermissionToggles().calls(false)));
+
+    AgencyResponseDTO result = agencyService.getAgencies(AGENCY_IDS_LIST).get(0);
+
+    assertEquals(false, result.getSettings().getFeatureCallsEnabled());
+  }
+
+  @Test
+  public void getAgencies_With_Ids_Should_NotLeakAgencyAdminControls_OnThePublicResponse() {
+    when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
+    when(agencyAdminControlsService.getControls())
+        .thenReturn(
+            new AgencyAdminControls()
+                .allowedPermissionToggles(
+                    new AgencyAdminAllowedPermissionToggles().calls(false)));
+
+    AgencyResponseDTO result = agencyService.getAgencies(AGENCY_IDS_LIST).get(0);
+
+    // The public response must never carry the raw controls object — only the effective
+    // (merged) feature flags. Guards against regressing to enrichSettingsWithAgencyAdminControls,
+    // which used to attach it here.
+    assertEquals(null, result.getSettings().getAgencyAdminControls());
   }
 
   @Test

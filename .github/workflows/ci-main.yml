@@ -12,8 +12,22 @@ env:
   ORG: openresilienceinitiative
 
 jobs:
+  required-integration-tests:
+    name: required integration tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Run deterministic integration contract
+      uses: ./.github/actions/maven-verify-required
+      with:
+        java_version: '21'
+
   publish:
     name: test, build and publish image
+    needs: required-integration-tests
     runs-on: ubuntu-latest
 
     permissions:
@@ -58,3 +72,41 @@ jobs:
 
     - name: Record immutable release digest
       run: echo '${{ env.REGISTRY }}/${{ env.ORG }}/oriso-agencyservice@${{ steps.image.outputs.digest }}' >> "$GITHUB_STEP_SUMMARY"
+
+  # Explicit legacy quarantine: #185, owner @Storypapst, expires 2026-09-30.
+  # Turns the quarantine deadline into a check instead of a job title. This job
+  # is NOT continue-on-error, so once the date passes the workflow fails until
+  # #185 is closed or the deadline is consciously extended in this file.
+  legacy-quarantine-expiry:
+    name: legacy quarantine deadline (#185)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Fail once the quarantine deadline has passed
+      shell: bash
+      env:
+        QUARANTINE_EXPIRES: "2026-09-30"
+      run: |
+        today="$(date -u +%F)"
+        if [[ "${today}" > "${QUARANTINE_EXPIRES}" ]]; then
+          echo "::error::The #185 legacy integration quarantine expired on ${QUARANTINE_EXPIRES}. Fix the suite, or extend the deadline deliberately in this workflow."
+          exit 1
+        fi
+        echo "Quarantine #185 is valid until ${QUARANTINE_EXPIRES} (today ${today})."
+
+  legacy-integration-quarantine:
+    name: legacy integration quarantine (#185, expires 2026-09-30)
+    runs-on: ubuntu-latest
+    # Declared here, not hidden in the action: this job may go red without
+    # blocking the PR. legacy-quarantine-expiry below removes that tolerance
+    # on 2026-10-01.
+    continue-on-error: true
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Run full legacy integration suite
+      uses: ./.github/actions/maven-verify-burnin
+      with:
+        java_version: '21'
