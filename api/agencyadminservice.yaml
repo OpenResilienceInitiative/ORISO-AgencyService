@@ -1304,6 +1304,18 @@ components:
           type: string
           maxLength: 1000
           example: "Mo-Fr 9-17 Uhr"
+        lat:
+          type: number
+          format: double
+          nullable: true
+          description: WGS84 latitude of the agency, null until geocoded
+          example: 52.520008
+        lng:
+          type: number
+          format: double
+          nullable: true
+          description: WGS84 longitude of the agency, null until geocoded
+          example: 13.404954
         teamAgency:
           type: boolean
           example: false
@@ -1544,6 +1556,22 @@ components:
           type: string
           maxLength: 1000
           example: "Mo-Fr 9-17 Uhr"
+        lat:
+          type: number
+          format: double
+          nullable: true
+          minimum: -90
+          maximum: 90
+          description: WGS84 latitude of the agency
+          example: 52.520008
+        lng:
+          type: number
+          format: double
+          nullable: true
+          minimum: -180
+          maximum: 180
+          description: WGS84 longitude of the agency
+          example: 13.404954
         teamAgency:
           type: boolean
           example: false
@@ -1653,6 +1681,26 @@ components:
             Omit (or send null) to keep the stored opening hours; send an empty
             string to clear them.
           example: "Mo-Fr 9-17 Uhr"
+        lat:
+          type: number
+          format: double
+          nullable: true
+          minimum: -90
+          maximum: 90
+          description: >-
+            WGS84 latitude of the agency. Omit (or send null) to keep the
+            stored value.
+          example: 52.520008
+        lng:
+          type: number
+          format: double
+          nullable: true
+          minimum: -180
+          maximum: 180
+          description: >-
+            WGS84 longitude of the agency. Omit (or send null) to keep the
+            stored value.
+          example: 13.404954
         offline:
           type: boolean
           example: false

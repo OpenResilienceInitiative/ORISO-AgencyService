@@ -461,6 +461,8 @@ public class AgencyService {
         .houseNumber(agency.getHouseNumber())
         .phone(agency.getPhone())
         .openingHours(agency.getOpeningHours())
+        .lat(agency.getLat())
+        .lng(agency.getLng())
         .departments(
             agency.getAgencyTopics().stream()
                 .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
@@ -521,7 +523,9 @@ public class AgencyService {
         .street(agency.getStreet())
         .houseNumber(agency.getHouseNumber())
         .phone(agency.getPhone())
-        .openingHours(agency.getOpeningHours());
+        .openingHours(agency.getOpeningHours())
+        .lat(agency.getLat())
+        .lng(agency.getLng());
 
   }
 

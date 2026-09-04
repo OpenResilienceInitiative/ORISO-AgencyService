@@ -371,7 +371,8 @@ public class AgencyServiceTest {
     Agency agency = Agency.builder().id(103L).name("Zentrum")
         .consultingTypeId(CONSULTING_TYPE_SUCHT)
         .street("Musterstraße").houseNumber("12a").phone("+49301234567")
-        .openingHours("Mo-Fr 9-17 Uhr").floorBuilding("Haus B").build();
+        .openingHours("Mo-Fr 9-17 Uhr").floorBuilding("Haus B")
+        .lat(52.520008).lng(13.404954).build();
     AgencyTopic overriding = AgencyTopic.builder().agency(agency).topicId(1L)
         .openingHours("Di+Do 14-18 Uhr").phoneExtension("-23").floorLocation("3. OG").build();
     AgencyTopic inheriting = AgencyTopic.builder().agency(agency).topicId(2L).build();
@@ -385,6 +386,8 @@ public class AgencyServiceTest {
     assertEquals("12a", result.getHouseNumber());
     assertEquals("+49301234567", result.getPhone());
     assertEquals("Mo-Fr 9-17 Uhr", result.getOpeningHours());
+    assertEquals(Double.valueOf(52.520008), result.getLat());
+    assertEquals(Double.valueOf(13.404954), result.getLng());
     var byTopicId = result.getDepartments().stream()
         .collect(java.util.stream.Collectors.toMap(d -> d.getTopicId(), d -> d));
     assertEquals("Di+Do 14-18 Uhr", byTopicId.get(1L).getOpeningHours());
