@@ -17,45 +17,45 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
     - name: Checkout pull-request base
       if: github.event_name == 'pull_request'
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.base.sha }}
         path: .contract-base
 
     - name: Checkout ConsultingTypeService provider
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         repository: OpenResilienceInitiative/ORISO-ConsultingTypeService
         ref: pre-dev
         path: .providers/consulting
 
     - name: Checkout TenantService provider
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         repository: OpenResilienceInitiative/ORISO-TenantService
         ref: ${{ github.event_name == 'pull_request' && 'a213d5546e2cdbcbd1f641291661f11cbbca2cfc' || 'pre-dev' }}
         path: .providers/tenant
 
     - name: Checkout UserService provider
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         repository: OpenResilienceInitiative/ORISO-UserService
         ref: ${{ github.event_name == 'pull_request' && 'd205cf89eadd07c7ee4ec72a2f20950a8dc3e628' || 'pre-dev' }}
         path: .providers/user
 
     - name: Set up Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v7
       with:
         node-version: '24'
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version: '1.26.3'
 
@@ -116,7 +116,7 @@ jobs:
 
     - name: Upload immutable provider contracts
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: provider-contracts-${{ github.sha }}
         path: contract-artifacts/
@@ -132,12 +132,12 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         persist-credentials: false
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.13"
 
