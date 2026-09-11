@@ -38,6 +38,7 @@ class AgencyServiceMatrixCredentialsTest {
   @Mock private ApplicationSettingsService applicationSettingsService;
   @Mock private AgencySettingsService agencySettingsService;
   @Mock private AgencyAdminControlsService agencyAdminControlsService;
+  @Mock private de.caritas.cob.agencyservice.api.service.legal.LegalTextInheritanceResolver legalTextInheritanceResolver;
 
   @org.mockito.Spy
   private final de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier

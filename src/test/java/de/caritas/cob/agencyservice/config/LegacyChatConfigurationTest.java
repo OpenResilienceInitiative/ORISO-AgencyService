@@ -30,14 +30,21 @@ class LegacyChatConfigurationTest {
     assertTrue(mainWorkflow.contains("id-token: write"));
     assertTrue(mainWorkflow.contains("attestations: write"));
     assertTrue(
-        mainWorkflow.contains(
-            "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"));
+        buildAction.contains("aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"));
     assertTrue(
         mainWorkflow.contains("actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6"));
-    assertTrue(
-        mainWorkflow.contains(
-            "image-ref: ${{ env.REGISTRY }}/${{ env.ORG }}/oriso-agencyservice@${{ steps.image.outputs.digest }}"));
     assertTrue(mainWorkflow.contains("subject-digest: ${{ steps.image.outputs.digest }}"));
+
+    // The vulnerability scan has to sit ahead of the publish. Scanning after
+    // `push: true` can only redden the run; the image is already in GHCR and the
+    // deploy scripts resolve a tag to a digest without reading workflow results
+    // (OpenResilienceInitiative/ORISO-Docs#88).
+    var scanIndex = buildAction.indexOf("aquasecurity/trivy-action@");
+    var publishIndex = buildAction.indexOf("push: ${{ inputs.push_to_ghcr }}");
+    assertTrue(scanIndex > -1, "the build action must run Trivy");
+    assertTrue(publishIndex > -1, "the build action must publish the image");
+    assertTrue(
+        scanIndex < publishIndex, "Trivy must run before the image is pushed to the registry");
   }
 
   @Test

@@ -175,9 +175,24 @@ paths:
     get:
       tags:
         - agency-controller
-      summary: 'Returns the published legal texts (data privacy policy and imprint) of a
-        department (agency x topic). Draft or never-authored texts are returned as null content -
-        drafts are never exposed to users. [Authorization: none]'
+      summary: >-
+        Returns the legal texts in force for a department (Fachbereich = agency x topic), resolved
+        server-side across all four ADR-021 levels (Fachbereich -> Beratungsstelle -> Träger ->
+        platform operator) and with the server-owned placeholders already substituted.
+
+        Drafts are never exposed: a Fachbereich still drafting falls through to the level above
+        rather than blanking out a legally required document.
+
+        `{{Beratungsstelle}}` and `{{Thema}}` are substituted here; `{{legal_links}}` is left
+        standing on purpose, because the link targets come from the frontend deployment
+        configuration and the backend does not know them (ADR-021 decision 5). Any token that
+        remains is the client's half of the substitution.
+
+        Each text reports the level it was resolved from and, for the levels whose history
+        AgencyService owns, the id of the published version it corresponds to. That version id is
+        what a consuming service pins a recorded consent to (ORISO-UserService
+        `session.consented_legal_version_id`, ADR-022 decision 2).
+        [Authorization: none]
       operationId: getDepartmentLegal
       parameters:
         - name: agencyId
@@ -279,6 +294,24 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        street:
+          type: string
+          example: "Musterstraße"
+        houseNumber:
+          type: string
+          example: "12a"
+        phone:
+          type: string
+          example: "+49 30 1234567"
+        openingHours:
+          type: string
+          example: "Mo-Fr 9-17 Uhr"
+        departments:
+          type: array
+          description: The agency's departments (one per assigned topic) with the publication
+            state of their own legal texts. Optional - older clients can ignore it.
+          items:
+            $ref: '#/components/schemas/AgencyDepartmentDTO'
         settings:
           $ref: '#/components/schemas/Settings'
 
@@ -296,6 +329,10 @@ components:
             external:
               type: boolean
               example: "false"
+            # departments also lives on AgencyResponseDTO now (by-id route needs it).
+            # It is intentionally repeated here: oasdiff compares allOf subschemas
+            # one by one, so dropping it from this subschema reads as a breaking
+            # removal even though the merged schema would be identical.
             departments:
               type: array
               description: The agency's departments (one per assigned topic) with the publication
@@ -312,12 +349,42 @@ components:
           example: 7
         hasPublishedDpp:
           type: boolean
-          description: true if the department has a published data privacy policy of its own
+          description: >-
+            true if a data privacy policy is in force for this department at ALL, resolved across
+            the four ADR-021 levels (Fachbereich -> Beratungsstelle -> Träger -> platform
+            operator) - i.e. exactly when
+            `GET /agencies/{agencyId}/topics/{topicId}/legal` returns dpp content.
+
+            This deliberately differs from the same-named field on the admin
+            `AgencyAdminDepartmentDTO`, which answers "does this department carry a policy of its
+            OWN" for the Fachbereich switcher. Reporting "of its own" here was a defect: a
+            department returned false while /legal served an inherited document, so clients hid a
+            text that existed.
           example: true
         hasPublishedImprint:
           type: boolean
-          description: true if the department has a published imprint of its own
+          description: >-
+            true if an imprint is in force for this department at ALL, resolved across the four
+            ADR-021 levels. Same "in force" vs. "of its own" distinction as hasPublishedDpp.
           example: false
+        openingHours:
+          type: string
+          nullable: true
+          description: Resolved opening hours of the department - its own override when set,
+            otherwise the agency-level opening hours (Fachbereich ?? Beratungsstelle)
+          example: "Di+Do 14-18 Uhr"
+        phoneExtension:
+          type: string
+          nullable: true
+          description: Phone extension (Durchwahl) of the department; null when the department
+            has none (callers use the agency-level phone as-is)
+          example: "-23"
+        floorLocation:
+          type: string
+          nullable: true
+          description: Resolved floor/location detail inside the building - the department's own
+            override when set, otherwise the agency-level floor/building detail
+          example: "3. OG, Raum 312"
 
     DepartmentLegalDTO:
       type: object
@@ -336,8 +403,41 @@ components:
         content:
           type: string
           nullable: true
-          description: Published multilingual content as a JSON language->HTML map string;
-            null when the text is a draft or was never authored (drafts are never exposed)
+          description: >-
+            The wording in force as a JSON language->HTML map string, with the server-owned
+            placeholders already substituted. Null when nothing is authored on any of the four
+            levels. Drafts are never exposed.
+        consentText:
+          type: string
+          nullable: true
+          description: >-
+            The consent sentence stored with the data privacy policy (ADR-021 decision 4), as a
+            JSON language->text map string with `{{Beratungsstelle}}` / `{{Thema}}` substituted and
+            `{{legal_links}}` left for the client. Always null on the imprint, which is an
+            information duty and never a consent gate (decision 7), and null when the Träger
+            authored no sentence — the platform's default then applies.
+
+            The cookie/authentication notice is NOT part of this text: it is a fixed, non-editable
+            addendum the client renders beneath the sentence.
+        sourceLevel:
+          type: string
+          nullable: true
+          description: >-
+            Which rung of the ADR-021 ladder this wording came from. "The privacy policy" without a
+            level is not a valid statement (decision 1), so the level is always reported.
+            NONE = nothing is authored anywhere on the chain.
+          enum: [ DEPARTMENT, AGENCY, TENANT, PLATFORM, NONE ]
+        versionId:
+          type: integer
+          format: int64
+          nullable: true
+          description: >-
+            Id of the `legal_text_version` snapshot this wording corresponds to. Null for the
+            Träger and platform levels, whose history lives in ORISO-TenantService rather than here.
+
+            This is the identifier a consuming service pins a recorded consent to
+            (ORISO-UserService `session.consented_legal_version_id`, ADR-022 decision 2) — without
+            it, "is this room cleared for the version currently in force" cannot be answered.
 
     AgencyTopicsDTO:
       type: object

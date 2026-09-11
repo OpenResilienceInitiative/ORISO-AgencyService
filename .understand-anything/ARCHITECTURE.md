@@ -1,224 +1,143 @@
 # Architecture Notes: ORISO-AgencyService
 
+_Refreshed 2026-08-27 against the current `pre-dev` tip. Supersedes the June 2026 notes (~328 files); the repository now tracks ~511 files (~325 Java sources: 186 main, 139 test)._
+
 ## Purpose
 
-AgencyService provides agency core data, postcode ranges, agency settings, and agency admin APIs for the ORISO Online-Beratung platform.
+AgencyService is the ORISO backend microservice that owns agencies (Beratungsstellen): agency core data, postcode ranges, agency settings and admin controls, agency-level legal texts (data protection, imprint, consent) with versioning, agency ID reservation/allocation, and agency administration APIs for the Admin Panel.
+
+## Stack
+
+- Java 21, Spring Boot parent `4.0.7` (`pom.xml`), Maven Wrapper.
+- Spring Web, Spring Data JPA, Spring Security OAuth2 resource server, Spring HATEOAS, Ehcache, FreeMarker.
+- MariaDB in deployment; H2 for the `testing` profile. Liquibase changelogs are tracked in-repo (`src/main/resources/db/changelog/`) but Liquibase is disabled at runtime (`spring.liquibase.enabled=false`, see `README.md`); schemas are managed via the ORISO-Database repository.
+- OpenAPI-first: server stubs are generated from `api/agencyservice.yaml` and `api/agencyadminservice.yaml` (openapi-generator-maven-plugin 7.17.0); client stubs from the specs under `services/`.
+- OWASP Java HTML Sanitizer for legal-text content sanitization.
+- The old Keycloak Spring adapters are gone from `pom.xml`; auth is plain Spring Security resource-server JWT (only `jboss-logging`, formerly a Keycloak-adapter transitive, is still declared explicitly).
 
 ## Architecture Layers
 
-### Api And Routing
+### API and Routing
 
-HTTP routes, controllers, OpenAPI contracts, authorization boundaries, and service API integration files.
+HTTP controllers implement the generated OpenAPI interfaces; authorization boundaries live beside them.
 
 Key files:
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminController.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminController.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.controller;".
-- `src/main/java/de/caritas/cob/agencyservice/api/authorization/Authority.java` - src/main/java/de/caritas/cob/agencyservice/api/authorization/Authority.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.authorization;".
-- `src/main/java/de/caritas/cob/agencyservice/api/authorization/RoleAuthorizationAuthorityMapper.java` - src/main/java/de/caritas/cob/agencyservice/api/authorization/RoleAuthorizationAuthorityMapper.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.authorization;".
-- `src/main/java/de/caritas/cob/agencyservice/api/controller/AgencyController.java` - src/main/java/de/caritas/cob/agencyservice/api/controller/AgencyController.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/main/java/de/caritas/cob/agencyservice/api/controller/CustomSwaggerUIController.java` - src/main/java/de/caritas/cob/agencyservice/api/controller/CustomSwaggerUIController.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/main/java/de/caritas/cob/agencyservice/api/controller/VersionController.java` - src/main/java/de/caritas/cob/agencyservice/api/controller/VersionController.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerAuthorizationIT.java` - src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerAuthorizationIT.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerTest.java` - src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerTest.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/authorization/AuthorityTest.java` - src/test/java/de/caritas/cob/agencyservice/api/authorization/AuthorityTest.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.authorization;".
-- `src/test/java/de/caritas/cob/agencyservice/api/authorization/RoleAuthorizationAuthorityMapperTest.java` - src/test/java/de/caritas/cob/agencyservice/api/authorization/RoleAuthorizationAuthorityMapperTest.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.authorization;".
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/ActuatorControllerIT.java` - src/test/java/de/caritas/cob/agencyservice/api/controller/ActuatorControllerIT.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerIT.java` - src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerIT.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithDemographicsIT.java` - src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithDemographicsIT.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithTopicsIT.java` - src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithTopicsIT.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerIT.java` - src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerIT.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerTest.java` - src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyControllerTest.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.controller;".
+- `api/agencyservice.yaml` - public/app-facing contract: `/agencies`, `/agencies/by-tenant`, `/agencies/topics`, `/agencies/{agencyIds}`, `/agencies/{agencyId}/topics/{topicId}/legal`, `/agencies/consultingtype/{consultingTypeId}`.
+- `api/agencyadminservice.yaml` - admin contract: agency CRUD and search, `changetype`, postcode ranges, admin `controls`, agency-ID availability/next-free/reservations, legal texts and legal-text versions, per-topic data-protection (`dpp`), imprint, and topic `details` endpoints. Shared schema parts in `api/components/agency-settings.yaml`.
+- `src/main/java/de/caritas/cob/agencyservice/api/controller/AgencyController.java` - public agency read APIs.
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminController.java` - all `/agencyadmin` endpoints.
+- `src/main/java/de/caritas/cob/agencyservice/api/controller/CustomSwaggerUIController.java`, `VersionController.java` - Swagger UI and version info.
+- `src/main/java/de/caritas/cob/agencyservice/api/authorization/Authority.java`, `RoleAuthorizationAuthorityMapper.java` - Keycloak role to Spring authority mapping.
+- `src/main/java/de/caritas/cob/agencyservice/filter/` - `HttpTenantFilter`, `SubdomainExtractor`, `StatelessCsrfFilter`, `CorrelationIdFilter`.
 
 ### Domain Services
 
-Agency administration, agency settings, admin controls, topic enrichment, validation, and application services.
+Agency administration, settings, admin controls, legal texts, ID allocation, topic enrichment, and validation.
 
 Key files:
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminService.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminService.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/AgencyTopicMergeService.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/AgencyTopicMergeService.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/UserAdminService.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/UserAdminService.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminFullResponseDTOBuilder.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminFullResponseDTOBuilder.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearch.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearch.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchService.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchService.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchTenantSupportService.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchTenantSupportService.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencySettingsService.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencySettingsService.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyTopicEnrichmentService.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyTopicEnrichmentService.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionConverter.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionConverter.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionDTOBuilder.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DataProtectionDTOBuilder.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DemographicsConverter.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/DemographicsConverter.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/SearchResult.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/SearchResult.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminAllowedPermissionTogglesSettings.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminAllowedPermissionTogglesSettings.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsConverter.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsConverter.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsFacade.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminControlsFacade.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;".
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/AgencyAdminService.java` - agency create/update/changetype/delete-marking core.
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/` - `AgencyAdminSearchService` (+ `AgencyAdminSearchTenantSupportService`), `AgencySettingsService`, `AgencyTopicEnrichmentService`, `DataProtectionConverter`/`DataProtectionDTOBuilder`, `DemographicsConverter`, `AgencyAdminFullResponseDTOBuilder`.
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/` - `AgencyAdminControlsFacade`, `AgencyAdminControlsService`, converter, and `AgencyAdminAllowedPermissionTogglesSettings` (permission toggles for restricted agency admins).
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/legal/` - legal-text administration: `LegalTextAdminService`, `LegalTextVersionAdminService`/`LegalTextVersionService`, `ConsentTextService`, `DepartmentDataProtectionService`, `DepartmentImprintService`, `LegalAdminAccessGuard`, `LegalContentSanitizer` (OWASP), `LegalTextTokens`.
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/allocation/` - `AgencyIdAllocationService` (next-free ID, availability, reservations).
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/department/` - `DepartmentDetailsService` (per-topic department details).
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencypostcoderange/` - postcode range admin service, transformer, validator.
+- `src/main/java/de/caritas/cob/agencyservice/api/service/` - `AgencyService`/`AgencySearch` (public lookups), `DepartmentLegalService`, `CentralDataProtectionTemplateService`, `TemplateRenderer` (FreeMarker in-memory template rendering), `TopicEnrichmentService`, and HTTP clients `TenantService`, `TopicService`, `ConsultingTypeService`, `ApplicationSettingsService`, `AppointmentService`, `UserAdminService` (under `admin/service/`).
+- `src/main/java/de/caritas/cob/agencyservice/api/service/legal/` - `LegalTextInheritanceResolver` and `PublicLegalTextRenderer`: resolve the effective legal text across levels (`LegalTextLevel`: SHARED, AGENCY, DEPARTMENT) for public delivery.
+- `src/main/java/de/caritas/cob/agencyservice/api/service/matrix/` - `MatrixProvisioningService`, `AgencyMatrixPasswordCipher`, `MatrixConfig`: per-agency Matrix credentials provisioning.
+- `src/main/java/de/caritas/cob/agencyservice/api/workflow/` - `DeleteAgenciesMarkedForDeletionScheduler`, `DeleteAgencyService`, `AgencyPurgeTransaction`: scheduled purge of agencies marked for deletion.
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/validation/` - `AgencyValidator` plus validators (offline, consulting type, postcode-range delete, tenant, update-permission) with the `annotation/` marker package.
+- `src/main/java/de/caritas/cob/agencyservice/api/manager/consultingtype/` - `ConsultingTypeManager`, registration and white-spot settings.
 
-### Data And Persistence
+### Data and Persistence
 
-JPA repositories/entities, Liquibase changelogs, database schema files, and persistence tests.
+JPA entities/repositories with tenant-aware and tenant-unaware variants; Liquibase changelogs mirror the schema.
 
 Key files:
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/TenantAware.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/TenantAware.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/TenantUnaware.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/TenantUnaware.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Agency.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Agency.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepository.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepository.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantAwareRepository.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantAwareRepository.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantUnawareRepository.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantUnawareRepository.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionPlaceHolderType.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionPlaceHolderType.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleContact.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleContact.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleEntity.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleEntity.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Gender.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Gender.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlEntity.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlEntity.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agencyadmincontrol;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlRepository.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlRepository.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agencyadmincontrol;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRange.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRange.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agencypostcoderange;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRangeRepository.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRangeRepository.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agencypostcoderange;".
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencytopic/AgencyTopic.java` - src/main/java/de/caritas/cob/agencyservice/api/repository/agencytopic/AgencyTopic.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agencytopic;".
-- `src/test/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepositoryIT.java` - src/test/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepositoryIT.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.repository.agency;".
+- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/` - `Agency` (incl. settings, data-protection fields, logo, address/contact, opening hours, Matrix credentials), `AgencyRepository`, `AgencyTenantAwareRepository`, `AgencyTenantUnawareRepository`, `DataProtectionResponsibleEntity`/`Contact`, `DataProtectionPlaceHolderType`, `Gender`.
+- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencytopic/AgencyTopic.java` - per-topic assignment incl. legal-text linkage, department, and details.
+- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/` - `AgencyPostcodeRange` + repository.
+- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/` - `AgencyAdminControlEntity` + repository.
+- `src/main/java/de/caritas/cob/agencyservice/api/repository/legaltext/` - `LegalText`, `LegalTextVersion`, `LegalTextKind`, `LegalTextLevel` + repositories.
+- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencyidreservation/` - `AgencyIdReservation` + repository.
+- `src/main/java/de/caritas/cob/agencyservice/api/repository/TenantAware.java`, `TenantUnaware.java` - repository marker interfaces for tenant filtering.
+- `src/main/resources/db/changelog/agencyservice-master.xml` - master changelog including changesets `0001`-`0032` (the former `agencyservice-dev-master.xml` no longer exists).
+- Changesets added since June 2026 include: `0021_agency_topic_legal`, `0022_agency_address_contact`, `0023_agency_topic_department`, `0024_agency_dpo_contact_nullable`, `0025_demo_baseline`, `0026_legal_text`, `0027_agency_legal_text`, `0028_agency_id_reservation`, `0029_agency_opening_hours`, `0030_agency_topic_details`, `0031_legal_text_version`, `0032_legal_consent_text`.
 
 ### Configuration
 
-Runtime, build, package, framework, and environment configuration.
+Key files:
+- `src/main/java/de/caritas/cob/agencyservice/config/SecurityConfig.java` - resource-server security filter chain.
+- `src/main/java/de/caritas/cob/agencyservice/config/AuthenticatedUserConfig.java`, `AppConfig.java`, `CacheManagerConfig.java`, `CorsConfig.java`, `FreeMarkerConfig.java`, `TracingConfig.java`, `ConfigurationValidator.java`, `SortParameterBindingConfig.java`, `SpringFoxConfig.java`.
+- `src/main/java/de/caritas/cob/agencyservice/config/apiclient/` and `config/resttemplate/` - generated-client and RestTemplate wiring for downstream services.
+- `src/main/resources/application.properties` plus `-dev`, `-staging`, `-prod`, `-testing` profiles; `hibernate.properties`, `liquibase.properties`, `logback-spring.xml`, `version.properties`.
+- `api/` and `services/` OpenAPI specs (see below), `pom.xml`, `package.json` (commitlint/standard-version tooling only).
+
+### Deployment and Operations
 
 Key files:
-- `.github/actions/docker-build-push/action.yml` - .github/actions/docker-build-push/action.yml is a config file in ORISO-AgencyService; starts with "name: Reusable Docker Build and Publish steps".
-- `.github/actions/maven-build/action.yml` - .github/actions/maven-build/action.yml is a config file in ORISO-AgencyService; starts with "name: Reusable Maven Build steps".
-- `.mvn/wrapper/maven-wrapper.properties` - .mvn/wrapper/maven-wrapper.properties is a config file in ORISO-AgencyService; starts with "wrapperVersion=3.3.4".
-- `api/agencyadminservice.yaml` - api/agencyadminservice.yaml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `api/agencyservice.yaml` - api/agencyservice.yaml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `google_checks_light.xml` - google_checks_light.xml is a config file in ORISO-AgencyService; starts with "<?xml version='1.0'?>".
-- `package-lock.json` - package-lock.json is a config file in ORISO-AgencyService; starts with "{".
-- `package.json` - package.json is a config file in ORISO-AgencyService; starts with "{".
-- `pom.xml` - pom.xml is a config file in ORISO-AgencyService; starts with "<?xml version='1.0' encoding='UTF-8'?>".
-- `services/applicationsettingsservice.yml` - services/applicationsettingsservice.yml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `services/appointmentService.yaml` - services/appointmentService.yaml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `services/consultingtypeservice.yaml` - services/consultingtypeservice.yaml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `services/tenantservice.yaml` - services/tenantservice.yaml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `services/topicservice.yaml` - services/topicservice.yaml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `services/useradminservice.yaml` - services/useradminservice.yaml is a config file in ORISO-AgencyService; starts with "openapi: 3.0.1".
-- `src/main/resources/application-dev.properties` - src/main/resources/application-dev.properties is a config file in ORISO-AgencyService; starts with "# ---------------- Logging ----------------".
-
-### Deployment And Operations
-
-Docker, CI/CD workflows, reusable GitHub actions, and operational scripts.
-
-Key files:
-- `.github/workflows/ci-feature-branch.yml` - .github/workflows/ci-feature-branch.yml is a pipeline file in ORISO-AgencyService; starts with "name: CI - Feature Branch".
-- `.github/workflows/ci-main.yml` - .github/workflows/ci-main.yml is a pipeline file in ORISO-AgencyService; starts with "name: CI - Main".
-- `.github/workflows/ci-pull-request.yml` - .github/workflows/ci-pull-request.yml is a pipeline file in ORISO-AgencyService; starts with "name: CI - Pull Request".
-- `Dockerfile` - Dockerfile is a infra file in ORISO-AgencyService; starts with "FROM eclipse-temurin:21-jre".
+- `.github/workflows/ci-pull-request.yml`, `ci-feature-branch.yml`, `ci-main.yml` - Maven build/test pipelines (Java 21).
+- `.github/workflows/openapi-contracts.yml` - OpenAPI contract gate (Redocly lint + oasdiff breaking-change check) on PRs and `pre-dev` pushes.
+- `.github/workflows/release-image.yml` - builds/publishes `ghcr.io/openresilienceinitiative/oriso-agencyservice` from `release/agencyservice-*` branches.
+- `.github/actions/maven-build/`, `.github/actions/docker-build-push/` - reusable steps.
+- `Dockerfile` - digest-pinned `eclipse-temurin:21-jre`, exposes port 8084.
+- `scripts/ci/` (coverage summary, required-IT runner, test-report guard) and `scripts/contracts/` (provider/consumer contract publish/verify), with matching Python tests under `tests/ci/` and `tests/contracts/`.
+- `run-trivy.sh`, `check-version.sh`, `deploy-development.sh`, `run-local-remote-db.sh`.
 
 ### Documentation
 
-Human-facing repository documentation and architecture notes.
-
-Key files:
-- `CHANGELOG.md` - CHANGELOG.md is a docs file in ORISO-AgencyService; starts with "# Changelog".
-- `README.md` - README.md is a docs file in ORISO-AgencyService; starts with "# ORISO AgencyService".
-- `readme.md` - readme.md is a docs file in ORISO-AgencyService; starts with "# Caritas Online-Beratung AgencyService".
-
-### Application Core
-
-Application entry point, shared utilities, exceptions, tenant resolution, and supporting code.
-
-Key files:
-- `.gitignore` - .gitignore is a code file in ORISO-AgencyService; starts with "/target/".
-- `.swagger-codegen-ignore` - .swagger-codegen-ignore is a code file in ORISO-AgencyService; starts with "# Swagger Codegen Ignore".
-- `LICENSE` - LICENSE is a code file in ORISO-AgencyService; starts with "GNU AFFERO GENERAL PUBLIC LICENSE".
-- `check-version.sh` - check-version.sh is a script file in ORISO-AgencyService; starts with "#!/bin/bash".
-- `commitlint.config.js` - commitlint.config.js is a code file in ORISO-AgencyService; starts with "module.exports = { extends: ['@commitlint/config-conventional'] };".
-- `deploy-development.sh` - deploy-development.sh is a script file in ORISO-AgencyService; starts with "#!/bin/bash".
-- `docker-build.cmd` - docker-build.cmd is a script file in ORISO-AgencyService; starts with "docker build --no-cache -t cob/agencyservice:development .".
-- `mvnw` - mvnw is a code file in ORISO-AgencyService; starts with "#!/bin/sh".
-- `mvnw.cmd` - mvnw.cmd is a script file in ORISO-AgencyService; starts with "<# : batch portion".
-- `run-trivy.sh` - run-trivy.sh is a script file in ORISO-AgencyService; starts with "rm report*.sarif".
-- `src/main/java/de/caritas/cob/agencyservice/AgencyServiceApplication.java` - src/main/java/de/caritas/cob/agencyservice/AgencyServiceApplication.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice;".
-- `src/main/java/de/caritas/cob/agencyservice/api/ApiDefaultResponseEntityExceptionHandler.java` - src/main/java/de/caritas/cob/agencyservice/api/ApiDefaultResponseEntityExceptionHandler.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api;".
-- `src/main/java/de/caritas/cob/agencyservice/api/ApiResponseEntityExceptionHandler.java` - src/main/java/de/caritas/cob/agencyservice/api/ApiResponseEntityExceptionHandler.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/AgencyLinksBuilder.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/AgencyLinksBuilder.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.hallink;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/HalLinkBuilder.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/HalLinkBuilder.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.hallink;".
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/RootDTOBuilder.java` - src/main/java/de/caritas/cob/agencyservice/api/admin/hallink/RootDTOBuilder.java is a code file in ORISO-AgencyService; starts with "package de.caritas.cob.agencyservice.api.admin.hallink;".
-
+- `README.md` - run/config notes (port 8084, Liquibase disabled at runtime, MariaDB, Keycloak realm settings).
+- `AGENTS.md` - agent working rules (build commands, `pre-dev` integration branch, no self-merge).
+- `CHANGELOG.md`, `documentation/AgencyService-Architektur.graphml|png`.
 
 ## Major Flows
 
-- Entry and boot flow: `src/main/java/de/caritas/cob/agencyservice/AgencyServiceApplication.java`, `pom.xml`, and Spring Boot configuration.
-- Agency admin API flow: `api/agencyadminservice.yaml`, `AgencyAdminController`, `AgencyAdminService`, agency settings service, and agency admin controls facade/service/converter classes.
-- Persistence flow: JPA entities and repositories under `api/repository` connect to Liquibase changesets under `src/main/resources/db/changelog`.
-- Tenant and auth flow: Spring Security resource-server configuration, authority mapping, authenticated user configuration, and tenant resolver services guard API boundaries.
-- Deployment flow: GitHub Actions workflows build/test the Maven service and Dockerfile packages the runnable service.
+- Boot flow: `src/main/java/de/caritas/cob/agencyservice/AgencyServiceApplication.java` + Spring Boot auto-config; `filter/` servlet filters run before the security chain.
+- Public agency flow: `api/agencyservice.yaml` -> `AgencyController` -> `AgencyService`/`AgencySearch` -> tenant-aware repositories; postcode-range matching and white-spot fallback via `ConsultingTypeManager`.
+- Admin flow: `api/agencyadminservice.yaml` -> `AgencyAdminController` -> `AgencyAdminService`, `AgencySettingsService`, `AgencyAdminControlsFacade`, `AgencyIdAllocationService`, legal admin services -> repositories; HAL links via `api/admin/hallink/`.
+- Legal-text flow: admin services persist `LegalText`/`LegalTextVersion` per level and kind; `LegalTextInheritanceResolver` + `PublicLegalTextRenderer` resolve and render the effective text (with token substitution) for public endpoints such as `/agencies/{agencyId}/topics/{topicId}/legal`.
+- Tenant and auth flow: JWT resource server (`SecurityConfig`) -> `RoleAuthorizationAuthorityMapper`; tenant resolved by `TenantResolverService` chaining `AccessTokenTenantResolver`, `SubdomainTenantResolver`, `CustomHeaderTenantResolver`, `MultitenancyWithSingleDomainTenantResolver`, `TechnicalUserTenantResolver`; enforced in persistence via `TenantContext`, `TenantAspect`, and `TenantHibernateInterceptor`.
+- Deletion flow: agencies marked for deletion are purged by `DeleteAgenciesMarkedForDeletionScheduler` -> `DeleteAgencyService` -> `AgencyPurgeTransaction`.
+- Deployment flow: GitHub Actions build and contract-gate the service; release branches publish the GHCR image; ORISO-Helm deploys it.
 
-## API And Service Dependencies
+## API and Service Dependencies
 
-- `api/agencyadminservice.yaml` - config, yaml
-- `api/agencyservice.yaml` - config, yaml
-- `services/applicationsettingsservice.yml` - config, yaml
-- `services/appointmentService.yaml` - config, yaml
-- `services/consultingtypeservice.yaml` - config, yaml
-- `services/tenantservice.yaml` - config, yaml
-- `services/topicservice.yaml` - config, yaml
-- `services/useradminservice.yaml` - config, yaml
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminController.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/controller/AgencyController.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/controller/CustomSwaggerUIController.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/controller/VersionController.java` - code, java
-- `src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerAuthorizationIT.java` - code, java
-- `src/test/java/de/caritas/cob/agencyservice/api/admin/controller/AgencyAdminControllerTest.java` - code, java
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/ActuatorControllerIT.java` - code, java
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerIT.java` - code, java
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithDemographicsIT.java` - code, java
-- `src/test/java/de/caritas/cob/agencyservice/api/controller/AgencyAdminControllerWithTopicsIT.java` - code, java
+Server contracts (this service provides):
+- `api/agencyservice.yaml` - public agency API.
+- `api/agencyadminservice.yaml` (+ `api/components/agency-settings.yaml`) - admin API.
+
+Client contracts (this service consumes, generated from `services/`):
+- `services/tenantservice.yaml` - tenant lookup for multitenancy.
+- `services/topicservice.yaml` - topic data for `TopicEnrichmentService`/`AgencyTopicEnrichmentService`.
+- `services/consultingtypeservice.yaml` - consulting-type settings for registration/white-spot logic.
+- `services/applicationsettingsservice.yml` - platform application settings.
+- `services/useradminservice.yaml` - consultant/agency-admin data via `UserAdminService`.
+- `services/appointmentService.yaml` - appointment-service integration.
 
 ## Authentication Relationship
 
-- `services/tenantservice.yaml` - config, yaml
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agency/AgencyAdminSearchTenantSupportService.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/agencyadmincontrol/AgencyAdminAllowedPermissionTogglesSettings.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyTenantValidator.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyUpdatePermissionValidator.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/authorization/Authority.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/authorization/RoleAuthorizationAuthorityMapper.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/exception/KeycloakException.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/TenantAware.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/TenantUnaware.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantAwareRepository.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantUnawareRepository.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/service/TenantHeaderSupplier.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/service/TenantHibernateInterceptor.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/service/TenantService.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/service/securityheader/SecurityHeaderSupplier.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/tenant/AccessTokenTenantResolver.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/tenant/CustomHeaderTenantResolver.java` - code, java
+- `src/main/java/de/caritas/cob/agencyservice/config/SecurityConfig.java`, `AuthenticatedUserConfig.java`
+- `src/main/java/de/caritas/cob/agencyservice/config/security/` - `JwtAuthConverter` (+ properties), `AuthorisationService`, `KeycloakLogoutHandler`
+- `src/main/java/de/caritas/cob/agencyservice/api/authorization/Authority.java`, `RoleAuthorizationAuthorityMapper.java`
+- `src/main/java/de/caritas/cob/agencyservice/api/tenant/` - resolver chain, `TenantContext`, `TenantAspect`
+- `src/main/java/de/caritas/cob/agencyservice/filter/HttpTenantFilter.java`, `SubdomainExtractor.java`, `StatelessCsrfFilter.java`
+- `src/main/java/de/caritas/cob/agencyservice/api/service/TenantHeaderSupplier.java`, `TenantHibernateInterceptor.java`, `TenantService.java`, `securityheader/SecurityHeaderSupplier.java`
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/service/legal/LegalAdminAccessGuard.java` - restricts legal administration per role/tenant
+- `src/main/java/de/caritas/cob/agencyservice/api/admin/validation/validators/AgencyTenantValidator.java`, `AgencyUpdatePermissionValidator.java`
 
 ## Database Relationship
 
-- `src/main/java/de/caritas/cob/agencyservice/api/ApiDefaultResponseEntityExceptionHandler.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/ApiResponseEntityExceptionHandler.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/TenantAware.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/TenantUnaware.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Agency.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyRepository.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantAwareRepository.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/AgencyTenantUnawareRepository.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionPlaceHolderType.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleContact.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/DataProtectionResponsibleEntity.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agency/Gender.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlEntity.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencyadmincontrol/AgencyAdminControlRepository.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRange.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencypostcoderange/AgencyPostcodeRangeRepository.java` - code, java
-- `src/main/java/de/caritas/cob/agencyservice/api/repository/agencytopic/AgencyTopic.java` - code, java
-- `src/main/resources/db/changelog/agencyservice-dev-master.xml` - data, xml
+- Entities/repositories under `src/main/java/de/caritas/cob/agencyservice/api/repository/` (agency, agencytopic, agencypostcoderange, agencyadmincontrol, legaltext, agencyidreservation).
+- `src/main/resources/db/changelog/agencyservice-master.xml` with changesets `0001_initsql` through `0032_legal_consent_text` (~75 tracked SQL files).
+- Runtime note: Liquibase is disabled in deployed environments; the changelogs document/develop the schema, execution happens via the ORISO-Database process.
 
 ## Deployment Relationship
 
-- `.github/workflows/ci-feature-branch.yml` - pipeline, yaml
-- `.github/workflows/ci-main.yml` - pipeline, yaml
-- `.github/workflows/ci-pull-request.yml` - pipeline, yaml
-- `Dockerfile` - infra, dockerfile
-- `check-version.sh` - script, shell
-- `deploy-development.sh` - script, shell
-- `docker-build.cmd` - script, batch
-- `mvnw.cmd` - script, batch
-- `run-trivy.sh` - script, shell
+- `.github/workflows/ci-pull-request.yml`, `ci-feature-branch.yml`, `ci-main.yml`, `openapi-contracts.yml`, `release-image.yml`
+- `.github/actions/maven-build/action.yml`, `.github/actions/docker-build-push/action.yml`
+- `Dockerfile` (eclipse-temurin:21-jre, port 8084)
+- `scripts/ci/`, `scripts/contracts/`, `run-trivy.sh`, `check-version.sh`, `deploy-development.sh`
 
 ## ORISO Ecosystem Fit
 
-`ORISO-AgencyService` is one service in the ORISO platform. Locally visible integration contracts show relationships to application settings, appointment, consulting type, tenant, topic, and user admin services.
+`ORISO-AgencyService` is one backend service of the ORISO platform (GitHub org `OpenResilienceInitiative`; lineage: Caritas Online-Beratung AgencyService, AGPL). It is the source of truth for agencies and their legal texts, consumed by the Admin Panel (agency administration screens), the app-layer frontend (agency selection during registration), and UserService (consultant-agency relations). It consumes TenantService, TopicService, ConsultingTypeService, ApplicationSettingsService, UserAdminService, and AppointmentService via generated clients.

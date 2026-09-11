@@ -19,7 +19,7 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
       + "LEFT JOIN agency_postcode_range r ON a.id = r.agency_id "
       + "INNER JOIN agency_topic at ON a.id = at.agency_id "
       + "WHERE (:postcode is NULL OR ((CAST(:postcode AS INT) BETWEEN CAST(SUBSTR(r.postcode_from, 1, :length) AS int) "
-      + "AND CAST(SUBSTR(r.postcode_to, 1, :length) AS int)))) " + "AND a.is_offline = false "
+      + "AND CAST(SUBSTR(r.postcode_to, 1, :length) AS int)))) " + "AND a.is_offline = 0 "
       + "AND (:type is NULL OR a.consulting_type = :type) "
       + "AND at.topic_id = :topicId "
       + AND_WITH_BRACKET
@@ -36,7 +36,7 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
       + "LEFT JOIN agency_postcode_range r ON a.id = r.agency_id "
       + "WHERE "
       + "(:postcode is NULL OR ((CAST(:postcode AS INT) BETWEEN CAST(SUBSTR(r.postcode_from, 1, :length) AS int) "
-      + "AND CAST(SUBSTR(r.postcode_to, 1, :length) AS int)))) " + "AND a.is_offline = false "
+      + "AND CAST(SUBSTR(r.postcode_to, 1, :length) AS int)))) " + "AND a.is_offline = 0 "
       + "AND (:type is NULL OR a.consulting_type = :type) "
       + AND_WITH_BRACKET
       + " (:age IS NULL) OR (a.age_from <= :age)"
@@ -55,7 +55,7 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
   // predicate to attach to instead of widening the INNER JOIN condition.
   String SELECT_ALL_AGENCIES_TOPICS = "SELECT distinct(at.topic_id) FROM agency_topic at "
       + "INNER JOIN agency a ON a.id = at.agency_id "
-      + "WHERE a.is_offline = false AND a.delete_date IS NULL ";
+      + "WHERE a.is_offline = 0 AND a.delete_date IS NULL ";
 
   String GROUP_BY_ORDER_BY = "GROUP BY a.id "
       + "ORDER BY a.postcode DESC";

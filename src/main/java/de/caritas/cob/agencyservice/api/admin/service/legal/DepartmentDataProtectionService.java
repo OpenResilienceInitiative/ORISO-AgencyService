@@ -15,6 +15,8 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -54,6 +56,8 @@ public class DepartmentDataProtectionService {
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
+  private final @NonNull LegalTextVersionService legalTextVersionService;
+  private final @NonNull ConsentTextService consentTextService;
 
   /**
    * Sanitises and stores the department's DPP for the given agency × topic. When {@code publish} is
@@ -64,7 +68,11 @@ public class DepartmentDataProtectionService {
    */
   @Transactional
   public PublicationStatus publishDepartmentDataPrivacy(
-      Long agencyId, Long topicId, Map<String, String> content, boolean publish) {
+      Long agencyId,
+      Long topicId,
+      Map<String, String> content,
+      Map<String, String> consentText,
+      boolean publish) {
     assertRestrictedAdminOwnsAgency(agencyId);
 
     AgencyTopic department =
@@ -75,7 +83,14 @@ public class DepartmentDataProtectionService {
     assertCallerTenantMatches(department.getAgency());
 
     var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
-    var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
+    // ADR-021 decision 2: validated BEFORE anything is written, so a consent text missing the
+    // mandatory token leaves the stored document untouched instead of half-updating it.
+    // "Absent keeps": an Admin build that predates this field must not wipe the Träger's sentence
+    // by publishing a policy body (see ConsentTextService#resolveForUpdate).
+    var sanitizedConsent =
+        consentTextService.resolveForUpdate(department.getConsentText(), consentText, publish);
+    final var wasPublished = department.getPublicationStatus() == PublicationStatus.PUBLISHED;
+    final var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
 
     // ADR-014 amendment 2026-07-28: never write through to the referenced shared object. The 0026
     // backfill merged byte-identical departments onto one row, so writing through would silently
@@ -86,9 +101,27 @@ public class DepartmentDataProtectionService {
       department.setDpp(null);
     }
     department.setContentDpp(sanitizedJson);
+    department.setConsentText(sanitizedConsent);
     department.setPublicationStatus(status);
     department.setUpdateDate(LocalDateTime.now());
     agencyTopicRepository.save(department);
+
+    // ADR-021 decision 3: only a real publish snapshots the wording. A draft-save deliberately
+    // writes no version — that is the #212 distinction update_date could never make.
+    if (publish) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.DEPARTMENT,
+          department.getId(),
+          LegalTextKind.DPP,
+          department.getAgency() == null ? null : department.getAgency().getTenantId(),
+          sanitizedJson,
+          sanitizedConsent);
+    } else if (wasPublished) {
+      // Withdrawing a published policy back to DRAFT is not a new version, but the old one has
+      // stopped applying — leaving it open would have the history claim it is still in force.
+      legalTextVersionService.supersedeCurrent(
+          LegalTextLevel.DEPARTMENT, department.getId(), LegalTextKind.DPP);
+    }
 
     return status;
   }
@@ -112,10 +145,10 @@ public class DepartmentDataProtectionService {
     LegalText referenced = department.getDpp();
     if (referenced != null && !hasPendingDraft(department, referenced)) {
       return new DepartmentDataProtectionView(
-          referenced.getContent(), referenced.getPublicationStatus());
+          referenced.getContent(), referenced.getConsentText(), referenced.getPublicationStatus());
     }
     return new DepartmentDataProtectionView(
-        department.getContentDpp(), department.getPublicationStatus());
+        department.getContentDpp(), department.getConsentText(), department.getPublicationStatus());
   }
 
   /**

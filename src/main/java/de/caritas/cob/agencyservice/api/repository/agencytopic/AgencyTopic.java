@@ -21,6 +21,7 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -60,6 +61,27 @@ public class AgencyTopic {
   @Column(name = "update_date")
   private LocalDateTime updateDate;
 
+  /**
+   * ORISO-Admin#197: override of the agency-level opening hours for this department (Fachbereich).
+   * {@code null} = inherit the Beratungsstelle's opening hours (resolution Fachbereich ?? agency).
+   */
+  @Size(max = 1000)
+  @Column(name = "opening_hours")
+  private String openingHours;
+
+  /** ORISO-Admin#197: the department's phone extension (Durchwahl). {@code null} = none. */
+  @Size(max = 50)
+  @Column(name = "phone_extension")
+  private String phoneExtension;
+
+  /**
+   * ORISO-Admin#197: floor/location detail (Etage/Bereich) of this department inside the building.
+   * {@code null} = inherit the agency-level floor/building detail.
+   */
+  @Size(max = 100)
+  @Column(name = "floor_location")
+  private String floorLocation;
+
   /** This department's (Fachbereich) own data privacy policy (Datenschutzerklärung) text. */
   @Column(name = "content_dpp")
   private String contentDpp;
@@ -68,6 +90,17 @@ public class AgencyTopic {
   @Enumerated(EnumType.STRING)
   @Column(name = "publication_status", nullable = false)
   private PublicationStatus publicationStatus = PublicationStatus.DRAFT;
+
+  /**
+   * ADR-021 decision 4: the consent sentence a help-seeker ticks is a FIELD OF THE DPP, not a legal
+   * text of its own - so it shares {@link #publicationStatus} and the DPP's version history, and
+   * "which consent belonged to which policy" is answered by "the same version".
+   *
+   * <p>JSON language to text map, like {@link #contentDpp}. Tokens use the {@code {{key}}} dialect
+   * and must never pass through Freemarker (ADR-021 decision 6).
+   */
+  @Column(name = "consent_text")
+  private String consentText;
 
   /** This department's (Fachbereich) own imprint (Impressum) text. */
   @Column(name = "content_imprint")

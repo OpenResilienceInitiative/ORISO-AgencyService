@@ -9,19 +9,22 @@ required_tests=(
   AgencyControllerIT
   AgencyControllerAuthorizationIT
   TracingConfigVerificationIT
+  LiquibaseChangelogDriftIT
+  DemoBaselineChangesetIT
 )
 test_selector="$(IFS=,; echo "${required_tests[*]}")"
 
 "${maven_wrapper}" -B -Dtest="${test_selector}" test
 
-report_count=0
+required_reports=()
 for test_name in "${required_tests[@]}"; do
   matches=(target/surefire-reports/TEST-*."${test_name}".xml)
   if [[ ! -e "${matches[0]}" ]]; then
     echo "Required integration test produced no report: ${test_name}" >&2
     exit 1
   fi
-  report_count=$((report_count + ${#matches[@]}))
+  required_reports+=("${matches[@]}")
 done
 
-echo "Required integration contract produced ${report_count} report(s)."
+python3 scripts/ci/verify-test-reports.py "${required_reports[@]}"
+echo "Required integration contract produced ${#required_reports[@]} complete report(s)."

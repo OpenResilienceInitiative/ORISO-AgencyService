@@ -8,9 +8,11 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchSe
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdStepDirection;
+import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
@@ -22,6 +24,7 @@ import de.caritas.cob.agencyservice.api.model.AgencyIdResponseDTO;
 import de.caritas.cob.agencyservice.api.model.CreateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAdminDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAssignmentDTO;
+import de.caritas.cob.agencyservice.api.model.LegalTextVersionDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
@@ -29,6 +32,7 @@ import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyPostcodeRangeResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionContentDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentDetailsDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentImprintContentDTO;
@@ -40,6 +44,8 @@ import de.caritas.cob.agencyservice.api.model.Sort;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.generated.api.admin.controller.AgencyadminApi;
 import io.swagger.annotations.Api;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -59,14 +65,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AgencyAdminController implements AgencyadminApi {
 
+  /** Fixed wire shape for the ADR-021 version timestamps; see {@code formatVersionTimestamp}. */
+  private static final DateTimeFormatter LEGAL_TEXT_VERSION_TIMESTAMP =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
   private final @NonNull AgencyAdminSearchService agencyAdminSearchService;
   private final @NonNull AgencyPostcodeRangeAdminService agencyPostcodeRangeAdminService;
   private final @NonNull AgencyAdminService agencyAdminService;
   private final @NonNull AgencyValidator agencyValidator;
   private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
   private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
+  private final @NonNull DepartmentDetailsService departmentDetailsService;
   private final @NonNull DepartmentImprintService departmentImprintService;
   private final @NonNull LegalTextAdminService legalTextAdminService;
+  private final @NonNull LegalTextVersionAdminService legalTextVersionAdminService;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   /**
@@ -340,6 +352,7 @@ public class AgencyAdminController implements AgencyadminApi {
     var response =
         new DepartmentDataProtectionContentDTO()
             .content(view.content())
+            .consentText(view.consentText())
             .publicationStatus(
                 DepartmentDataProtectionContentDTO.PublicationStatusEnum.fromValue(
                     view.publicationStatus().name()));
@@ -354,6 +367,7 @@ public class AgencyAdminController implements AgencyadminApi {
             agencyId,
             topicId,
             departmentDataProtectionDTO.getContent(),
+            departmentDataProtectionDTO.getConsentText(),
             Boolean.TRUE.equals(departmentDataProtectionDTO.getPublish()));
     var response =
         new DepartmentDataProtectionResponseDTO()
@@ -411,6 +425,56 @@ public class AgencyAdminController implements AgencyadminApi {
   }
 
   /**
+   * Entry point to read a department's (Fachbereich = agency × topic) contact detail overrides
+   * (opening hours, phone extension, floor/location) to prefill the admin form. A {@code null}
+   * member means "inherits from the Beratungsstelle". Same agency/tenant scoping as the
+   * department legal-text endpoints (IDOR guard inside the service).
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @return the stored {@link DepartmentDetailsDTO} overrides
+   */
+  @Override
+  public ResponseEntity<DepartmentDetailsDTO> getDepartmentDetails(Long agencyId, Long topicId) {
+    var view = departmentDetailsService.getDepartmentDetails(agencyId, topicId);
+    return ResponseEntity.ok(toDepartmentDetailsDTO(view));
+  }
+
+  /**
+   * Entry point to store a department's (Fachbereich = agency × topic) contact detail overrides
+   * (ORISO-Admin#197). Only overrides are persisted — a null/blank member clears the override so
+   * the department inherits the Beratungsstelle value again.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId  Topic Id (Fachbereich)
+   * @param departmentDetailsDTO the overrides to store (bean-validated — the generated {@code
+   *     AgencyadminApi} interface declares {@code @Valid @RequestBody}, which Spring honours on
+   *     this override; re-declaring {@code @Valid} here would be an illegal parameter-constraint
+   *     redefinition, HV000151)
+   * @return the stored {@link DepartmentDetailsDTO} overrides after the update
+   */
+  @Override
+  public ResponseEntity<DepartmentDetailsDTO> updateDepartmentDetails(
+      Long agencyId, Long topicId, DepartmentDetailsDTO departmentDetailsDTO) {
+    var view =
+        departmentDetailsService.updateDepartmentDetails(
+            agencyId,
+            topicId,
+            departmentDetailsDTO.getOpeningHours(),
+            departmentDetailsDTO.getPhoneExtension(),
+            departmentDetailsDTO.getFloorLocation());
+    return ResponseEntity.ok(toDepartmentDetailsDTO(view));
+  }
+
+  private DepartmentDetailsDTO toDepartmentDetailsDTO(
+      de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsView view) {
+    return new DepartmentDetailsDTO()
+        .openingHours(view.openingHours())
+        .phoneExtension(view.phoneExtension())
+        .floorLocation(view.floorLocation());
+  }
+
+  /**
    * Lists the caller tenant's shared legal texts of one kind, each with its "used by N
    * departments" count (ADR-014 legal-text library).
    */
@@ -429,6 +493,7 @@ public class AgencyAdminController implements AgencyadminApi {
             LegalTextKind.valueOf(createLegalTextDTO.getKind().getValue()),
             createLegalTextDTO.getLabel(),
             createLegalTextDTO.getContent(),
+            createLegalTextDTO.getConsentText(),
             Boolean.TRUE.equals(createLegalTextDTO.getPublish()));
     return ResponseEntity.ok(toLegalTextAdminDto(view));
   }
@@ -442,6 +507,7 @@ public class AgencyAdminController implements AgencyadminApi {
             legalTextId,
             updateLegalTextDTO.getLabel(),
             updateLegalTextDTO.getContent(),
+            updateLegalTextDTO.getConsentText(),
             // null = preserve the current publication status (see service javadoc)
             updateLegalTextDTO.getPublish());
     return ResponseEntity.ok(toLegalTextAdminDto(view));
@@ -463,6 +529,86 @@ public class AgencyAdminController implements AgencyadminApi {
     return ResponseEntity.noContent().build();
   }
 
+  /**
+   * ADR-021 decision 3: the publication history of one department's DPP or imprint, newest first.
+   * IDOR/tenant guards live in the service.
+   */
+  @Override
+  public ResponseEntity<List<LegalTextVersionDTO>> getDepartmentLegalTextVersions(
+      Long agencyId, Long topicId, String kind) {
+    var views =
+        legalTextVersionAdminService.listDepartmentVersions(
+            agencyId, topicId, parseLegalTextKind(kind));
+    return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
+  }
+
+  /**
+   * ADR-021 decision 3 on the Beratungsstelle level, which has no publication status: every agency
+   * update that changes the stored wording is a publish there.
+   */
+  @Override
+  public ResponseEntity<List<LegalTextVersionDTO>> getAgencyLegalTextVersions(
+      Long agencyId, String kind) {
+    var views =
+        legalTextVersionAdminService.listAgencyVersions(agencyId, parseLegalTextKind(kind));
+    return ResponseEntity.ok(views.stream().map(this::toLegalTextVersionDto).toList());
+  }
+
+  /**
+   * The OpenAPI document constrains {@code kind} to an enum, but the generator emits it as a plain
+   * {@code String}, so nothing rejects a bad value before it reaches us. Left to
+   * {@code LegalTextKind.valueOf}, a typo raises {@link IllegalArgumentException}, which
+   * {@code ApiResponseEntityExceptionHandler} maps to 500 — blaming the server for the caller's
+   * mistake and burying it in the error budget. It is a 400, and the message names what is
+   * accepted so the caller can fix it without reading the spec.
+   */
+  private LegalTextKind parseLegalTextKind(String kind) {
+    try {
+      return LegalTextKind.valueOf(kind);
+    } catch (IllegalArgumentException e) {
+      throw new BadRequestException("kind must be one of DPP, IMPRINT");
+    }
+  }
+
+  /** One archived version, verbatim; authorised against the version's stored owner. */
+  @Override
+  public ResponseEntity<LegalTextVersionDTO> getLegalTextVersion(Long versionId) {
+    return ResponseEntity.ok(
+        toLegalTextVersionDto(legalTextVersionAdminService.getVersion(versionId)));
+  }
+
+  private LegalTextVersionDTO toLegalTextVersionDto(
+      de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionView view) {
+    return new LegalTextVersionDTO()
+        .id(view.id())
+        .kind(LegalTextVersionDTO.KindEnum.fromValue(view.kind().name()))
+        .ownerLevel(LegalTextVersionDTO.OwnerLevelEnum.fromValue(view.ownerLevel().name()))
+        .ownerId(view.ownerId())
+        .content(view.content())
+        .consentText(view.consentText())
+        .publishedAt(formatVersionTimestamp(view.publishedAt()))
+        .publishedBy(view.publishedBy())
+        .supersededAt(formatVersionTimestamp(view.supersededAt()));
+  }
+
+  /**
+   * The version timestamps go on the wire in one fixed shape, always 19 characters.
+   *
+   * <p>{@code LocalDateTime.toString()} drops the seconds when they are zero and appends fractional
+   * seconds when they are not, so the same field arrived as {@code 2026-05-01T09:00} or
+   * {@code 2026-08-16T13:12:08} depending on the value — enough to break a strict parser or any
+   * consumer comparing the strings. {@code published_at}/{@code superseded_at} are MariaDB
+   * {@code datetime} columns with no sub-second precision, so pinning the pattern to whole seconds
+   * discards nothing that survives a round-trip.
+   *
+   * <p>Deliberately a formatted {@code String} and not an OpenAPI {@code format: date-time} field:
+   * these are offset-less {@link LocalDateTime}s, and declaring them as date-time is what broke
+   * ORISO-UserService #872/#874 under the Jackson 3 tightening.
+   */
+  private String formatVersionTimestamp(LocalDateTime timestamp) {
+    return timestamp == null ? null : LEGAL_TEXT_VERSION_TIMESTAMP.format(timestamp);
+  }
+
   private LegalTextAdminDTO toLegalTextAdminDto(
       de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminView view) {
     return new LegalTextAdminDTO()
@@ -470,6 +616,7 @@ public class AgencyAdminController implements AgencyadminApi {
         .kind(LegalTextAdminDTO.KindEnum.fromValue(view.kind().name()))
         .label(view.label())
         .content(view.content())
+        .consentText(view.consentText())
         .publicationStatus(
             LegalTextAdminDTO.PublicationStatusEnum.fromValue(view.publicationStatus().name()))
         .usageCount(view.usageCount());

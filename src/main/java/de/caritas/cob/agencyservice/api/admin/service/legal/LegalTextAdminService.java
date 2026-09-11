@@ -10,6 +10,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicReposi
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextRepository;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
@@ -42,6 +43,8 @@ public class LegalTextAdminService {
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
+  private final @NonNull LegalTextVersionService legalTextVersionService;
+  private final @NonNull ConsentTextService consentTextService;
 
   /**
    * Lists the caller tenant's legal texts of one kind, each with its department usage count.
@@ -65,7 +68,11 @@ public class LegalTextAdminService {
   /** Creates a legal text owned by the caller's tenant (full agency admins only). */
   @Transactional
   public LegalTextAdminView createLegalText(
-      LegalTextKind kind, String label, Map<String, String> content, boolean publish) {
+      LegalTextKind kind,
+      String label,
+      Map<String, String> content,
+      Map<String, String> consentText,
+      boolean publish) {
     assertFullAgencyAdmin();
     assertValidLabel(label);
     var now = LocalDateTime.now();
@@ -75,11 +82,14 @@ public class LegalTextAdminService {
             .kind(kind)
             .label(label)
             .content(legalContentSanitizer.sanitizeToJson(content))
+            .consentText(resolveConsentText(kind, consentText, publish))
             .publicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT)
             .createDate(now)
             .updateDate(now)
             .build();
-    return toView(legalTextRepository.save(text));
+    var saved = legalTextRepository.save(text);
+    recordPublicationIfPublished(saved, publish);
+    return toView(saved);
   }
 
   /**
@@ -89,20 +99,77 @@ public class LegalTextAdminService {
    */
   @Transactional
   public LegalTextAdminView updateLegalText(
-      Long legalTextId, String label, Map<String, String> content, Boolean publish) {
+      Long legalTextId,
+      String label,
+      Map<String, String> content,
+      Map<String, String> consentText,
+      Boolean publish) {
     assertFullAgencyAdmin();
     LegalText text =
         legalTextRepository.findById(legalTextId).orElseThrow(NotFoundException::new);
     assertCallerTenantOwnsText(text);
     assertValidLabel(label);
 
+    // A null publish flag keeps the current status, so the token validator has to be told what the
+    // resulting status will be - otherwise updating an already published text could slip a consent
+    // sentence without {{legal_links}} past the gate.
+    var willBePublished =
+        publish != null ? publish : text.getPublicationStatus() == PublicationStatus.PUBLISHED;
+
+    final var wasPublished = text.getPublicationStatus() == PublicationStatus.PUBLISHED;
+
     text.setLabel(label);
     text.setContent(legalContentSanitizer.sanitizeToJson(content));
+    text.setConsentText(
+        resolveConsentTextForUpdate(text, consentText, willBePublished));
     if (publish != null) {
       text.setPublicationStatus(publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT);
     }
     text.setUpdateDate(LocalDateTime.now());
-    return toView(legalTextRepository.save(text));
+    var saved = legalTextRepository.save(text);
+
+    if (saved.getPublicationStatus() == PublicationStatus.PUBLISHED) {
+      recordPublicationIfPublished(saved, true);
+    } else if (wasPublished) {
+      // Unpublishing is not a new version, but the old one has stopped applying: public resolution
+      // now falls through to another level while the last snapshot would still read as in force.
+      legalTextVersionService.supersedeCurrent(
+          LegalTextLevel.SHARED, saved.getId(), saved.getKind());
+    }
+    return toView(saved);
+  }
+
+  /**
+   * ADR-021 decision 7 plus the "absent keeps" rule: an imprint never carries a consent sentence,
+   * and an update that does not mention the sentence must not delete it. See
+   * {@link ConsentTextService#resolveForUpdate}.
+   */
+  private String resolveConsentTextForUpdate(
+      LegalText text, Map<String, String> consentText, boolean publish) {
+    return text.getKind() == LegalTextKind.DPP
+        ? consentTextService.resolveForUpdate(text.getConsentText(), consentText, publish)
+        : null;
+  }
+
+  /**
+   * ADR-021 decision 3 for the ADR-014 shared objects. A shared text is the document in force for
+   * every department referencing it, so its wording needs the same provable history as an inline
+   * one; leaving it out would mean a Träger loses its evidence precisely by doing the tidy thing
+   * and maintaining one document instead of N copies.
+   *
+   * <p>An update that leaves the text {@code DRAFT} records nothing, and re-saving an unchanged
+   * published wording is deduplicated inside {@link LegalTextVersionService}.
+   */
+  private void recordPublicationIfPublished(LegalText text, boolean published) {
+    if (published) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.SHARED,
+          text.getId(),
+          text.getKind(),
+          text.getTenantId(),
+          text.getContent(),
+          text.getConsentText());
+    }
   }
 
   /**
@@ -172,8 +239,21 @@ public class LegalTextAdminService {
         text.getKind(),
         text.getLabel(),
         text.getContent(),
+        text.getConsentText(),
         text.getPublicationStatus(),
         usage);
+  }
+
+  /**
+   * ADR-021 decision 7: only the DPP is consent-bearing. An imprint is an information duty, so a
+   * consent sentence submitted alongside one is dropped rather than stored — storing it would
+   * create a second, unreachable consent wording that nothing renders and nothing validates.
+   */
+  private String resolveConsentText(
+      LegalTextKind kind, Map<String, String> consentText, boolean publish) {
+    return kind == LegalTextKind.DPP
+        ? consentTextService.sanitizeAndValidate(consentText, publish)
+        : null;
   }
 
   private void assertValidLabel(String label) {

@@ -34,6 +34,8 @@ import de.caritas.cob.agencyservice.api.model.FullAgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.service.DepartmentLegalService;
 import de.caritas.cob.agencyservice.api.service.DepartmentLegalView;
+import de.caritas.cob.agencyservice.api.service.legal.LegalTextSourceLevel;
+import de.caritas.cob.agencyservice.api.service.legal.ResolvedLegalText;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
@@ -360,7 +362,17 @@ class AgencyControllerTest {
 
     when(departmentLegalService.getPublishedDepartmentLegal(7L, 42L))
         .thenReturn(
-            new DepartmentLegalView("{\"de\":\"<p>DSE</p>\"}", "{\"de\":\"<p>Impressum</p>\"}"));
+            new DepartmentLegalView(
+                new ResolvedLegalText(
+                    "{\"de\":\"<p>DSE</p>\"}",
+                    null,
+                    LegalTextSourceLevel.DEPARTMENT,
+                    100L),
+                new ResolvedLegalText(
+                    "{\"de\":\"<p>Impressum</p>\"}",
+                    null,
+                    LegalTextSourceLevel.AGENCY,
+                    null)));
 
     mvc.perform(get("/agencies/7/topics/42/legal").accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
@@ -375,7 +387,7 @@ class AgencyControllerTest {
     // the service resolves drafts/never-authored texts to null - the JSON must carry null, so a
     // draft can never leak through this public endpoint
     when(departmentLegalService.getPublishedDepartmentLegal(7L, 42L))
-        .thenReturn(new DepartmentLegalView(null, null));
+        .thenReturn(new DepartmentLegalView(ResolvedLegalText.none(), ResolvedLegalText.none()));
 
     mvc.perform(get("/agencies/7/topics/42/legal").accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())

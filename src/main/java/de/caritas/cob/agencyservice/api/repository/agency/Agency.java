@@ -107,6 +107,10 @@ public class Agency implements TenantAware {
   @Column(name = "email")
   private String email;
 
+  @Size(max = 1000)
+  @Column(name = "opening_hours")
+  private String openingHours;
+
   @Column(name = "is_team_agency", nullable = false, columnDefinition = "tinyint")
   @Convert(converter = NumericBooleanConverter.class)
   @JdbcTypeCode(Types.TINYINT)
@@ -214,6 +218,13 @@ public class Agency implements TenantAware {
   @Column(name = "content_dpp", columnDefinition = "longtext")
   @JdbcTypeCode(Types.LONGVARCHAR)
   private String contentDpp;
+
+  /**
+   * ADR-021 decision 4: the agency-wide consent sentence, a field of {@link #contentDpp}. This
+   * level carries no publication status - what is stored, applies - so saving it is publishing it.
+   */
+  @Column(name = "consent_text", columnDefinition = "longtext")
+  private String consentText;
 
   /** Agency-wide imprint; see {@link #contentDpp}. */
   @Column(name = "content_imprint", columnDefinition = "longtext")

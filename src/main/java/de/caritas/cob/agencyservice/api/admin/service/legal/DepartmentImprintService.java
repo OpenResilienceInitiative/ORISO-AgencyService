@@ -12,6 +12,8 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -47,6 +49,7 @@ public class DepartmentImprintService {
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull AuthenticatedUser authenticatedUser;
   private final @NonNull UserAdminService userAdminService;
+  private final @NonNull LegalTextVersionService legalTextVersionService;
 
   /**
    * Sanitises and stores the department's imprint for the given agency × topic. When {@code
@@ -68,6 +71,8 @@ public class DepartmentImprintService {
     assertCallerTenantMatches(department.getAgency());
 
     var sanitizedJson = legalContentSanitizer.sanitizeToJson(content);
+    final var wasPublished =
+        department.getPublicationStatusImprint() == PublicationStatus.PUBLISHED;
     var status = publish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
 
     // ADR-014 amendment 2026-07-28: never write through to the referenced shared object. The 0026
@@ -82,6 +87,23 @@ public class DepartmentImprintService {
     department.setPublicationStatusImprint(status);
     department.setUpdateDate(LocalDateTime.now());
     agencyTopicRepository.save(department);
+
+    // ADR-021 decision 3: the imprint gets the same history as the DPP. It is an information duty,
+    // never a consent gate (decision 7), but "which imprint was reachable when" is still a question
+    // the platform has to be able to answer.
+    if (publish) {
+      legalTextVersionService.recordPublication(
+          LegalTextLevel.DEPARTMENT,
+          department.getId(),
+          LegalTextKind.IMPRINT,
+          department.getAgency() == null ? null : department.getAgency().getTenantId(),
+          sanitizedJson,
+          // An imprint is an information duty, never consent-bearing (ADR-021 decision 7).
+          null);
+    } else if (wasPublished) {
+      legalTextVersionService.supersedeCurrent(
+          LegalTextLevel.DEPARTMENT, department.getId(), LegalTextKind.IMPRINT);
+    }
 
     return status;
   }

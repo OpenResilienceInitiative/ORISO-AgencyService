@@ -1,0 +1,16 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+    <!-- ORISO-Admin#197 / ORISO-AgencyService#242: per-department (Fachbereich = agency x topic)
+         contact detail overrides. A center may run several Fachbereiche at different floors/areas
+         with different hours, so each department may override the Beratungsstelle's opening hours,
+         carry its own phone extension (Durchwahl) and its own floor/location detail (Etage).
+         All nullable: null = inherit the agency-level value (resolution Fachbereich ?? agency). -->
+    <changeSet author="oriso" id="addAgencyTopicDetails">
+        <sqlFile path="db/changelog/changeset/0030_agency_topic_details/addAgencyTopicDetails.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0030_agency_topic_details/addAgencyTopicDetails-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.admin.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
@@ -9,7 +10,9 @@ import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocat
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsFacade;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionView;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
@@ -35,8 +38,10 @@ class AgencyAdminControllerDepartmentDppTest {
   @Mock private AgencyValidator agencyValidator;
   @Mock private AgencyAdminControlsFacade agencyAdminControlsFacade;
   @Mock private DepartmentDataProtectionService departmentDataProtectionService;
+  @Mock private DepartmentDetailsService departmentDetailsService;
   @Mock private DepartmentImprintService departmentImprintService;
   @Mock private LegalTextAdminService legalTextAdminService;
+  @Mock private LegalTextVersionAdminService legalTextVersionAdminService;
   @Mock private AgencyIdAllocationService agencyIdAllocationService;
 
   @InjectMocks private AgencyAdminController controller;
@@ -45,7 +50,7 @@ class AgencyAdminControllerDepartmentDppTest {
   void publishDepartmentDataProtection_Should_delegate_andMapStatusTo200() {
     var body = new DepartmentDataProtectionDTO().content(Map.of("de", "<p>DSE</p>")).publish(true);
     when(departmentDataProtectionService.publishDepartmentDataPrivacy(
-            eq(7L), eq(42L), eq(Map.of("de", "<p>DSE</p>")), eq(true)))
+            eq(7L), eq(42L), eq(Map.of("de", "<p>DSE</p>")), eq(Map.of()), eq(true)))
         .thenReturn(PublicationStatus.PUBLISHED);
 
     var response = controller.publishDepartmentDataProtection(7L, 42L, body);
@@ -61,13 +66,17 @@ class AgencyAdminControllerDepartmentDppTest {
     when(departmentDataProtectionService.getDepartmentDataPrivacy(7L, 42L))
         .thenReturn(
             new DepartmentDataProtectionView(
-                "{\"de\":\"<p>x</p>\"}", PublicationStatus.PUBLISHED));
+                "{\"de\":\"<p>x</p>\"}",
+                "{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}",
+                PublicationStatus.PUBLISHED));
 
     var response = controller.getDepartmentDataProtection(7L, 42L);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().getContent()).isEqualTo("{\"de\":\"<p>x</p>\"}");
+    // ADR-021 decision 4: the consent sentence is read back through the policy, not separately.
+    assertThat(response.getBody().getConsentText()).contains("{{legal_links}}");
     assertThat(response.getBody().getPublicationStatus())
         .isEqualTo(DepartmentDataProtectionContentDTO.PublicationStatusEnum.PUBLISHED);
   }
@@ -77,7 +86,7 @@ class AgencyAdminControllerDepartmentDppTest {
     // publish flag omitted -> Boolean null -> service receives false (draft-save)
     var body = new DepartmentDataProtectionDTO().content(Map.of("de", "<p>Entwurf</p>"));
     when(departmentDataProtectionService.publishDepartmentDataPrivacy(
-            eq(7L), eq(42L), eq(Map.of("de", "<p>Entwurf</p>")), eq(false)))
+            eq(7L), eq(42L), eq(Map.of("de", "<p>Entwurf</p>")), eq(Map.of()), eq(false)))
         .thenReturn(PublicationStatus.DRAFT);
 
     var response = controller.publishDepartmentDataProtection(7L, 42L, body);

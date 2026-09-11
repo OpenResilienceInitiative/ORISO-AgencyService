@@ -58,6 +58,14 @@ public class LegalText {
   @Column(name = "content")
   private String content;
 
+  /**
+   * ADR-021 decision 4: the consent sentence belonging to this text, when it is a DPP. Shares this
+   * object's {@link #publicationStatus} and version history — one document, one history.
+   * {@code null} for imprints, which are never consent-bearing (ADR-021 decision 7).
+   */
+  @Column(name = "consent_text")
+  private String consentText;
+
   @Builder.Default
   @Enumerated(EnumType.STRING)
   @Column(name = "publication_status", nullable = false)

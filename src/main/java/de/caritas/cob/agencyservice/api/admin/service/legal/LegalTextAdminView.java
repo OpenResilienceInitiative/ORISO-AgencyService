@@ -12,5 +12,6 @@ public record LegalTextAdminView(
     LegalTextKind kind,
     String label,
     String content,
+    String consentText,
     PublicationStatus publicationStatus,
     long usageCount) {}

@@ -6,6 +6,7 @@ import static de.caritas.cob.agencyservice.testHelper.TestConstants.INVALID_CONS
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.INVALID_POSTCODE;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.VALID_POSTCODE;
 import static java.util.Collections.singletonList;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -22,10 +23,14 @@ import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
+import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.WhiteSpotDTO;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.model.ConsultantAdminResponseDTO;
 import org.jeasy.random.EasyRandom;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +41,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.junit4.SpringRunner;
 
 @RunWith(SpringRunner.class)
@@ -43,6 +49,10 @@ import org.springframework.test.context.junit4.SpringRunner;
 @TestPropertySource(properties = "spring.profiles.active=testing")
 @AutoConfigureTestDatabase(replace = Replace.ANY)
 @DirtiesContext(classMode = ClassMode.BEFORE_CLASS)
+// The four update-path tests validate an EXISTING agency, so the validator has to be able to load
+// it. Without the seed every one of them dies in AgencyValidator.fromUpdateAgencyDto with
+// "Agency with id 1 not found!" and never reaches the rule it is meant to exercise (#208).
+@Sql(scripts = "/database/AgencyDatabase.sql")
 public class AgencyValidatorIT {
 
   @Autowired
@@ -56,6 +66,21 @@ public class AgencyValidatorIT {
 
   @MockitoBean
   private AuthenticatedUser authenticatedUser;
+
+  /**
+   * The update path runs AgencyDataProtectionValidator, which asks the TenantService whether the
+   * central data-protection template is enabled. Unmocked that is a live call to localhost:8089
+   * and every update test dies with a 400 before reaching its own rule (same cause as #205).
+   */
+  @MockitoBean
+  private TenantService tenantService;
+
+  @Before
+  public void setupTenantSettings() {
+    when(tenantService.getRestrictedTenantDataByTenantId(any()))
+        .thenReturn(new RestrictedTenantDTO()
+            .settings(new Settings().featureCentralDataProtectionTemplateEnabled(false)));
+  }
 
   @Test(expected = InvalidPostcodeException.class)
   public void validate_Should_ThrowInvalidPostcodeException_WhenCreateAndAgencyPostcodeIsInvalid() {

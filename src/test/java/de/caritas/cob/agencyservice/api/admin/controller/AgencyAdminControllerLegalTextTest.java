@@ -11,7 +11,9 @@ import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocat
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsFacade;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminView;
@@ -41,8 +43,10 @@ class AgencyAdminControllerLegalTextTest {
   @Mock private AgencyValidator agencyValidator;
   @Mock private AgencyAdminControlsFacade agencyAdminControlsFacade;
   @Mock private DepartmentDataProtectionService departmentDataProtectionService;
+  @Mock private DepartmentDetailsService departmentDetailsService;
   @Mock private DepartmentImprintService departmentImprintService;
   @Mock private LegalTextAdminService legalTextAdminService;
+  @Mock private LegalTextVersionAdminService legalTextVersionAdminService;
   @Mock private AgencyIdAllocationService agencyIdAllocationService;
 
   @InjectMocks private AgencyAdminController controller;
@@ -53,6 +57,7 @@ class AgencyAdminControllerLegalTextTest {
         LegalTextKind.DPP,
         "Standard-DSE",
         "{\"de\":\"<p>x</p>\"}",
+        "{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}",
         PublicationStatus.PUBLISHED,
         usage);
   }
@@ -78,7 +83,11 @@ class AgencyAdminControllerLegalTextTest {
   @Test
   void createLegalText_Should_delegateWithPublishFlag() {
     when(legalTextAdminService.createLegalText(
-            eq(LegalTextKind.DPP), eq("Neu"), eq(Map.of("de", "<p>x</p>")), eq(true)))
+            eq(LegalTextKind.DPP),
+            eq("Neu"),
+            eq(Map.of("de", "<p>x</p>")),
+            eq(Map.of()),
+            eq(true)))
         .thenReturn(view(2L, 0L));
 
     var body =
@@ -97,7 +106,7 @@ class AgencyAdminControllerLegalTextTest {
   void updateLegalText_Should_passNullPublish_ToPreserveCurrentStatus() {
     // omitted publish flag = keep the current publication status (review regression)
     when(legalTextAdminService.updateLegalText(
-            eq(1L), eq("Umbenannt"), eq(Map.of("de", "<p>y</p>")), isNull()))
+            eq(1L), eq("Umbenannt"), eq(Map.of("de", "<p>y</p>")), eq(Map.of()), isNull()))
         .thenReturn(view(1L, 2L));
 
     var body =
@@ -111,7 +120,7 @@ class AgencyAdminControllerLegalTextTest {
   @Test
   void updateLegalText_Should_passExplicitPublishFlag() {
     when(legalTextAdminService.updateLegalText(
-            eq(1L), eq("Umbenannt"), eq(Map.of("de", "<p>y</p>")), eq(Boolean.TRUE)))
+            eq(1L), eq("Umbenannt"), eq(Map.of("de", "<p>y</p>")), eq(Map.of()), eq(Boolean.TRUE)))
         .thenReturn(view(1L, 2L));
 
     var body =

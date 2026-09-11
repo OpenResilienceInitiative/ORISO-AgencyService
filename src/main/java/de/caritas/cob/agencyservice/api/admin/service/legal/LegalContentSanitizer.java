@@ -66,7 +66,8 @@ public class LegalContentSanitizer {
       assertValidMeta(key, safeValue);
       return safeValue;
     }
-    return inputSanitizer.sanitizeAllowingFormattingAndLinks(safeValue);
+    return LegalTextTokens.restoreKnownTokens(
+        inputSanitizer.sanitizeAllowingFormattingAndLinks(safeValue));
   }
 
   /**

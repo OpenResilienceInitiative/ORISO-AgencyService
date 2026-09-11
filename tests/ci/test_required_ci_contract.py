@@ -106,6 +106,33 @@ class RequiredCiContractTest(unittest.TestCase):
         self.assertNotIn("continue-on-error:", action)
         self.assertNotIn("if ! ./mvnw", action)
 
+    def test_blocking_suites_use_the_shared_zero_skip_guard(self):
+        guard = "scripts/ci/verify-test-reports.py"
+        unit_action = (ROOT / ".github/actions/maven-build/action.yml").read_text()
+        required_runner = (ROOT / "scripts/ci/run-required-integration-tests.sh").read_text()
+
+        self.assertIn(guard, unit_action)
+        self.assertIn(guard, required_runner)
+
+    def test_required_runner_owns_the_real_mariadb_contracts(self):
+        required_runner = (ROOT / "scripts/ci/run-required-integration-tests.sh").read_text()
+
+        self.assertIn("LiquibaseChangelogDriftIT", required_runner)
+        self.assertIn("DemoBaselineChangesetIT", required_runner)
+
+    def test_legacy_quarantine_uses_the_guard_but_stays_non_blocking(self):
+        action = (ROOT / ".github/actions/maven-verify-burnin/action.yml").read_text()
+        self.assertIn("scripts/ci/verify-test-reports.py", action)
+
+        for relative_path in (
+            ".github/workflows/ci-pull-request.yml",
+            ".github/workflows/ci-feature-branch.yml",
+            ".github/workflows/ci-main.yml",
+        ):
+            workflow = (ROOT / relative_path).read_text()
+            quarantine = job_block(workflow, "legacy-integration-quarantine")
+            self.assertIn("continue-on-error: true", quarantine)
+
 
 if __name__ == "__main__":
     unittest.main()

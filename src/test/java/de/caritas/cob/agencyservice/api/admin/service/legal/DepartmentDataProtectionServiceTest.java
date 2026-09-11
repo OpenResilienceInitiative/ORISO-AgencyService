@@ -3,6 +3,8 @@ package de.caritas.cob.agencyservice.api.admin.service.legal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -18,6 +20,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicReposi
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
+import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -38,6 +41,9 @@ class DepartmentDataProtectionServiceTest {
   @Mock private AgencyTopicRepository agencyTopicRepository;
   @Mock private AuthenticatedUser authenticatedUser;
   @Mock private UserAdminService userAdminService;
+  @Mock private LegalTextVersionService legalTextVersionService;
+  private final ConsentTextService consentTextService =
+      new ConsentTextService(new LegalContentSanitizer(new InputSanitizer()));
 
   private DepartmentDataProtectionService service;
 
@@ -50,7 +56,9 @@ class DepartmentDataProtectionServiceTest {
             agencyTopicRepository,
             new LegalContentSanitizer(new InputSanitizer()),
             authenticatedUser,
-            userAdminService);
+            userAdminService,
+            legalTextVersionService,
+            consentTextService);
   }
 
   @AfterEach
@@ -104,7 +112,7 @@ class DepartmentDataProtectionServiceTest {
     department.setDpp(referenced);
 
     var status =
-        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>neu</p>"), true);
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>neu</p>"), null, true);
 
     assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
 
@@ -129,7 +137,7 @@ class DepartmentDataProtectionServiceTest {
     department.setDpp(referenced);
 
     var status =
-        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>entwurf</p>"), false);
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>entwurf</p>"), null, false);
 
     assertThat(status).isEqualTo(PublicationStatus.DRAFT);
 
@@ -189,11 +197,9 @@ class DepartmentDataProtectionServiceTest {
     existingDepartment();
 
     var status =
-        service.publishDepartmentDataPrivacy(
-            7L,
+        service.publishDepartmentDataPrivacy(7L,
             42L,
-            Map.of("de", "<p onclick=\"steal()\">Datenschutz <script>bad()</script></p>"),
-            true);
+            Map.of("de", "<p onclick=\"steal()\">Datenschutz <script>bad()</script></p>"), null, true);
 
     // a full admin is never scoped-checked against agency ids
     verifyNoInteractions(userAdminService);
@@ -210,12 +216,123 @@ class DepartmentDataProtectionServiceTest {
   }
 
   @Test
+  void publish_Should_recordAnImmutableVersion_ForTheDepartmentLevel() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+    department.setId(4711L);
+    department.setAgency(Agency.builder().id(7L).name("BS").consultingTypeId(1).tenantId(3L).build());
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>neu</p>"), null, true);
+
+    // ADR-021 decision 3: the snapshot is keyed by the department row, not by the agency, and it
+    // carries the sanitized wording that was actually stored.
+    var content = ArgumentCaptor.forClass(String.class);
+    verify(legalTextVersionService)
+        .recordPublication(
+            eq(LegalTextLevel.DEPARTMENT),
+            eq(4711L),
+            eq(LegalTextKind.DPP),
+            eq(3L),
+            content.capture(), any());
+    assertThat(content.getValue()).contains("neu");
+  }
+
+  @Test
+  void publish_Should_storeTheConsentTextWithThePolicy() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+
+    service.publishDepartmentDataPrivacy(
+        7L,
+        42L,
+        Map.of("de", "<p>DSE</p>"),
+        Map.of("de", "Ich habe die {{legal_links}} gelesen."),
+        true);
+
+    // ADR-021 decision 4: one document, one publication status - the sentence lives on the
+    // department row next to the policy, not as a legal text of its own.
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getConsentText()).contains("{{legal_links}}");
+    assertThat(saved.getValue().getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
+    assertThat(department.getConsentText()).contains("{{legal_links}}");
+  }
+
+  @Test
+  void publish_Should_beRejected_When_theConsentTextLacksTheMandatoryToken() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+
+    assertThatExceptionOfType(BadRequestException.class)
+        .isThrownBy(
+            () ->
+                service.publishDepartmentDataPrivacy(
+                    7L, 42L, Map.of("de", "<p>DSE</p>"), Map.of("de", "Ich stimme zu."), true));
+
+    // Validation runs before anything is written: a rejected publish must leave the stored
+    // document exactly as it was, not half-updated.
+    verify(agencyTopicRepository, never()).save(any());
+    assertThat(department.getContentDpp()).isNull();
+    assertThat(department.getConsentText()).isNull();
+  }
+
+  @Test
+  void publish_Should_keepTheStoredConsentText_When_theFieldIsOmitted() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setConsentText("{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}");
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>neu</p>"), null, true);
+
+    // An Admin build that predates this field publishes a policy body without it; wiping the
+    // Träger's sentence on that request would be a silent legal regression.
+    assertThat(department.getConsentText()).contains("{{legal_links}}");
+  }
+
+  @Test
+  void unpublish_Should_closeTheOpenVersion_ratherThanLeavingItInForce() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setId(4711L);
+    department.setPublicationStatus(PublicationStatus.PUBLISHED);
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>zurueckgezogen</p>"), null, false);
+
+    // Public resolution now falls through to the agency level, so a snapshot still reading as
+    // "in force" would make the history assert the opposite of what help-seekers are shown.
+    verify(legalTextVersionService)
+        .supersedeCurrent(LegalTextLevel.DEPARTMENT, 4711L, LegalTextKind.DPP);
+  }
+
+  @Test
+  void draftSave_Should_notCloseAnything_When_nothingWasPublishedBefore() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    existingDepartment();
+
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>Entwurf</p>"), null, false);
+
+    verifyNoInteractions(legalTextVersionService);
+  }
+
+  @Test
+  void draftSave_Should_storeAnIncompleteConsentText() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    var department = existingDepartment();
+
+    service.publishDepartmentDataPrivacy(
+        7L, 42L, Map.of("de", "<p>Entwurf</p>"), Map.of("de", "Ich bin"), false);
+
+    // The gate is publication, not typing.
+    assertThat(department.getConsentText()).contains("Ich bin");
+  }
+
+  @Test
   void publish_Should_setDraft_When_publishFalse() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     existingDepartment();
 
     var status =
-        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>Entwurf</p>"), false);
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>Entwurf</p>"), null, false);
 
     assertThat(status).isEqualTo(PublicationStatus.DRAFT);
   }
@@ -228,7 +345,7 @@ class DepartmentDataProtectionServiceTest {
     existingDepartment();
 
     var status =
-        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>ok</p>"), true);
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>ok</p>"), null, true);
 
     assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
     verify(agencyTopicRepository).save(any());
@@ -243,7 +360,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(AgencyAccessDeniedException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>x</p>"), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>x</p>"), null, true));
 
     // IDOR guard runs before any load or write
     verify(agencyTopicRepository, never()).findByAgency_IdAndTopicId(any(), any());
@@ -258,7 +375,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(NotFoundException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(7L, 99L, Map.of("de", "<p>x</p>"), true));
+                service.publishDepartmentDataPrivacy(7L, 99L, Map.of("de", "<p>x</p>"), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -305,7 +422,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(AgencyAccessDeniedException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>x</p>"), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>x</p>"), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -316,7 +433,7 @@ class DepartmentDataProtectionServiceTest {
     existingDepartmentInTenant(1L);
 
     var status =
-        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>ok</p>"), true);
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>ok</p>"), null, true);
 
     assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
     verify(agencyTopicRepository).save(any());
@@ -327,9 +444,7 @@ class DepartmentDataProtectionServiceTest {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
 
-    service.publishDepartmentDataPrivacy(
-        7L, 42L, Map.of("de", "<strong>Wichtig</strong> <a href=\"https://caritas.de\">Info</a>"),
-        true);
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<strong>Wichtig</strong> <a href=\"https://caritas.de\">Info</a>"), null, true);
 
     // guards against a regression to the strip-everything sanitize() policy
     var stored = department.getContentDpp();
@@ -342,8 +457,7 @@ class DepartmentDataProtectionServiceTest {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
 
-    service.publishDepartmentDataPrivacy(
-        7L, 42L, Map.of("de", "<p>Datenschutz</p>", "en", "<p>Privacy</p>"), true);
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>Datenschutz</p>", "en", "<p>Privacy</p>"), null, true);
 
     var stored = department.getContentDpp();
     assertThat(stored).contains("\"de\":").contains("Datenschutz");
@@ -355,12 +469,12 @@ class DepartmentDataProtectionServiceTest {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
 
-    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>final</p>"), true);
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>final</p>"), null, true);
     assertThat(department.getPublicationStatus()).isEqualTo(PublicationStatus.PUBLISHED);
 
     // a second call as draft overwrites the content and reverts the status
     var status =
-        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>revised</p>"), false);
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>revised</p>"), null, false);
 
     assertThat(status).isEqualTo(PublicationStatus.DRAFT);
     assertThat(department.getPublicationStatus()).isEqualTo(PublicationStatus.DRAFT);
@@ -372,7 +486,7 @@ class DepartmentDataProtectionServiceTest {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     var department = existingDepartment();
 
-    var status = service.publishDepartmentDataPrivacy(7L, 42L, null, true);
+    var status = service.publishDepartmentDataPrivacy(7L, 42L, null, null, true);
 
     assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
     assertThat(department.getContentDpp()).isEqualTo("{}");
@@ -385,7 +499,7 @@ class DepartmentDataProtectionServiceTest {
     var content = new java.util.HashMap<String, String>();
     content.put("de", null);
 
-    service.publishDepartmentDataPrivacy(7L, 42L, content, true);
+    service.publishDepartmentDataPrivacy(7L, 42L, content, null, true);
 
     assertThat(department.getContentDpp()).isEqualTo("{\"de\":\"\"}");
   }
@@ -399,8 +513,7 @@ class DepartmentDataProtectionServiceTest {
     // passed through verbatim after a strict schema validation instead
     var metaJson = "{\"mt\":true,\"src\":\"de\",\"at\":\"2026-07-04T10:00:00Z\"}";
 
-    service.publishDepartmentDataPrivacy(
-        7L, 42L, Map.of("de", "<p>Datenschutz</p>", "de__meta", metaJson), true);
+    service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de", "<p>Datenschutz</p>", "de__meta", metaJson), null, true);
 
     var stored = department.getContentDpp();
     assertThat(stored).contains("\"de__meta\":");
@@ -415,8 +528,7 @@ class DepartmentDataProtectionServiceTest {
     existingDepartment();
 
     var status =
-        service.publishDepartmentDataPrivacy(
-            7L, 42L, Map.of("de__meta", "{\"mt\":true,\"src\":\"de\",\"at\":\"2026-07-04\"}"), true);
+        service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", "{\"mt\":true,\"src\":\"de\",\"at\":\"2026-07-04\"}"), null, true);
 
     assertThat(status).isEqualTo(PublicationStatus.PUBLISHED);
     verify(agencyTopicRepository).save(any());
@@ -430,8 +542,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(
-                    7L, 42L, Map.of("de__meta", "not-json{"), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", "not-json{"), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -442,7 +553,7 @@ class DepartmentDataProtectionServiceTest {
 
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
-            () -> service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", ""), true));
+            () -> service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", ""), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -454,8 +565,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(
-                    7L, 42L, Map.of("de__meta", "[\"de\",\"en\"]"), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", "[\"de\",\"en\"]"), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -467,8 +577,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(
-                    7L, 42L, Map.of("de__meta", "\"just-a-string\""), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", "\"just-a-string\""), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -480,8 +589,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(
-                    7L, 42L, Map.of("de__meta", "{\"mt\":true,\"unexpected\":\"x\"}"), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", "{\"mt\":true,\"unexpected\":\"x\"}"), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -493,8 +601,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(
-                    7L, 42L, Map.of("de__meta", "{\"mt\":\"true\"}"), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", "{\"mt\":\"true\"}"), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 
@@ -506,8 +613,7 @@ class DepartmentDataProtectionServiceTest {
     assertThatExceptionOfType(BadRequestException.class)
         .isThrownBy(
             () ->
-                service.publishDepartmentDataPrivacy(
-                    7L, 42L, Map.of("de__meta", "{\"src\":\"   \"}"), true));
+                service.publishDepartmentDataPrivacy(7L, 42L, Map.of("de__meta", "{\"src\":\"   \"}"), null, true));
     verify(agencyTopicRepository, never()).save(any());
   }
 }

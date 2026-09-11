@@ -1,0 +1,14 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+    <!-- ADR-021 decision 4: the consent sentence a help-seeker ticks becomes a field of the data
+         protection policy on every level that stores one, plus on the version snapshot. Purely
+         additive and nullable: a Träger that authors none keeps the platform's default sentence. -->
+    <changeSet author="oriso" id="addLegalConsentText">
+        <sqlFile path="db/changelog/changeset/0032_legal_consent_text/addLegalConsentText.sql" stripComments="true"/>
+        <rollback>
+            <sqlFile path="db/changelog/changeset/0032_legal_consent_text/addLegalConsentText-rollback.sql" stripComments="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

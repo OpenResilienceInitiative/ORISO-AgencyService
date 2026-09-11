@@ -38,9 +38,7 @@ public class AgencyDataProtectionValidationService {
 
   private void validateThatDataProtectionDtoExists(ValidateAgencyDTO validateAgencyDto) {
     if (validateAgencyDto.getDataProtectionDTO() == null) {
-      log.warn(
-          "Could not save agency with id {} status. Required fields for data protection officer is empty.",
-          validateAgencyDto.getId());
+      logValidationFailure(validateAgencyDto, HttpStatusExceptionReason.DATA_PROTECTION_DTO_IS_NULL);
       throw new InvalidOfflineStatusException(
           HttpStatusExceptionReason.DATA_PROTECTION_DTO_IS_NULL);
     }
@@ -56,9 +54,8 @@ public class AgencyDataProtectionValidationService {
         validateAgencyDto.getDataProtectionDTO().getDataProtectionResponsibleEntity())
         && areFieldsEmpty(
         validateAgencyDto.getDataProtectionDTO().getDataProtectionOfficerContact())) {
-      log.warn(
-          "Could not save agency with id {}. Required fields for data protection officer is empty.",
-          validateAgencyDto.getId());
+      logValidationFailure(
+          validateAgencyDto, HttpStatusExceptionReason.DATA_PROTECTION_OFFICER_IS_EMPTY);
       throw new InvalidOfflineStatusException(
           HttpStatusExceptionReason.DATA_PROTECTION_OFFICER_IS_EMPTY);
     }
@@ -69,9 +66,8 @@ public class AgencyDataProtectionValidationService {
         validateAgencyDto.getDataProtectionDTO().getDataProtectionResponsibleEntity())
         && areFieldsEmpty(
         validateAgencyDto.getDataProtectionDTO().getAgencyDataProtectionResponsibleContact())) {
-      log.warn(
-          "Could not save agency with id {} status. Required fields for agency responsible is empty.",
-          validateAgencyDto.getId());
+      logValidationFailure(
+          validateAgencyDto, HttpStatusExceptionReason.DATA_PROTECTION_RESPONSIBLE_IS_EMPTY);
       throw new InvalidOfflineStatusException(
           HttpStatusExceptionReason.DATA_PROTECTION_RESPONSIBLE_IS_EMPTY);
     }
@@ -82,12 +78,20 @@ public class AgencyDataProtectionValidationService {
         validateAgencyDto.getDataProtectionDTO().getDataProtectionResponsibleEntity())
         && areFieldsEmpty(validateAgencyDto.getDataProtectionDTO()
         .getAlternativeDataProtectionRepresentativeContact())) {
-      log.warn(
-          "Could not save agency with id {} status. Required fields for alternative responsible is empty.",
-          validateAgencyDto.getId());
+      logValidationFailure(
+          validateAgencyDto,
+          HttpStatusExceptionReason.DATA_PROTECTION_ALTERNATIVE_RESPONSIBLE_IS_EMPTY);
       throw new InvalidOfflineStatusException(
           HttpStatusExceptionReason.DATA_PROTECTION_ALTERNATIVE_RESPONSIBLE_IS_EMPTY);
     }
+  }
+
+  private void logValidationFailure(
+      ValidateAgencyDTO validateAgencyDto, HttpStatusExceptionReason reason) {
+    log.warn(
+        "Agency validation failed: agencyId={}, field=dataProtection, reason={}",
+        validateAgencyDto.getId(),
+        reason);
   }
 
   private boolean areFieldsEmpty(DataProtectionContactDTO dataProtectionOfficerContact) {

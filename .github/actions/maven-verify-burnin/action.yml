@@ -44,22 +44,16 @@ runs:
         echo "::warning::Legacy integration failures are quarantined by #185 until 2026-09-30."
       fi
 
-  - name: Assert test reports were produced (zero-report guard)
+  - name: Reject incomplete legacy test reports
     if: ${{ always() }}
     shell: bash
-    # Guards against a future silent-skip: a green build that produced ZERO test
-    # reports must be treated as a failure, not a pass. Surefire writes both the
-    # unit (**/*Test) and integration (**/*IT) executions into surefire-reports;
-    # failsafe-reports is globbed too in case a module adopts failsafe later.
+    # The shared guard treats zero reports, zero executed tests, failures, errors,
+    # and skips as red. The calling workflow still owns the explicit, time-bounded
+    # continue-on-error quarantine; strict report truth does not make this suite blocking.
     run: |
       shopt -s nullglob globstar
       reports=( **/target/surefire-reports/TEST-*.xml **/target/failsafe-reports/TEST-*.xml )
-      count=${#reports[@]}
-      echo "Found ${count} test report file(s)."
-      if [ "${count}" -eq 0 ]; then
-        echo "::error::Zero test reports were produced — tests were silently skipped or never ran."
-        exit 1
-      fi
+      python3 scripts/ci/verify-test-reports.py "${reports[@]}"
 
   - name: Summarise legacy integration-test results
     if: ${{ always() }}
