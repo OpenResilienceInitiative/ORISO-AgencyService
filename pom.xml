@@ -16,7 +16,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.7</version>
+    <version>4.1.1</version>
     <relativePath/> <!-- lookup parent from repository -->
   </parent>
 
@@ -27,20 +27,20 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <java.version>21</java.version>
-    <openapi.generator.maven.version>7.17.0</openapi.generator.maven.version>
-    <jackson-databind-nullable.version>0.2.3</jackson-databind-nullable.version>
+    <openapi.generator.maven.version>7.25.0</openapi.generator.maven.version>
+    <jackson-databind-nullable.version>0.2.11</jackson-databind-nullable.version>
     <jakarta.ws.rs-api.version>3.1.0</jakarta.ws.rs-api.version>
-    <commons-lang3.version>3.18.0</commons-lang3.version>
-    <liquibase-maven-plugin.version>4.23.2</liquibase-maven-plugin.version>
-    <h2.version>2.2.220</h2.version>
+    <commons-lang3.version>3.20.0</commons-lang3.version>
+    <liquibase-maven-plugin.version>4.33.0</liquibase-maven-plugin.version>
+    <h2.version>2.5.250</h2.version>
     <powermock-module-junit4.version>2.0.9</powermock-module-junit4.version>
     <easy-random-core.version>5.0.0</easy-random-core.version>
     <spring-boot-autoconfigure.version>4.0.7</spring-boot-autoconfigure.version>
-    <liquibase-core.version>4.23.2</liquibase-core.version>
+    <liquibase-core.version>4.33.0</liquibase-core.version>
     <springfox-boot-starter.version>3.0.0</springfox-boot-starter.version>
     <springfox.version>2.9.2</springfox.version>
     <springfox-swagger-ui.version>2.10.0</springfox-swagger-ui.version>
-    <spring-security-oauth2-test-webmvc-addons.version>3.0.1</spring-security-oauth2-test-webmvc-addons.version>
+    <spring-security-oauth2-test-webmvc-addons.version>3.2.1</spring-security-oauth2-test-webmvc-addons.version>
     <httpcore5.version>5.4.3</httpcore5.version>
     <mockito.version>5.20.0</mockito.version>
     <!-- Filled in by jacoco:prepare-agent and consumed by surefire's argLine below.
@@ -52,7 +52,7 @@
     <maven.compiler.target>21</maven.compiler.target>
     <hibernate.search.version>6.1.1.Final</hibernate.search.version>
     <springfox.boot.starter.version>3.0.0</springfox.boot.starter.version>
-    <owasp.java.html.sanitizer>20211018.1</owasp.java.html.sanitizer>
+    <owasp.java.html.sanitizer>20211018.2</owasp.java.html.sanitizer>
   </properties>
 
   <dependencyManagement>
@@ -179,7 +179,7 @@
     <dependency>
       <groupId>net.logstash.logback</groupId>
       <artifactId>logstash-logback-encoder</artifactId>
-      <version>7.0.1</version>
+      <version>7.4</version>
     </dependency>
 
     <!-- OpenApi/Swagger dependencies -->
@@ -197,13 +197,13 @@
     <dependency>
       <groupId>org.codehaus.plexus</groupId>
       <artifactId>plexus-utils</artifactId>
-      <version>3.6.1</version>
+      <version>3.6.2</version>
     </dependency>
     <!-- SpringFox: generate YAML file from POJOs and generate documentation -->
     <dependency>
       <groupId>io.swagger.core.v3</groupId>
       <artifactId>swagger-annotations</artifactId>
-      <version>2.2.15</version>
+      <version>2.2.55</version>
     </dependency>
     <dependency>
       <groupId>io.springfox</groupId>
@@ -223,7 +223,7 @@
     <dependency>
       <groupId>io.swagger.parser.v3</groupId>
       <artifactId>swagger-parser</artifactId>
-      <version>2.1.15</version>
+      <version>2.1.48</version>
     </dependency>
 
     <dependency>
@@ -270,7 +270,7 @@
     <dependency>
       <groupId>com.github.jknack</groupId>
       <artifactId>handlebars</artifactId>
-      <version>4.5.2</version>
+      <version>4.5.4</version>
     </dependency>
 
     <!-- Liquibase -->
@@ -336,12 +336,12 @@
     <dependency>
       <groupId>org.yaml</groupId>
       <artifactId>snakeyaml</artifactId>
-      <version>2.0</version>
+      <version>2.7</version>
     </dependency>
     <dependency>
       <groupId>io.swagger.core.v3</groupId>
       <artifactId>swagger-annotations</artifactId>
-      <version>2.2.15</version>
+      <version>2.2.55</version>
     </dependency>
 
 
@@ -382,7 +382,7 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.13.1</version>
+      <version>4.13.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -400,7 +400,7 @@
     <dependency>
       <groupId>org.wiremock</groupId>
       <artifactId>wiremock-standalone</artifactId>
-      <version>3.3.1</version>
+      <version>3.13.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -666,7 +666,7 @@
       </plugin>
       <plugin>
         <artifactId>maven-antrun-plugin</artifactId>
-        <version>3.1.0</version>
+        <version>3.2.0</version>
         <executions>
           <execution>
             <id>spring-7-openapi-client-compatibility</id>
@@ -698,7 +698,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.3.0</version>
+        <version>3.6.0</version>
         <executions>
           <execution>
             <id>validate</id>
@@ -790,7 +790,7 @@
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.10</version>
+        <version>0.8.15</version>
         <configuration>
           <excludes>
             <exclude>**/*generated*/**</exclude>
