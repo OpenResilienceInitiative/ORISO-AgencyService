@@ -27,6 +27,11 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <java.version>21</java.version>
+    <!-- CVE-2026-65182 / CVE-2026-65905 / CVE-2026-68525: three CRITICAL auth-bypass
+         issues in the Tomcat 11.0.22 that spring-boot 4.0.7 manages; the Trivy publish
+         gate rejects them as fixable. Boot 4.0.8 still only manages 11.0.24, so pin the
+         fixed patch here and drop this once the parent manages >= 11.0.25. -->
+    <tomcat.version>11.0.25</tomcat.version>
     <openapi.generator.maven.version>7.17.0</openapi.generator.maven.version>
     <jackson-databind-nullable.version>0.2.3</jackson-databind-nullable.version>
     <jakarta.ws.rs-api.version>3.1.0</jakarta.ws.rs-api.version>

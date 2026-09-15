@@ -1,0 +1,3 @@
+ALTER TABLE `agencyservice`.`agency`
+  ADD COLUMN IF NOT EXISTS `lat` DOUBLE NULL,
+  ADD COLUMN IF NOT EXISTS `lng` DOUBLE NULL;

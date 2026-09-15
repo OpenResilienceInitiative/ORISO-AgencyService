@@ -93,6 +93,7 @@
        cookie/authentication notice is deliberately NOT stored: it is a fixed addendum the client
        renders, so no Träger can edit away the platform's mandatory disclosure. -->
   <include file="db/changelog/changeset/0032_legal_consent_text/0032_changeSet.xml"/>
+  <include file="db/changelog/changeset/0033_agency_geocoordinates/0033_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB

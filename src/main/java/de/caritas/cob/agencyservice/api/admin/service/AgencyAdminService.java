@@ -240,6 +240,8 @@ public class AgencyAdminService {
         .phoneSecondary(agencyDTO.getPhoneSecondary())
         .email(agencyDTO.getEmail())
         .openingHours(agencyDTO.getOpeningHours())
+        .lat(agencyDTO.getLat())
+        .lng(agencyDTO.getLng())
         .offline(true)
         .teamAgency(agencyDTO.getTeamAgency())
         .consultingTypeId(agencyDTO.getConsultingType())
@@ -435,6 +437,19 @@ public class AgencyAdminService {
   }
 
   /**
+   * Null coordinates on update keep the stored values, same as {@code openingHours}: a partial
+   * payload that never mentions {@code lat}/{@code lng} must not silently drop an agency off the
+   * map (#278). There is no "clear" form yet — coordinates are corrected by sending new ones.
+   */
+  private Double resolveLatForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    return updateAgencyDTO.getLat() != null ? updateAgencyDTO.getLat() : agency.getLat();
+  }
+
+  private Double resolveLngForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    return updateAgencyDTO.getLng() != null ? updateAgencyDTO.getLng() : agency.getLng();
+  }
+
+  /**
    * Null {@code dataProtection} on update keeps the stored contacts. Calling
    * {@link DataProtectionConverter#convertToEntity} with null would nullify them.
    */
@@ -468,6 +483,8 @@ public class AgencyAdminService {
         .phoneSecondary(updateAgencyDTO.getPhoneSecondary())
         .email(updateAgencyDTO.getEmail())
         .openingHours(resolveOpeningHoursForUpdate(agency, updateAgencyDTO))
+        .lat(resolveLatForUpdate(agency, updateAgencyDTO))
+        .lng(resolveLngForUpdate(agency, updateAgencyDTO))
         .offline(resolveOfflineForUpdate(agency, updateAgencyDTO))
         .teamAgency(agency.isTeamAgency())
         .url(updateAgencyDTO.getUrl())

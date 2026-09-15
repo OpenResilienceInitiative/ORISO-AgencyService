@@ -306,6 +306,18 @@ components:
         openingHours:
           type: string
           example: "Mo-Fr 9-17 Uhr"
+        lat:
+          type: number
+          format: double
+          nullable: true
+          description: WGS84 latitude of the agency, null until geocoded
+          example: 52.520008
+        lng:
+          type: number
+          format: double
+          nullable: true
+          description: WGS84 longitude of the agency, null until geocoded
+          example: 13.404954
         departments:
           type: array
           description: The agency's departments (one per assigned topic) with the publication

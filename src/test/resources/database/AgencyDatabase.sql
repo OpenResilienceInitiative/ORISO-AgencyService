@@ -29,6 +29,8 @@ create table AGENCY
     PHONE_SECONDARY varchar(30)   null     default null,
     EMAIL           varchar(255)  null     default null,
     OPENING_HOURS   varchar(1000) null     default null,
+    LAT             double        null     default null,
+    LNG             double        null     default null,
     IS_TEAM_AGENCY  tinyint       not null default 0,
     CONSULTING_TYPE int       null     default 0,
     IS_OFFLINE      tinyint       not null default 0,

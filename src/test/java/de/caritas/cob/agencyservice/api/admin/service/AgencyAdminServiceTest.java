@@ -329,6 +329,74 @@ class AgencyAdminServiceTest {
   }
 
   @Test
+  void createAgency_Should_StoreCoordinates_WhenProvided() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    clearDataProtection(agency);
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setCounsellingRelations(null);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+    agencyDTO.setLat(52.520008);
+    agencyDTO.setLng(13.404954);
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    agencyAdminService.createAgency(agencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals(52.520008, agencyArgumentCaptor.getValue().getLat());
+    assertEquals(13.404954, agencyArgumentCaptor.getValue().getLng());
+  }
+
+  @Test
+  void updateAgency_Should_KeepStoredCoordinates_WhenPayloadOmitsThem() {
+    // Same "absent keeps" contract as openingHours: a partial payload must not
+    // silently drop an agency off the map (#278).
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setLat(52.520008);
+    agency.setLng(13.404954);
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setLat(null);
+    updateAgencyDTO.setLng(null);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals(52.520008, agencyArgumentCaptor.getValue().getLat());
+    assertEquals(13.404954, agencyArgumentCaptor.getValue().getLng());
+  }
+
+  @Test
+  void updateAgency_Should_UpdateCoordinates_WhenPayloadSendsThem() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setLat(52.520008);
+    agency.setLng(13.404954);
+    clearDataProtection(agency);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
+    updateAgencyDTO.setConsultingType(null);
+    updateAgencyDTO.setDataProtection(null);
+    updateAgencyDTO.setLat(48.135125);
+    updateAgencyDTO.setLng(11.581981);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertEquals(48.135125, agencyArgumentCaptor.getValue().getLat());
+    assertEquals(11.581981, agencyArgumentCaptor.getValue().getLng());
+  }
+
+  @Test
   void updateAgency_Should_ClearOpeningHours_WhenPayloadSendsEmptyString() {
     // Absent keeps, empty deletes — without this the field could never be cleared.
     var agency = this.easyRandom.nextObject(Agency.class);
