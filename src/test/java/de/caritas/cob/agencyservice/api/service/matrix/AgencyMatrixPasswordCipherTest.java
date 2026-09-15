@@ -12,6 +12,33 @@ class AgencyMatrixPasswordCipherTest {
       new AgencyMatrixPasswordCipher("test-agency-matrix-encryption-key");
 
   @Test
+  void encryptShouldProtectEveryNonNullValueIncludingBlanks() {
+    for (String plaintext : new String[] {"", " ", "\t"}) {
+      var encrypted = cipher.encrypt(plaintext);
+      assertThat(encrypted).startsWith("enc:").isNotEqualTo(plaintext);
+      assertThat(cipher.decrypt(encrypted)).isEqualTo(plaintext);
+    }
+    assertThat(cipher.encrypt(null)).isNull();
+  }
+
+  @Test
+  void encryptShouldRejectMalformedOrUnknownReservedFormats() {
+    for (String stored : new String[] {"enc:", "enc:not-base64!", "enc:v2:unknown"}) {
+      assertThatThrownBy(() -> cipher.encrypt(stored))
+          .isInstanceOf(InternalServerErrorException.class)
+          .hasMessage("Unable to decrypt agency Matrix password");
+    }
+  }
+
+  @Test
+  void decryptShouldReadAnIndependentLegacyEcbFixture() {
+    // Synthetic fixture produced with OpenSSL AES-128-ECB and the original SHA-1 key derivation.
+    String legacy = "enc:/LKuZWDJI2HQ4f62KunPy8AjrVjQ+O9iIUqW1KLn8lE=";
+    assertThat(cipher.decrypt(legacy)).isEqualTo("legacy-fixture-password");
+    assertThat(cipher.encrypt(legacy)).isEqualTo(legacy);
+  }
+
+  @Test
   void encryptThenDecryptShouldRoundTrip() {
     var encrypted = cipher.encrypt("matrix-secret-password");
     assertThat(encrypted).startsWith("enc:");
