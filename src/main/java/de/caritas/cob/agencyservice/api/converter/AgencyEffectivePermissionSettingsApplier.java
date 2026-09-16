@@ -35,6 +35,14 @@ public class AgencyEffectivePermissionSettingsApplier {
           new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getGroupChat,
               Settings::setFeatureGroupChatV2Enabled),
+          // Group-chat formats (ORISO-AgencyService#293): a toggle stored before the format
+          // toggles existed is unset and follows the legacy groupChat toggle.
+          new ToggleBinding(
+              toggles -> orGroupChat(toggles.getInternalGroupChat(), toggles),
+              Settings::setFeatureInternalGroupChatEnabled),
+          new ToggleBinding(
+              toggles -> orGroupChat(toggles.getSelfHelpGroups(), toggles),
+              Settings::setFeatureSelfHelpGroupsEnabled),
           new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getCalls, Settings::setFeatureCallsEnabled),
           new ToggleBinding(
@@ -152,6 +160,11 @@ public class AgencyEffectivePermissionSettingsApplier {
           new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getMediaAiScanSupervisionChats,
               Settings::setFeatureMediaAiScanSupervisionChatsEnabled));
+
+  private static Boolean orGroupChat(
+      Boolean formatToggle, AgencyAdminAllowedPermissionToggles toggles) {
+    return formatToggle != null ? formatToggle : toggles.getGroupChat();
+  }
 
   public void applyTo(Settings settings, AgencyAdminControls controls) {
     if (settings == null || controls == null) {
