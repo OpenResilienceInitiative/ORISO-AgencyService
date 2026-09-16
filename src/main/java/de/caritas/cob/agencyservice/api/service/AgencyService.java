@@ -8,7 +8,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsServi
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier;
-import de.caritas.cob.agencyservice.api.converter.EffectiveGroupChatFormatsResolver;
+import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
@@ -498,12 +498,12 @@ public class AgencyService {
    * AgencyAdminControlsService#enrichSettingsWithAgencyAdminControls} so the Admin UI can render
    * disabled-not-hidden state.
    *
-   * <p>Group-chat formats are served as effective values: Träger AND Beratungsstelle, a Träger
-   * "off" always wins (ORISO-AgencyService#293) — see {@link EffectiveGroupChatFormatsResolver}.
+   * <p>Feature flags are served as effective values: Träger AND Beratungsstelle, a Träger
+   * "off" always wins (ORISO-AgencyService#293) — see {@link EffectiveAgencySettingsResolver}.
    */
   private Settings buildAgencySettings(Agency agency, RestrictedTenantDTO tenantData) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
-    EffectiveGroupChatFormatsResolver.applyTo(
+    EffectiveAgencySettingsResolver.applyTo(
         settings, tenantData != null ? tenantData.getSettings() : null);
     effectivePermissionSettingsApplier.applyTo(settings, agencyAdminControlsService.getControls());
     return settings;

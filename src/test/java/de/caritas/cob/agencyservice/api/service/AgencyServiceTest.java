@@ -485,6 +485,99 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getAgencies_With_Ids_Should_CascadeEveryCommonFlag_NotOnlyGroupChat() {
+    Agency agency = Agency.builder().id(9L).name("Flanders Beratung").tenantId(14L)
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of());
+    when(agencyRepository.findByIdIn(List.of(9L))).thenReturn(List.of(agency));
+    when(agencySettingsService.toSettings(any()))
+        .thenReturn(new de.caritas.cob.agencyservice.api.model.Settings()
+            .featureCallsEnabled(true)
+            .featureVideoCallsGroupChatsEnabled(false));
+    when(tenantService.getRestrictedTenantDataByTenantId(14L))
+        .thenReturn(new RestrictedTenantDTO().id(14L).settings(
+            new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings()
+                .featureCallsEnabled(false)
+                .featureVideoCallsGroupChatsEnabled(true)
+                .featureMediaAiScanSupervisionChatsEnabled(true)));
+
+    var settings = agencyService.getAgencies(List.of(9L)).get(0).getSettings();
+
+    assertEquals(false, settings.getFeatureCallsEnabled()); // Träger off wins
+    assertEquals(false, settings.getFeatureVideoCallsGroupChatsEnabled()); // agency restricts
+    assertEquals(true, settings.getFeatureMediaAiScanSupervisionChatsEnabled()); // inherited
+  }
+
+  @Test
+  public void getAgencies_With_Ids_Should_TreatGroupChatV2AsMasterOverBothFormats() {
+    Agency agency = Agency.builder().id(9L).name("Flanders Beratung").tenantId(14L)
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    ReflectionTestUtils.setField(agency, "agencyTopics", List.of());
+    when(agencyRepository.findByIdIn(List.of(9L))).thenReturn(List.of(agency));
+    when(agencySettingsService.toSettings(any()))
+        .thenReturn(new de.caritas.cob.agencyservice.api.model.Settings()
+            .featureGroupChatV2Enabled(false)
+            .featureInternalGroupChatEnabled(true)
+            .featureSelfHelpGroupsEnabled(true));
+    when(tenantService.getRestrictedTenantDataByTenantId(14L))
+        .thenReturn(new RestrictedTenantDTO().id(14L).settings(
+            new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings()
+                .featureGroupChatV2Enabled(true)
+                .featureInternalGroupChatEnabled(true)
+                .featureSelfHelpGroupsEnabled(true)));
+
+    var settings = agencyService.getAgencies(List.of(9L)).get(0).getSettings();
+
+    assertEquals(false, settings.getFeatureInternalGroupChatEnabled());
+    assertEquals(false, settings.getFeatureSelfHelpGroupsEnabled());
+  }
+
+  @Test
+  public void getAgencies_With_Ids_Should_ForceBothFormatsOff_When_PlatformDisallowsGroupChatMaster() {
+    when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
+    when(agencySettingsService.toSettings(any()))
+        .thenReturn(new de.caritas.cob.agencyservice.api.model.Settings()
+            .featureInternalGroupChatEnabled(true)
+            .featureSelfHelpGroupsEnabled(true));
+    when(agencyAdminControlsService.getControls())
+        .thenReturn(
+            new AgencyAdminControls()
+                .allowedPermissionToggles(
+                    new AgencyAdminAllowedPermissionToggles()
+                        .groupChat(false)
+                        .internalGroupChat(true)
+                        .selfHelpGroups(true)));
+
+    var settings = agencyService.getAgencies(AGENCY_IDS_LIST).get(0).getSettings();
+
+    assertEquals(false, settings.getFeatureInternalGroupChatEnabled());
+    assertEquals(false, settings.getFeatureSelfHelpGroupsEnabled());
+  }
+
+  @Test
+  public void getAgencies_With_Ids_Should_EnforceOneFormatOn_When_PlatformEnforcesOnlyThatFormat() {
+    when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
+    when(agencySettingsService.toSettings(any()))
+        .thenReturn(new de.caritas.cob.agencyservice.api.model.Settings()
+            .featureInternalGroupChatEnabled(false)
+            .featureSelfHelpGroupsEnabled(false));
+    when(agencyAdminControlsService.getControls())
+        .thenReturn(
+            new AgencyAdminControls()
+                .enforcedPermissionToggles(
+                    // Stored enforced controls default groupChat to false; that must not block
+                    // an explicitly enforced format.
+                    new AgencyAdminAllowedPermissionToggles()
+                        .groupChat(false)
+                        .internalGroupChat(true)));
+
+    var settings = agencyService.getAgencies(AGENCY_IDS_LIST).get(0).getSettings();
+
+    assertEquals(true, settings.getFeatureInternalGroupChatEnabled());
+    assertEquals(false, settings.getFeatureSelfHelpGroupsEnabled());
+  }
+
+  @Test
   public void getAgencies_With_Ids_Should_ServeAgencyValues_When_TenantLookupFails() {
     Agency agency = Agency.builder().id(9L).name("Flanders Beratung").tenantId(14L)
         .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
