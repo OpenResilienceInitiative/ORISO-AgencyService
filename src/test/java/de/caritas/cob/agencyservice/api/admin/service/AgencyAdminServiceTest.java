@@ -10,6 +10,7 @@ import static de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO.Agency
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.AGENCY_ID;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
@@ -54,6 +55,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import java.util.List;
@@ -252,6 +254,30 @@ class AgencyAdminServiceTest {
     // then: save and guard both ran through the shared creation transaction
     verify(agencyCreationTransaction).execute(any());
     verify(agencyIdAllocationService).guardAssignmentAgainstOpenReservations(agency.getId());
+  }
+
+  @Test
+  void
+      createAgency_Should_PersistNullTenantId_When_NoTenantClaimAndNoTenantContext() {
+    // #217: every deployed profile runs with multitenancy.enabled=false, so an admin whose JWT
+    // carries no tenantId claim is a supported, everyday case — not a caller error. Creation
+    // must persist tenant_id = null instead of throwing a bare, unmessaged 500.
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    TenantContext.clear();
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setDataProtectionOfficerContactData(null);
+    clearDataProtection(agency);
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    agencyAdminService.createAgency(agencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertThat(agencyArgumentCaptor.getValue().getTenantId(), is(nullValue()));
   }
 
   @Test
