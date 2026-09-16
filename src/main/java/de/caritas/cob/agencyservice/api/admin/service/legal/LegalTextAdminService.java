@@ -180,7 +180,7 @@ public class LegalTextAdminService {
     if (authenticatedUser.hasRestrictedAgencyPriviliges()) {
       log.warn(
           "Restricted admin user {} may not manage the tenant-wide legal-text library",
-          authenticatedUser.getUserId());
+          authenticatedUser.requireUserId());
       throw new AgencyAccessDeniedException();
     }
   }
@@ -271,7 +271,7 @@ public class LegalTextAdminService {
     if (!effectiveTenantId.equals(text.getTenantId())) {
       log.warn(
           "Admin user {} (tenant {}) may not edit legal text {} (tenant {})",
-          authenticatedUser.getUserId(),
+          authenticatedUser.requireUserId(),
           effectiveTenantId,
           text.getId(),
           text.getTenantId());
@@ -308,7 +308,7 @@ public class LegalTextAdminService {
       if (adminAgencyIds == null || !adminAgencyIds.contains(agencyId)) {
         log.warn(
             "Admin user {} may not assign legal texts of agency {}",
-            authenticatedUser.getUserId(),
+            authenticatedUser.requireUserId(),
             agencyId);
         throw new AgencyAccessDeniedException();
       }
@@ -324,7 +324,7 @@ public class LegalTextAdminService {
     if (agency == null || !effectiveTenantId.equals(agency.getTenantId())) {
       log.warn(
           "Admin user {} (tenant {}) may not assign legal texts of agency {} (tenant {})",
-          authenticatedUser.getUserId(),
+          authenticatedUser.requireUserId(),
           effectiveTenantId,
           agency == null ? null : agency.getId(),
           agency == null ? null : agency.getTenantId());
