@@ -23,47 +23,55 @@ class EffectiveAgencySettingsResolverTest {
       de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings.class;
 
   /**
-   * Every boolean flag present in both the Träger (TenantService) and the agency Settings schema
-   * that has no schema default. Adding a shared flag to either contract must be a conscious
+   * The permission registry: every boolean flag present in both the Träger (TenantService) and
+   * the agency Settings schema, minus {@link #NOT_CASCADED}. Mirrors the TenantService {@code
+   * PermissionFeature} names. Adding a shared flag to either contract must be a conscious
    * decision here as well.
    */
   private static final Set<String> EXPECTED_COMMON_FLAGS =
       Set.of(
-          "featureAnonymousChatEnabled", "featureAppointmentsEnabled",
-          "featureAudioCallsAnonymousChatsEnabled", "featureAudioCallsEnabled",
-          "featureAudioCallsGroupChatsEnabled", "featureAudioCallsOneOnOneChatsEnabled",
-          "featureAudioCallsSupervisionChatsEnabled", "featureCallsEnabled",
-          "featureCentralDataProtectionTemplateEnabled", "featureDemographicsEnabled",
-          "featureGroupChatV2Enabled", "featureInternalGroupChatEnabled",
+          "featureAnonymousChatEnabled", "featureAudioCallsAnonymousChatsEnabled",
+          "featureAudioCallsEnabled", "featureAudioCallsGroupChatsEnabled",
+          "featureAudioCallsOneOnOneChatsEnabled", "featureAudioCallsSupervisionChatsEnabled",
+          "featureCallsEnabled", "featureGroupChatV2Enabled", "featureInternalGroupChatEnabled",
           "featureMediaAiScanAnonymousChatsEnabled", "featureMediaAiScanEnabled",
           "featureMediaAiScanGroupChatsEnabled", "featureMediaAiScanOneOnOneChatsEnabled",
           "featureMediaAiScanSupervisionChatsEnabled",
-          "featureMediaInlineDisplayAnonymousChatsEnabled",
-          "featureMediaInlineDisplayEnabled", "featureMediaInlineDisplayGroupChatsEnabled",
+          "featureMediaInlineDisplayAnonymousChatsEnabled", "featureMediaInlineDisplayEnabled",
+          "featureMediaInlineDisplayGroupChatsEnabled",
           "featureMediaInlineDisplayOneOnOneChatsEnabled",
           "featureMediaInlineDisplaySupervisionChatsEnabled",
-          "featureMediaUploadAnonymousChatsEnabled",
-          "featureMediaUploadEnabled", "featureMediaUploadGroupChatsEnabled",
-          "featureMediaUploadOneOnOneChatsEnabled", "featureMediaUploadSupervisionChatsEnabled",
-          "featureSelfHelpGroupsEnabled", "featureStatisticsEnabled",
+          "featureMediaUploadAnonymousChatsEnabled", "featureMediaUploadEnabled",
+          "featureMediaUploadGroupChatsEnabled", "featureMediaUploadOneOnOneChatsEnabled",
+          "featureMediaUploadSupervisionChatsEnabled", "featureSelfHelpGroupsEnabled",
           "featureSupervisionAnonymousChatsEnabled", "featureSupervisionEnabled",
-          "featureSupervisionOneOnOneChatsEnabled", "featureSystemNotificationEmailsEnabled",
-          "featureThreadsAnonymousChatsEnabled", "featureThreadsEnabled",
-          "featureThreadsGroupChatsEnabled", "featureThreadsOneOnOneEnabled",
-          "featureThreadsSupervisionChatsEnabled", "featureToolsEnabled", "featureTopicsEnabled",
+          "featureSupervisionOneOnOneChatsEnabled", "featureThreadsAnonymousChatsEnabled",
+          "featureThreadsEnabled", "featureThreadsGroupChatsEnabled",
+          "featureThreadsOneOnOneEnabled", "featureThreadsSupervisionChatsEnabled",
           "featureVideoCallsAnonymousChatsEnabled", "featureVideoCallsEnabled",
           "featureVideoCallsGroupChatsEnabled", "featureVideoCallsOneOnOneChatsEnabled",
           "featureVideoCallsSupervisionChatsEnabled", "featureVoiceMessagesAnonymousChatsEnabled",
           "featureVoiceMessagesEnabled", "featureVoiceMessagesGroupChatsEnabled",
-          "featureVoiceMessagesOneOnOneChatsEnabled", "featureVoiceMessagesSupervisionChatsEnabled",
-          "topicsInRegistrationEnabled");
+          "featureVoiceMessagesOneOnOneChatsEnabled",
+          "featureVoiceMessagesSupervisionChatsEnabled");
 
   /**
-   * Shared flags with a schema default of {@code false} on both models. They can never be unset,
-   * so the cascade is not applied to them; they are served as the agency stores them.
+   * Shared flags deliberately not cascaded: the eight operational tenant-level flags (served as
+   * stored, {@code null} stays {@code null}) and the two flags with a schema default of
+   * {@code false} on both models.
    */
-  private static final Set<String> DEFAULTED_FLAGS_NOT_CASCADED =
-      Set.of("isVideoCallAllowed", "showAskerProfile");
+  private static final Set<String> NOT_CASCADED =
+      Set.of(
+          "featureStatisticsEnabled",
+          "featureTopicsEnabled",
+          "topicsInRegistrationEnabled",
+          "featureDemographicsEnabled",
+          "featureAppointmentsEnabled",
+          "featureToolsEnabled",
+          "featureCentralDataProtectionTemplateEnabled",
+          "featureSystemNotificationEmailsEnabled",
+          "showAskerProfile",
+          "isVideoCallAllowed");
 
   // ---------------------------------------------------------------------------------------------
   // Registry coverage: every common flag is resolved, nothing more, nothing less.
@@ -81,23 +89,38 @@ class EffectiveAgencySettingsResolverTest {
         discovered.add(Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
       }
     }
-    discovered.removeAll(DEFAULTED_FLAGS_NOT_CASCADED);
+    discovered.removeAll(NOT_CASCADED);
 
     assertThat(EffectiveAgencySettingsResolver.flagNames())
         .containsExactlyInAnyOrderElementsOf(discovered)
         .containsExactlyInAnyOrderElementsOf(EXPECTED_COMMON_FLAGS)
-        .doesNotContainAnyElementsOf(DEFAULTED_FLAGS_NOT_CASCADED);
+        .doesNotContainAnyElementsOf(NOT_CASCADED);
   }
 
   @Test
-  void applyTo_should_leaveDefaultedFlagsAsTheAgencyStoresThem() {
-    var traeger = newTraeger().isVideoCallAllowed(true).showAskerProfile(true);
-    var agency = new Settings().isVideoCallAllowed(false).showAskerProfile(true);
+  void registry_should_matchTheResolversOwnExclusionList() {
+    assertThat(EffectiveAgencySettingsResolver.NOT_CASCADED)
+        .containsExactlyInAnyOrderElementsOf(NOT_CASCADED);
+  }
 
-    EffectiveAgencySettingsResolver.applyTo(agency, traeger);
+  @Test
+  void applyTo_should_leaveExcludedFlagsAsTheAgencyStoresThem() {
+    // Träger off must NOT win and unset must NOT inherit for excluded flags.
+    for (String flag : NOT_CASCADED) {
+      var traegerOff = newTraeger();
+      var agencyOn = new Settings();
+      set(traegerOff, flag, false);
+      set(agencyOn, flag, true);
+      EffectiveAgencySettingsResolver.applyTo(agencyOn, traegerOff);
+      assertThat(get(agencyOn, flag)).as("%s: served as stored", flag).isTrue();
 
-    assertThat(agency.getIsVideoCallAllowed()).isFalse();
-    assertThat(agency.getShowAskerProfile()).isTrue();
+      var traegerOn = newTraeger();
+      var agencyUnset = new Settings();
+      set(traegerOn, flag, true);
+      set(agencyUnset, flag, null);
+      EffectiveAgencySettingsResolver.applyTo(agencyUnset, traegerOn);
+      assertThat(get(agencyUnset, flag)).as("%s: null stays null", flag).isNull();
+    }
   }
 
   @Test

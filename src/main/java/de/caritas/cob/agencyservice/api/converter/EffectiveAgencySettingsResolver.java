@@ -12,9 +12,10 @@ import java.util.Set;
  * Resolves the effective feature flags a Beratungsstelle serves on the public agency response
  * (ORISO-AgencyService#293, ADR-013): a Beratungsstelle may only restrict what its Träger allows.
  *
- * <p>The same rule applies uniformly to every boolean flag that exists in both the Träger
+ * <p>The same rule applies uniformly to every permission flag that exists in both the Träger
  * (TenantService) settings and the agency settings — the registry is discovered from the two
- * generated models, never hand-written per field:
+ * generated models minus a literal exclusion list ({@link #NOT_CASCADED}), never hand-written
+ * per field:
  *
  * <ul>
  *   <li>Träger "off" always wins;
@@ -32,6 +33,26 @@ import java.util.Set;
 public final class EffectiveAgencySettingsResolver {
 
   private static final String GROUP_CHAT_MASTER = "featureGroupChatV2Enabled";
+
+  /**
+   * Shared flags deliberately NOT cascaded (decision for #293). The eight operational tenant-level
+   * flags are read from the tenant by their consumers; {@code null} on an agency is meaningful
+   * there and stays {@code null}. {@code showAskerProfile} and {@code isVideoCallAllowed} carry a
+   * schema default of {@code false} on both models, so "unset → inherit" cannot be expressed.
+   * All ten are served as the agency stores them.
+   */
+  static final Set<String> NOT_CASCADED =
+      Set.of(
+          "featureStatisticsEnabled",
+          "featureTopicsEnabled",
+          "topicsInRegistrationEnabled",
+          "featureDemographicsEnabled",
+          "featureAppointmentsEnabled",
+          "featureToolsEnabled",
+          "featureCentralDataProtectionTemplateEnabled",
+          "featureSystemNotificationEmailsEnabled",
+          "showAskerProfile",
+          "isVideoCallAllowed");
   private static final Set<String> GROUP_CHAT_FORMATS =
       Set.of("featureInternalGroupChatEnabled", "featureSelfHelpGroupsEnabled");
 
@@ -99,15 +120,12 @@ public final class EffectiveAgencySettingsResolver {
   }
 
   /**
-   * Every getter returning {@code Boolean} that exists on both models, except flags with a schema
-   * default ({@code showAskerProfile}, {@code isVideoCallAllowed}): a fresh instance already holds
-   * {@code false} for them, so "unset → inherit" cannot be expressed and the cascade would only
-   * ever force them off. They keep being served as the agency stores them.
+   * Every getter returning {@code Boolean} that exists on both models, minus {@link #NOT_CASCADED}.
+   * This mirrors the TenantService permission registry ({@code PermissionFeature}); a new shared
+   * flag lands in the cascade unless it is listed there, and the coverage test pins the result.
    */
   private static List<FlagBinding> discoverCommonBooleanFlags() {
     Class<?> traegerClass = de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings.class;
-    var freshTraeger = new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings();
-    var freshAgency = new Settings();
     List<FlagBinding> bindings = new ArrayList<>();
     for (Method agencyGetter : Settings.class.getMethods()) {
       if (!isBooleanGetter(agencyGetter)) {
@@ -119,10 +137,10 @@ public final class EffectiveAgencySettingsResolver {
       if (traegerGetter == null || agencySetter == null) {
         continue;
       }
-      if (read(agencyGetter, freshAgency) != null || read(traegerGetter, freshTraeger) != null) {
+      String name = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
+      if (NOT_CASCADED.contains(name)) {
         continue;
       }
-      String name = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
       bindings.add(new FlagBinding(name, traegerGetter, agencyGetter, agencySetter));
     }
     bindings.sort(Comparator.comparing(FlagBinding::name));
