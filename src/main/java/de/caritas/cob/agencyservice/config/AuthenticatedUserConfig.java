@@ -28,6 +28,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public class AuthenticatedUserConfig {
 
   private static final String CLAIM_NAME_USER_ID = "userId";
+  private static final String CLAIM_NAME_SUBJECT = "sub";
   private static final String CLAIM_NAME_USERNAME = "username";
   private static final String CLAIM_NAME_TENANT_ID = "tenantId";
 
@@ -45,7 +46,7 @@ public class AuthenticatedUserConfig {
     Map<String, Object> claimMap = authenticationToken.getToken().getClaims();
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
-    authenticatedUser.setUserId(getOptionalUserAttribute(claimMap, CLAIM_NAME_USER_ID));
+    authenticatedUser.setUserId(resolveUserId(claimMap));
     authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
     authenticatedUser.setTenantId(getTenantId(claimMap));
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
@@ -79,6 +80,21 @@ public class AuthenticatedUserConfig {
       throw new KeycloakException("Keycloak user attribute '" + claimValue + "' not found.");
     }
     return claimMap.get(claimValue).toString();
+  }
+
+  /**
+   * The domain user id comes from the custom {@code userId} claim. That claim is only present
+   * while the Keycloak user still carries the {@code userId} attribute, and a profile update that
+   * replaced the attribute map (UserService) has been observed to drop it. For every account the
+   * UserService creates, the domain id IS the Keycloak id, so the token subject is an exact
+   * substitute — fall back to it instead of answering 403 to an admin whose claim went missing.
+   */
+  private String resolveUserId(Map<String, Object> claimMap) {
+    var claimed = getOptionalUserAttribute(claimMap, CLAIM_NAME_USER_ID);
+    if (claimed != null && !claimed.isBlank()) {
+      return claimed;
+    }
+    return getOptionalUserAttribute(claimMap, CLAIM_NAME_SUBJECT);
   }
 
   private String getOptionalUserAttribute(Map<String, Object> claimMap, String claimValue) {
