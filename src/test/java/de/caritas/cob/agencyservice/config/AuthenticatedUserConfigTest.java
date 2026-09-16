@@ -38,4 +38,41 @@ public class AuthenticatedUserConfigTest {
     assertThat(authenticatedUser.getUsername()).isEqualTo("platform-admin");
     assertThat(authenticatedUser.isAgencyAdmin()).isTrue();
   }
+
+  @Test
+  public void getAuthenticatedUser_Should_FallBackToSubject_When_UserIdClaimIsMissing() {
+    var jwt = Jwt.withTokenValue("test-token")
+        .header("alg", "none")
+        .subject("8ed43c2c-1f51-4169-a7d9-c75de7eaf830")
+        .claim("username", "agency-admin")
+        .claim("realm_access", Map.of("roles", List.of("restricted-agency-admin")))
+        .build();
+    var request = new MockHttpServletRequest();
+    request.setUserPrincipal(new JwtAuthenticationToken(jwt));
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+    var authenticatedUser = authenticatedUserConfig.getAuthenticatedUser();
+
+    assertThat(authenticatedUser.getUserId()).isEqualTo("8ed43c2c-1f51-4169-a7d9-c75de7eaf830");
+    assertThat(authenticatedUser.requireUserId()).isEqualTo("8ed43c2c-1f51-4169-a7d9-c75de7eaf830");
+    assertThat(authenticatedUser.hasRestrictedAgencyPriviliges()).isTrue();
+  }
+
+  @Test
+  public void getAuthenticatedUser_Should_PreferUserIdClaim_When_Present() {
+    var jwt = Jwt.withTokenValue("test-token")
+        .header("alg", "none")
+        .subject("subject-id")
+        .claim("userId", "domain-id")
+        .claim("username", "agency-admin")
+        .claim("realm_access", Map.of("roles", List.of("restricted-agency-admin")))
+        .build();
+    var request = new MockHttpServletRequest();
+    request.setUserPrincipal(new JwtAuthenticationToken(jwt));
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+    var authenticatedUser = authenticatedUserConfig.getAuthenticatedUser();
+
+    assertThat(authenticatedUser.getUserId()).isEqualTo("domain-id");
+  }
 }
