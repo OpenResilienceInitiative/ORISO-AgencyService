@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.api.admin.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
@@ -16,13 +17,16 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintSer
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionView;
+import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftView;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.model.LegalTextVersionDTO;
+import de.caritas.cob.agencyservice.api.model.SaveAgencyLegalDraftDTO;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +54,47 @@ class AgencyAdminControllerLegalVersionsTest {
   @Mock private LegalTextVersionAdminService legalTextVersionAdminService;
   @Mock private AgencyIdAllocationService agencyIdAllocationService;
 
+  @Mock private de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService agencyLegalDraftService;
+
   @InjectMocks private AgencyAdminController controller;
+
+  @Test
+  void agencyDraftEndpoints_Should_mapContractAndDelegateOpaqueRevision() {
+    var savedAt = LocalDateTime.of(2026, 9, 17, 14, 30, 0);
+    var view =
+        new AgencyLegalDraftView(
+            LegalTextKind.DPP,
+            Map.of("de", "<p>Entwurf</p>"),
+            Map.of("de", "Zustimmung"),
+            "8c65e53a-1e5d-4e72-80da-13323900448c:3",
+            savedAt);
+    when(agencyLegalDraftService.get(7L, LegalTextKind.DPP)).thenReturn(view);
+
+    var get = controller.getAgencyLegalDraft(7L, "DPP");
+
+    assertThat(get.getBody().getRevision()).isEqualTo(view.revision());
+    assertThat(get.getBody().getContent()).containsEntry("de", "<p>Entwurf</p>");
+    assertThat(get.getBody().getSavedAt()).isEqualTo("2026-09-17T14:30:00");
+
+    var request =
+        new SaveAgencyLegalDraftDTO()
+            .content(Map.of("de", "<p>Neu</p>"))
+            .consentText(Map.of("de", "Neu"))
+            .revision(view.revision());
+    when(agencyLegalDraftService.save(
+            7L,
+            LegalTextKind.DPP,
+            request.getContent(),
+            request.getConsentText(),
+            request.getRevision()))
+        .thenReturn(view);
+
+    assertThat(controller.saveAgencyLegalDraft(7L, "DPP", request).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(controller.deleteAgencyLegalDraft(7L, "DPP", view.revision()).getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    verify(agencyLegalDraftService).delete(7L, LegalTextKind.DPP, view.revision());
+  }
 
   private LegalTextVersionView view(LegalTextLevel level, LocalDateTime supersededAt) {
     return view(level, LocalDateTime.of(2026, 5, 1, 9, 0), supersededAt);

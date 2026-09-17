@@ -38,6 +38,8 @@ class AgencyAdminControllerDepartmentDetailsTest {
   @Mock private LegalTextVersionAdminService legalTextVersionAdminService;
   @Mock private AgencyIdAllocationService agencyIdAllocationService;
 
+  @Mock private de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService agencyLegalDraftService;
+
   @InjectMocks private AgencyAdminController controller;
 
   @Test
