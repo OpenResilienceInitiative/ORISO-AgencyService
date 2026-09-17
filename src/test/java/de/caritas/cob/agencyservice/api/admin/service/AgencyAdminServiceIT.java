@@ -82,6 +82,25 @@ public class AgencyAdminServiceIT extends AgencyAdminServiceITBase {
   }
 
   @Test
+  public void saveAgency_Should_ThrowConflictAndKeepReservation_When_ReservationBelongsToAnotherTenant() {
+    // A reservation is tenant-bound: creating an agency for tenant 2 must not be able to burn
+    // tenant 1's reservation. The reservation and the ID space have to survive the attempt.
+    // the caller is tenant 1 (AUTHENTICATED_TENANT_ID); the reservation belongs to tenant 2
+    agencyIdReservationRepository.saveAndFlush(
+        AgencyIdReservation.newReservation(RESERVED_AGENCY_ID, 2L));
+
+    var agencyDTO = createAgencyDTO();
+    agencyDTO.setTenantId(2L);
+    agencyDTO.setReservedAgencyId(RESERVED_AGENCY_ID);
+
+    assertThrows(ConflictException.class, () -> agencyAdminService.createAgency(agencyDTO));
+
+    entityManager.clear();
+    assertThat(agencyIdReservationRepository.existsById(RESERVED_AGENCY_ID), is(true));
+    assertThat(agencyRepository.findById(RESERVED_AGENCY_ID).isPresent(), is(false));
+  }
+
+  @Test
   public void saveAgency_Should_ThrowConflict_When_ReservedIdHasNoOpenReservation() {
     var agencyDTO = createAgencyDTO();
     agencyDTO.setTenantId(1L);

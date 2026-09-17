@@ -164,15 +164,24 @@ public class AgencyIdAllocationService {
    * key of {@code agency} arbitrates the residual race — a concurrent creation that wins the
    * insert rolls this whole transaction back.
    *
+   * <p>The claim is tenant-scoped: the reservation is only consumed when it belongs to the same
+   * tenant as the agency being created. A mismatching (or absent) tenant leaves the reservation
+   * untouched and answers 409 <em>before</em> any agency row is written, so a caller cannot burn
+   * another tenant's reservation — the delete itself carries the tenant predicate, so the check
+   * and the consumption are one atomic statement rather than a check-then-act.
+   *
    * @param agencyId the reserved ID to claim
-   * @param tenantId the tenant the agency belongs to; written immediately so the follow-up update
-   *     is visible through the Hibernate tenant filter
+   * @param tenantId the tenant the agency belongs to; matched against the reservation and written
+   *     immediately so the follow-up update is visible through the Hibernate tenant filter
    * @param name the agency name (the only other NOT NULL column without a default)
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public void claimReservedId(long agencyId, Long tenantId, String name) {
-    if (!consumeReservation(agencyId)) {
-      log.warn("Agency ID {} is not held by an open reservation and cannot be claimed", agencyId);
+    if (!consumeReservationOfTenant(agencyId, tenantId)) {
+      log.warn(
+          "Agency ID {} is not held by an open reservation of tenant {} and cannot be claimed",
+          agencyId,
+          tenantId);
       throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
     }
     try {
@@ -212,11 +221,15 @@ public class AgencyIdAllocationService {
       }
       jdbcTemplate.queryForObject("SELECT SETVAL(sequence_agency, ?, 1)", Long.class, agencyId);
     } catch (RuntimeException e) {
-      log.warn(
-          "Could not advance sequence_agency beyond the claimed agency ID {} — a later"
-              + " sequence-generated creation may collide with it",
+      // Never swallowed: committing the agency row with a stale sequence would hand the same ID
+      // out again later and break an unrelated creation at the primary key. Failing here rolls
+      // the whole claim back — reservation included — so the invite stays retryable.
+      log.error(
+          "Could not advance sequence_agency beyond the claimed agency ID {} — rolling the"
+              + " creation back rather than leaving the sequence able to re-issue it",
           agencyId,
           e);
+      throw e;
     }
   }
 
@@ -244,6 +257,20 @@ public class AgencyIdAllocationService {
       throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
     }
     jdbcTemplate.update("DELETE FROM agency_id_reservation WHERE agency_id = ?", agencyId);
+  }
+
+  /**
+   * Tenant-scoped consumption: the tenant predicate rides along in the DELETE, so a reservation
+   * belonging to another tenant is left intact and simply reports "nothing consumed". A null
+   * tenant never matches — an unscoped claim must not be able to take a scoped reservation.
+   */
+  private boolean consumeReservationOfTenant(long agencyId, Long tenantId) {
+    if (tenantId == null) {
+      return false;
+    }
+    return jdbcTemplate.update(
+        "DELETE FROM agency_id_reservation WHERE agency_id = ? AND tenant_id = ?",
+        agencyId, tenantId) > 0;
   }
 
   private Long reserveSpecificId(long agencyId, Long tenantId) {
