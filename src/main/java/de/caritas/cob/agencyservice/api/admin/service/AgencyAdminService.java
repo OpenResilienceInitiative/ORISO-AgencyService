@@ -202,7 +202,11 @@ public class AgencyAdminService {
       notNull(agencyDTO.getTenantId());
       agency.setTenantId(agencyDTO.getTenantId());
     } else {
-      notNull(effectiveTenantId);
+      // #217: a missing tenantId claim is a supported state, not a caller error — every
+      // deployed profile runs with multitenancy.enabled=false, AGENCY.TENANT_ID is nullable,
+      // and the seed rows already carry tenant_id = null. findAgencyById already treats a
+      // null-tenant admin as Platform Admin (#265); persist null here instead of throwing a
+      // bare, unmessaged 500.
       agency.setTenantId(effectiveTenantId);
     }
   }
