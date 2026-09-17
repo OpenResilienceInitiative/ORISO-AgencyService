@@ -448,6 +448,7 @@ public class AgencyService {
    * the agency response (ORISO-AgencyService#293): it is logged and treated as "no Träger data",
    * so the agency's own values are served.
    */
+  private RestrictedTenantDTO findTenantDataRelevantForFeatureToggles(Agency agency) {
     try {
       return getTenantDataRelevantForFeatureToggles(agency);
     } catch (RuntimeException exception) {
