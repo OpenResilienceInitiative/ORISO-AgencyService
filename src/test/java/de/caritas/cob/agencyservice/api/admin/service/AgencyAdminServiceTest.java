@@ -195,6 +195,9 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionOfficerContactData(null);
     clearDataProtection(agency);
     var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    // EasyRandom fills every field: without this the sequence-generated path would never
+    // be exercised again (see the reserved-ID tests below for that path).
+    agencyDTO.setReservedAgencyId(null);
     agencyDTO.setCounsellingRelations(null);
     agencyDTO.setConsultingType(1);
     agencyDTO.setDataProtection(new DataProtectionDTO());
@@ -220,6 +223,9 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionOfficerContactData(null);
     clearDataProtection(agency);
     var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    // EasyRandom fills every field: without this the sequence-generated path would never
+    // be exercised again (see the reserved-ID tests below for that path).
+    agencyDTO.setReservedAgencyId(null);
     agencyDTO.setConsultingType(1);
     agencyDTO.setDataProtection(new DataProtectionDTO());
 
@@ -241,6 +247,9 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionOfficerContactData(null);
     clearDataProtection(agency);
     var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    // EasyRandom fills every field: without this the sequence-generated path would never
+    // be exercised again (see the reserved-ID tests below for that path).
+    agencyDTO.setReservedAgencyId(null);
     agencyDTO.setConsultingType(1);
     agencyDTO.setDataProtection(new DataProtectionDTO());
 
@@ -252,6 +261,80 @@ class AgencyAdminServiceTest {
     // then: save and guard both ran through the shared creation transaction
     verify(agencyCreationTransaction).execute(any());
     verify(agencyIdAllocationService).guardAssignmentAgainstOpenReservations(agency.getId());
+  }
+
+  @Test
+  void createAgency_Should_ClaimReservedIdAndCreateWithIt_When_ReservedAgencyIdIsSet() {
+    // given: a counsellor invite reserved agency ID 4711; the Beratungsstelle has to come into
+    // existence under exactly that ID (ORISO-Admin#998).
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setDataProtectionOfficerContactData(null);
+    clearDataProtection(agency);
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+    agencyDTO.setReservedAgencyId(4711L);
+    agencyDTO.setName("Beratungsstelle Musterstadt");
+
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    // when
+    agencyAdminService.createAgency(agencyDTO);
+
+    // then: reservation consumed and the entity written under the reserved ID, inside the shared
+    // creation transaction — and the generated-ID guard deliberately NOT used on this path.
+    verify(agencyCreationTransaction).execute(any());
+    verify(agencyIdAllocationService)
+        .claimReservedId(eq(4711L), eq(1L), eq("Beratungsstelle Musterstadt"));
+    verify(agencyIdAllocationService, never()).guardAssignmentAgainstOpenReservations(anyLong());
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertThat(agencyArgumentCaptor.getValue().getId(), is(4711L));
+    verify(agencyService).provisionMatrixCredentials(agency);
+    verify(appointmentService).syncAgencyDataToAppointmentService(agency);
+  }
+
+  @Test
+  void createAgency_Should_ThrowConflictBeforeProvisioning_When_ReservedIdIsNotClaimable() {
+    // given: the reservation was released, consumed or the ID is already an agency — the
+    // allocation contract answers 409 and nothing may be created or provisioned.
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+    agencyDTO.setReservedAgencyId(4711L);
+
+    Mockito.doThrow(new ConflictException(AGENCY_ID_NOT_AVAILABLE))
+        .when(agencyIdAllocationService)
+        .claimReservedId(eq(4711L), any(), any());
+
+    // when, then
+    assertThrows(ConflictException.class, () -> agencyAdminService.createAgency(agencyDTO));
+    verify(agencyRepository, never()).save(any());
+    verify(agencyService, never()).provisionMatrixCredentials(any(Agency.class));
+    verify(appointmentService, never()).syncAgencyDataToAppointmentService(any());
+  }
+
+  @Test
+  void createAgency_Should_UseTheTenantOfThePayload_When_CallerIsCrossTenant() {
+    // given: the technical user (tenant 0) creating the invitee's Beratungsstelle carries the
+    // invite's tenant in the payload — the claimed skeleton row has to be written with it.
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setDataProtectionOfficerContactData(null);
+    clearDataProtection(agency);
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+    agencyDTO.setReservedAgencyId(4711L);
+    agencyDTO.setTenantId(42L);
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    // when
+    agencyAdminService.createAgency(agencyDTO);
+
+    // then
+    verify(agencyIdAllocationService).claimReservedId(eq(4711L), eq(42L), any());
   }
 
   @Test
@@ -334,6 +417,9 @@ class AgencyAdminServiceTest {
     agency.setCounsellingRelations(null);
     clearDataProtection(agency);
     var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    // EasyRandom fills every field: without this the sequence-generated path would never
+    // be exercised again (see the reserved-ID tests below for that path).
+    agencyDTO.setReservedAgencyId(null);
     agencyDTO.setCounsellingRelations(null);
     agencyDTO.setConsultingType(1);
     agencyDTO.setDataProtection(new DataProtectionDTO());

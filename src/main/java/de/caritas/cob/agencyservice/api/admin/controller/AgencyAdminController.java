@@ -124,11 +124,21 @@ public class AgencyAdminController implements AgencyadminApi {
   /**
    * Entry point for creating an agency.
    *
+   * <p>The Keycloak technical user may create an agency <em>only</em> with a pre-reserved ID. That
+   * is the counsellor onboarding path (ORISO-Admin#998): the invitee has no account while the
+   * wizard runs, so UserService creates the Beratungsstelle server-to-server as the technical
+   * user. The reservation carries the authorisation — an agency admin reserved that exact ID when
+   * they wrote the invite — so the technical user can only complete a creation an admin already
+   * authorised, never start an arbitrary one.
+   *
    * @param agencyDTO (required)
    * @return {@link AgencyAdminSearchService}
    */
   @Override
-  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  @PreAuthorize(
+      "hasAuthority('AUTHORIZATION_AGENCY_ADMIN')"
+          + " or (hasAuthority('AUTHORIZATION_TECHNICAL_USER')"
+          + " and #agencyDTO.reservedAgencyId != null)")
   public ResponseEntity<AgencyAdminFullResponseDTO> createAgency(AgencyDTO agencyDTO) {
 
 
