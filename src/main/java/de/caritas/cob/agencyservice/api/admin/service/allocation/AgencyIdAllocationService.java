@@ -9,10 +9,12 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundExceptio
 import de.caritas.cob.agencyservice.api.repository.agencyidreservation.AgencyIdReservation;
 import de.caritas.cob.agencyservice.api.repository.agencyidreservation.AgencyIdReservationRepository;
 import de.caritas.cob.agencyservice.api.service.TenantService;
+import java.util.Locale;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -146,6 +148,92 @@ public class AgencyIdAllocationService {
   }
 
   /**
+   * Claims a pre-reserved agency ID for the agency row that is about to be written: consumes the
+   * reservation and inserts the skeleton row carrying exactly that ID, both inside the caller's
+   * creation transaction. The caller then fills the row through the ordinary JPA update path, so
+   * an invite-created agency ends up byte-identical to a sequence-created one.
+   *
+   * <p>Why a native skeleton insert instead of saving an entity with a preset ID: {@code Agency}
+   * declares {@code @GeneratedValue(SEQUENCE)}, so {@code save()} on an entity carrying an ID
+   * runs through {@code merge()} and — with no row to merge into — would insert under a freshly
+   * generated ID, silently ignoring the reservation. Writing the row first turns the follow-up
+   * {@code save()} into a plain UPDATE of the claimed ID.
+   *
+   * <p>The reservation is the authorisation anchor: no open reservation (already consumed,
+   * released, or never reserved) and an ID that is already assigned both answer 409. The primary
+   * key of {@code agency} arbitrates the residual race — a concurrent creation that wins the
+   * insert rolls this whole transaction back.
+   *
+   * <p>The claim is tenant-scoped: the reservation is only consumed when it belongs to the same
+   * tenant as the agency being created. A mismatching (or absent) tenant leaves the reservation
+   * untouched and answers 409 <em>before</em> any agency row is written, so a caller cannot burn
+   * another tenant's reservation — the delete itself carries the tenant predicate, so the check
+   * and the consumption are one atomic statement rather than a check-then-act.
+   *
+   * @param agencyId the reserved ID to claim
+   * @param tenantId the tenant the agency belongs to; matched against the reservation and written
+   *     immediately so the follow-up update is visible through the Hibernate tenant filter
+   * @param name the agency name (the only other NOT NULL column without a default)
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void claimReservedId(long agencyId, Long tenantId, String name) {
+    if (!consumeReservationOfTenant(agencyId, tenantId)) {
+      log.warn(
+          "Agency ID {} is not held by an open reservation of tenant {} and cannot be claimed",
+          agencyId,
+          tenantId);
+      throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
+    }
+    try {
+      jdbcTemplate.update(
+          "INSERT INTO agency (id, tenant_id, name, create_date, update_date)"
+              + " VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+          agencyId, tenantId, name);
+    } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
+      log.warn("Agency ID {} was assigned concurrently while claiming its reservation", agencyId);
+      throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
+    }
+    advanceIdSequenceBeyond(agencyId);
+  }
+
+  /**
+   * Keeps {@code sequence_agency} from ever handing out an ID that was just assigned manually.
+   * The sequence knows nothing about assigned rows — it is declared {@code START WITH 0} in
+   * changeset 0001 — so without this an ordinary (sequence-generated) creation could later
+   * collide with a claimed ID and fail on the primary key.
+   *
+   * <p>Best effort by design: MariaDB/MySQL {@code SETVAL} only ever raises a sequence (a lower
+   * value is a no-op returning NULL), which is exactly the semantics wanted here. Other engines
+   * — the H2 testing profile — have no equivalent no-op-safe statement, and their sequences start
+   * far above any reserved ID, so the advance is skipped there instead of guessed. A failure is
+   * logged and never fails the creation: the collision it prevents is a later, retryable insert
+   * error, not a corrupted agency.
+   */
+  private void advanceIdSequenceBeyond(long agencyId) {
+    try {
+      var product = jdbcTemplate.execute(
+          (ConnectionCallback<String>) connection ->
+              connection.getMetaData().getDatabaseProductName());
+      var engine = product == null ? "" : product.toLowerCase(Locale.ROOT);
+      if (!engine.contains("maria") && !engine.contains("mysql")) {
+        log.debug("Skipping the agency ID sequence advance on database engine '{}'", product);
+        return;
+      }
+      jdbcTemplate.queryForObject("SELECT SETVAL(sequence_agency, ?, 1)", Long.class, agencyId);
+    } catch (RuntimeException e) {
+      // Never swallowed: committing the agency row with a stale sequence would hand the same ID
+      // out again later and break an unrelated creation at the primary key. Failing here rolls
+      // the whole claim back — reservation included — so the invite stays retryable.
+      log.error(
+          "Could not advance sequence_agency beyond the claimed agency ID {} — rolling the"
+              + " creation back rather than leaving the sequence able to re-issue it",
+          agencyId,
+          e);
+      throw e;
+    }
+  }
+
+  /**
    * Database-level guard for agency creation: must run inside the transaction that inserts the
    * agency row, directly after the ID has been generated. It inserts a reservation row for the
    * fresh ID — letting the primary key of {@code agency_id_reservation} arbitrate against every
@@ -169,6 +257,20 @@ public class AgencyIdAllocationService {
       throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
     }
     jdbcTemplate.update("DELETE FROM agency_id_reservation WHERE agency_id = ?", agencyId);
+  }
+
+  /**
+   * Tenant-scoped consumption: the tenant predicate rides along in the DELETE, so a reservation
+   * belonging to another tenant is left intact and simply reports "nothing consumed". A null
+   * tenant never matches — an unscoped claim must not be able to take a scoped reservation.
+   */
+  private boolean consumeReservationOfTenant(long agencyId, Long tenantId) {
+    if (tenantId == null) {
+      return false;
+    }
+    return jdbcTemplate.update(
+        "DELETE FROM agency_id_reservation WHERE agency_id = ? AND tenant_id = ?",
+        agencyId, tenantId) > 0;
   }
 
   private Long reserveSpecificId(long agencyId, Long tenantId) {

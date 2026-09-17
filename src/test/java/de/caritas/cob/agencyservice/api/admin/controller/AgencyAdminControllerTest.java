@@ -208,6 +208,9 @@ public class AgencyAdminControllerTest {
     setValidDemographics(agencyDTO.getDemographics());
     setValidDataProtection(agencyDTO.getDataProtection());
     setValidAddress(agencyDTO);
+    // EasyRandom would otherwise supply a random (often negative) reserved agency ID, which the
+    // contract rejects with @Min(1) before the controller is ever reached.
+    agencyDTO.setReservedAgencyId(null);
     AgencyAdminFullResponseDTO agencyAdminFullResponseDTO =
         easyRandom.nextObject(AgencyAdminFullResponseDTO.class);
 
@@ -290,6 +293,9 @@ public class AgencyAdminControllerTest {
     setValidDemographics(agencyDTO.getDemographics());
     setValidDataProtection(agencyDTO.getDataProtection());
     setValidAddress(agencyDTO);
+    // EasyRandom would otherwise supply a random (often negative) reserved agency ID, which the
+    // contract rejects with @Min(1) before the controller is ever reached.
+    agencyDTO.setReservedAgencyId(null);
     doThrow(new InvalidConsultingTypeException()).when(agencyValidator).validate(agencyDTO);
     this.mvc
         .perform(
@@ -311,6 +317,9 @@ public class AgencyAdminControllerTest {
     setValidDemographics(agencyDTO.getDemographics());
     setValidDataProtection(agencyDTO.getDataProtection());
     setValidAddress(agencyDTO);
+    // EasyRandom would otherwise supply a random (often negative) reserved agency ID, which the
+    // contract rejects with @Min(1) before the controller is ever reached.
+    agencyDTO.setReservedAgencyId(null);
     doThrow(new InvalidPostcodeException()).when(agencyValidator).validate(agencyDTO);
     this.mvc
         .perform(
