@@ -15,6 +15,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
+import de.caritas.cob.agencyservice.testHelper.JwtAuthenticatedUserHelper;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import java.util.List;
 import java.util.Optional;
@@ -258,5 +259,59 @@ class DepartmentDetailsServiceTest {
 
     assertThatExceptionOfType(NotFoundException.class)
         .isThrownBy(() -> service.getDepartmentDetails(7L, 99L));
+  }
+
+  // --- user id resolved from the token itself, not from a mocked AuthenticatedUser ---
+
+  @Test
+  void update_Should_scopeByTokenSubject_When_restrictedAdminTokenLacksUserIdClaim() {
+    // The Keycloak userId attribute (and with it the custom claim) is lost after an admin profile
+    // edit; the token subject is the same id and must keep the IDOR guard working.
+    var admin = JwtAuthenticatedUserHelper.userWithoutUserIdClaim(
+        "8ed43c2c-1f51-4169-a7d9-c75de7eaf830",
+        JwtAuthenticatedUserHelper.RESTRICTED_AGENCY_ADMIN_ROLE);
+    var tokenScopedService =
+        new DepartmentDetailsService(agencyTopicRepository, admin, userAdminService);
+    when(userAdminService.getAdminUserAgencyIds("8ed43c2c-1f51-4169-a7d9-c75de7eaf830"))
+        .thenReturn(List.of(7L));
+    existingDepartment();
+
+    var view = tokenScopedService.updateDepartmentDetails(7L, 42L, "Mo 9-12", null, null);
+
+    assertThat(view.openingHours()).isEqualTo("Mo 9-12");
+    verify(userAdminService).getAdminUserAgencyIds("8ed43c2c-1f51-4169-a7d9-c75de7eaf830");
+    verify(agencyTopicRepository).save(any());
+  }
+
+  @Test
+  void update_Should_denyBySubjectScope_When_restrictedAdminTokenLacksUserIdClaimAndDoesNotOwnAgency() {
+    var admin = JwtAuthenticatedUserHelper.userWithoutUserIdClaim(
+        "8ed43c2c-1f51-4169-a7d9-c75de7eaf830",
+        JwtAuthenticatedUserHelper.RESTRICTED_AGENCY_ADMIN_ROLE);
+    var tokenScopedService =
+        new DepartmentDetailsService(agencyTopicRepository, admin, userAdminService);
+    when(userAdminService.getAdminUserAgencyIds("8ed43c2c-1f51-4169-a7d9-c75de7eaf830"))
+        .thenReturn(List.of(9L));
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> tokenScopedService.updateDepartmentDetails(7L, 42L, "Mo 9-12", null, null));
+
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void update_Should_denyWithoutLookup_When_restrictedAdminTokenHasNoIdentityAtAll() {
+    // No userId claim and no subject: the guard must still refuse and never ask the UserService
+    // for "null"'s agencies.
+    var admin = JwtAuthenticatedUserHelper.userWithoutAnyIdentity(
+        JwtAuthenticatedUserHelper.RESTRICTED_AGENCY_ADMIN_ROLE);
+    var tokenScopedService =
+        new DepartmentDetailsService(agencyTopicRepository, admin, userAdminService);
+
+    assertThatExceptionOfType(org.springframework.security.access.AccessDeniedException.class)
+        .isThrownBy(() -> tokenScopedService.updateDepartmentDetails(7L, 42L, "Mo 9-12", null, null));
+
+    verifyNoInteractions(userAdminService);
+    verify(agencyTopicRepository, never()).save(any());
   }
 }

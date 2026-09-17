@@ -100,6 +100,17 @@ public class SecurityConfig {
                 + AuthorityValue.TENANT_ADMIN + "')"))
             .requestMatchers("/agencyadmin/controls", "/agencyadmin/controls/")
             .hasAuthority(AuthorityValue.GET_ALL_AGENCIES)
+            // Counsellor onboarding (ORISO-Admin#998): UserService creates the invitee's
+            // Beratungsstelle server-to-server as the Keycloak technical user, because the
+            // invitee has no account while the wizard runs. The HTTP layer only lets that
+            // identity reach the endpoint - createAgency's own @PreAuthorize is what still
+            // demands a reservedAgencyId, so the technical user can complete a creation an
+            // agency admin authorised and start none of its own. Without this matcher the
+            // blanket /agencyadmin/** rule below answers 403 before the method-level rule is
+            // ever evaluated.
+            .requestMatchers(HttpMethod.POST, "/agencyadmin/agencies", "/agencyadmin/agencies/")
+            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
+                AuthorityValue.TECHNICAL_USER)
             .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
             // /agencies/topics enriches via an authenticated ConsultingTypeService call and is

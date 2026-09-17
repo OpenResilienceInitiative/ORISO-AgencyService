@@ -166,7 +166,9 @@ public class AgencyAdminService {
     Agency agency = fromAgencyDTO(agencyDTO);
     setTenantIdOnCreate(agencyDTO, agency);
 
-    var savedAgency = saveWithReservationGuard(agency);
+    var savedAgency = agencyDTO.getReservedAgencyId() == null
+        ? saveWithReservationGuard(agency)
+        : saveWithReservedId(agency, agencyDTO.getReservedAgencyId());
     agencyService.provisionMatrixCredentials(savedAgency);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(savedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(savedAgency);
@@ -189,6 +191,31 @@ public class AgencyAdminService {
       var savedAgency = agencyRepository.save(agency);
       agencyIdAllocationService.guardAssignmentAgainstOpenReservations(savedAgency.getId());
       return savedAgency;
+    });
+  }
+
+  /**
+   * Creation with a pre-reserved ID (counsellor onboarding, ORISO-Admin#998): the invitee's
+   * Beratungsstelle must come into existence under exactly the ID the inviting admin reserved,
+   * because that ID is already stored on the invite and on every routing decision made with it.
+   *
+   * <p>One transaction, three steps: the reservation is consumed and the skeleton row written
+   * under the reserved ID ({@link AgencyIdAllocationService#claimReservedId}), then the ordinary
+   * {@code save()} fills that row — as an UPDATE, since the row now exists — so topics, tenant
+   * scoping and every other field follow the same code as a sequence-created agency. A conflict
+   * (no open reservation, or the ID assigned concurrently) rolls the whole thing back before any
+   * Matrix credential or appointment side effect runs.
+   *
+   * <p>No {@link AgencyIdAllocationService#guardAssignmentAgainstOpenReservations} here: that
+   * guard exists to arbitrate a <em>generated</em> ID against open reservations. On this path the
+   * reservation is the thing being consumed, and re-inserting it would collide with itself.
+   */
+  private Agency saveWithReservedId(Agency agency, Long reservedAgencyId) {
+    return agencyCreationTransaction.execute(status -> {
+      agencyIdAllocationService.claimReservedId(
+          reservedAgencyId, agency.getTenantId(), agency.getName());
+      agency.setId(reservedAgencyId);
+      return agencyRepository.save(agency);
     });
   }
 
