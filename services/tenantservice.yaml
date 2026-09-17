@@ -1190,6 +1190,14 @@ components:
         featureGroupChatV2Enabled:
           type: boolean
           example: 'false'
+        featureInternalGroupChatEnabled:
+          type: boolean
+          example: 'true'
+          description: Internal group chats (counsellors only). Absent on TenantService versions before ORISO-TenantService#250; consumers fall back to featureGroupChatV2Enabled.
+        featureSelfHelpGroupsEnabled:
+          type: boolean
+          example: 'true'
+          description: Conversation circles / self-help groups. Absent on TenantService versions before ORISO-TenantService#250; consumers fall back to featureGroupChatV2Enabled.
         featureTeamDiscussionEnabled:
           type: boolean
           example: 'false'
