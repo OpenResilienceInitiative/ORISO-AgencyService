@@ -11,6 +11,8 @@ import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdStepDir
 import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtectionService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService;
+import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftView;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
@@ -25,6 +27,8 @@ import de.caritas.cob.agencyservice.api.model.CreateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAdminDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextAssignmentDTO;
 import de.caritas.cob.agencyservice.api.model.LegalTextVersionDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalDraftDTO;
+import de.caritas.cob.agencyservice.api.model.SaveAgencyLegalDraftDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateLegalTextDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
@@ -79,6 +83,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull DepartmentImprintService departmentImprintService;
   private final @NonNull LegalTextAdminService legalTextAdminService;
   private final @NonNull LegalTextVersionAdminService legalTextVersionAdminService;
+  private final @NonNull AgencyLegalDraftService agencyLegalDraftService;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   /**
@@ -578,6 +583,42 @@ public class AgencyAdminController implements AgencyadminApi {
     } catch (IllegalArgumentException e) {
       throw new BadRequestException("kind must be one of DPP, IMPRINT");
     }
+  }
+
+  @Override
+  public ResponseEntity<AgencyLegalDraftDTO> getAgencyLegalDraft(Long agencyId, String kind) {
+    return ResponseEntity.ok(
+        toAgencyLegalDraftDto(
+            agencyLegalDraftService.get(agencyId, parseLegalTextKind(kind))));
+  }
+
+  @Override
+  public ResponseEntity<AgencyLegalDraftDTO> saveAgencyLegalDraft(
+      Long agencyId, String kind, SaveAgencyLegalDraftDTO request) {
+    return ResponseEntity.ok(
+        toAgencyLegalDraftDto(
+            agencyLegalDraftService.save(
+                agencyId,
+                parseLegalTextKind(kind),
+                request.getContent(),
+                request.getConsentText(),
+                request.getRevision())));
+  }
+
+  @Override
+  public ResponseEntity<Void> deleteAgencyLegalDraft(
+      Long agencyId, String kind, String revision) {
+    agencyLegalDraftService.delete(agencyId, parseLegalTextKind(kind), revision);
+    return ResponseEntity.noContent().build();
+  }
+
+  private AgencyLegalDraftDTO toAgencyLegalDraftDto(AgencyLegalDraftView view) {
+    return new AgencyLegalDraftDTO()
+        .kind(AgencyLegalDraftDTO.KindEnum.fromValue(view.kind().name()))
+        .content(view.content())
+        .consentText(view.consentText())
+        .revision(view.revision())
+        .savedAt(formatVersionTimestamp(view.savedAt()));
   }
 
   /** One archived version, verbatim; authorised against the version's stored owner. */
