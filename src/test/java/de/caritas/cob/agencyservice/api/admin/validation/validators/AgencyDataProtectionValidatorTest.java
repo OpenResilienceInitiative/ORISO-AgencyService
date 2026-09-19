@@ -1,6 +1,10 @@
 package de.caritas.cob.agencyservice.api.admin.validation.validators;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import de.caritas.cob.agencyservice.api.admin.validation.validators.model.ValidateAgencyDTO;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidOfflineStatusException;
 import de.caritas.cob.agencyservice.api.model.DataProtectionDTO;
 import de.caritas.cob.agencyservice.api.model.DataProtectionDTO.DataProtectionResponsibleEntityEnum;
 import de.caritas.cob.agencyservice.api.service.ApplicationSettingsService;
@@ -124,6 +128,52 @@ class AgencyDataProtectionValidatorTest {
     agencyDataProtectionValidator.validate(agencyToValidate);
 
     Mockito.verify(tenantService, Mockito.never()).getRestrictedTenantDataByTenantId(Mockito.any());
+    Mockito.verify(agencyDataProtectionValidationService, Mockito.never())
+        .validate(agencyToValidate);
+  }
+
+  /**
+   * The main-tenant branch shares its try/catch with the settings lookup it is there to tolerate.
+   * A validation failure raised inside it must still reach the caller - swallowing it would report
+   * a settings outage and create the invalid agency anyway.
+   */
+  @Test
+  void validate_Should_PropagateValidationFailure_When_RaisedForTheMainTenantInSingleDomainMultitenancy() {
+    ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .tenantId(1L)
+        .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
+            DataProtectionResponsibleEntityEnum.AGENCY_RESPONSIBLE)).build();
+    ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
+        true);
+    givenAgencyTenant(agencyToValidate, false);
+    givenSingleDomainWithValue("app");
+    givenMainTenant("app", true);
+    Mockito.doThrow(new InvalidOfflineStatusException(
+            HttpStatusExceptionReason.DATA_PROTECTION_RESPONSIBLE_IS_EMPTY))
+        .when(agencyDataProtectionValidationService).validate(agencyToValidate);
+
+    assertThrows(InvalidOfflineStatusException.class,
+        () -> agencyDataProtectionValidator.validate(agencyToValidate));
+  }
+
+  /**
+   * The other half of the same try: an unavailable settings lookup still must not block the
+   * update (e.g. a visibility toggle). Narrowing the catch to the lookup must not narrow this.
+   */
+  @Test
+  void validate_Should_NotBlockTheAgency_When_TheMainTenantSettingsLookupFails() {
+    ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .tenantId(1L)
+        .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
+            DataProtectionResponsibleEntityEnum.AGENCY_RESPONSIBLE)).build();
+    ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
+        true);
+    givenAgencyTenant(agencyToValidate, false);
+    Mockito.when(applicationSettingsService.getApplicationSettings())
+        .thenThrow(new IllegalStateException("settings service unavailable"));
+
+    agencyDataProtectionValidator.validate(agencyToValidate);
+
     Mockito.verify(agencyDataProtectionValidationService, Mockito.never())
         .validate(agencyToValidate);
   }

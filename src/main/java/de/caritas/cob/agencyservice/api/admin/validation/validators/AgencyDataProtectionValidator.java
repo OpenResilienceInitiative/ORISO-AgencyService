@@ -55,6 +55,12 @@ public class AgencyDataProtectionValidator implements ConcreteAgencyValidator {
     }
 
     if (multitenancyWithSingleDomain) {
+      // Only the LOOKUP is tolerated, never the validation. Both used to share this try, so a
+      // genuine InvalidOfflineStatusException raised for the main tenant was caught here, logged
+      // as a settings outage and the invalid agency written anyway - the rule did nothing in the
+      // one deployment shape (agency tenant off, main tenant on) where this branch is what
+      // enforces it.
+      Boolean mainTenantCentralTemplateEnabled = null;
       try {
         var mainTenantSubdomainForSingleDomainMultitenancy =
             applicationSettingsService
@@ -63,9 +69,8 @@ public class AgencyDataProtectionValidator implements ConcreteAgencyValidator {
         de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO mainTenant =
             tenantService.getRestrictedTenantDataBySubdomain(
                 mainTenantSubdomainForSingleDomainMultitenancy.getValue());
-        if (Boolean.TRUE.equals(mainTenant.getSettings().getFeatureCentralDataProtectionTemplateEnabled())) {
-          agencyDataProtectionValidationService.validate(validateAgencyDto);
-        }
+        mainTenantCentralTemplateEnabled =
+            mainTenant.getSettings().getFeatureCentralDataProtectionTemplateEnabled();
       } catch (Exception exception) {
         // Do not block agency updates (e.g. visibility toggle) if optional main-tenant
         // settings lookup is temporarily unavailable.
@@ -73,6 +78,10 @@ public class AgencyDataProtectionValidator implements ConcreteAgencyValidator {
             "Skipping optional main tenant data-protection validation for agency {} due to settings lookup error: {}",
             validateAgencyDto.getId(),
             exception.getMessage());
+      }
+
+      if (Boolean.TRUE.equals(mainTenantCentralTemplateEnabled)) {
+        agencyDataProtectionValidationService.validate(validateAgencyDto);
       }
     }
   }
