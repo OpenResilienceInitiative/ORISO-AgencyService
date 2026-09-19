@@ -40,22 +40,21 @@ class RequiredCiContractTest(unittest.TestCase):
         self.assertNotIn("continue-on-error:", integration)
         self.assertIn(
             "needs: [validate, required-integration-tests, contract-tests,"
-            " legacy-quarantine-expiry]",
+            " full-integration-suite]",
             aggregate,
         )
         self.assertIn("if: always()", aggregate)
-        self.assertIn("name: required PreDev CI", aggregate)
+        self.assertIn("name: required CI", aggregate)
         self.assertIn("needs.required-integration-tests.result", aggregate)
         self.assertIn("needs.contract-tests.result", aggregate)
-        self.assertIn("needs.legacy-quarantine-expiry.result", aggregate)
+        self.assertIn("needs.full-integration-suite.result", aggregate)
         # Reading a result into the environment is not the same as acting on
         # it: the conclusion itself must consider every required job.
         self.assertIn('"${CONTRACT_RESULT}" != success', aggregate)
         # The aggregate is the only check branch protection requires, so a job
-        # outside it cannot block anything. Without this, the quarantine expiry
-        # would turn the workflow run red on 2026-10-01 while the required
-        # conclusion stayed green and merges kept flowing.
-        self.assertIn('"${EXPIRY_RESULT}" != success', aggregate)
+        # outside it cannot block anything. The full suite is a required job
+        # now, so its failure has to reach this conclusion or it blocks nothing.
+        self.assertIn('"${FULL_SUITE_RESULT}" != success', aggregate)
 
     def test_ci_contract_tests_are_executed_by_ci(self):
         # These assertions are worthless unless something runs them. Without a
@@ -77,28 +76,31 @@ class RequiredCiContractTest(unittest.TestCase):
         self.assertIn("name: required integration tests", integration)
         self.assertNotIn("continue-on-error:", integration)
 
-    def test_legacy_burn_in_is_visible_owned_and_time_bounded(self):
+    def test_the_full_suite_blocks_and_the_quarantine_is_gone(self):
+        """#185 is retired: the suite that was tolerated red now blocks.
+
+        It ran green three consecutive times on dev (67b90676, 3c08a731,
+        5aace67c) with all seven repair sub-issues closed, so the deadline job
+        that existed to force this decision has no remaining purpose. Pinned
+        here because re-adding `continue-on-error` would silently return the
+        suite to advisory, which is the state this repository spent two months
+        leaving behind.
+        """
         for relative_path in (
             ".github/workflows/ci-pull-request.yml",
             ".github/workflows/ci-feature-branch.yml",
             ".github/workflows/ci-main.yml",
         ):
             workflow = (ROOT / relative_path).read_text()
-            quarantine = job_block(workflow, "legacy-integration-quarantine")
-            self.assertIn("#185", quarantine)
-            self.assertIn("2026-09-30", quarantine)
-            # The tolerance is declared on the job, where a reader of the
-            # workflow can see it, rather than inside the shared action.
-            self.assertIn("continue-on-error: true", quarantine)
-
-            expiry = job_block(workflow, "legacy-quarantine-expiry")
-            self.assertIn('QUARANTINE_EXPIRES: "2026-09-30"', expiry)
-            self.assertNotIn("continue-on-error:", expiry)
+            suite = job_block(workflow, "full-integration-suite")
+            self.assertIn("name: full integration suite", suite)
+            self.assertNotIn("continue-on-error:", suite)
+            self.assertNotIn("legacy-quarantine-expiry:", workflow)
+            self.assertNotIn("QUARANTINE_EXPIRES", workflow)
 
     def test_shared_action_does_not_swallow_the_maven_failure(self):
-        # Moving continue-on-error from the job into the action would leave the
-        # workflow looking blocking while the quarantine job stayed green no
-        # matter what Maven did.
+        # continue-on-error inside the action would leave the workflow looking
+        # blocking while the job stayed green no matter what Maven did.
         action = (ROOT / ".github/actions/maven-verify-burnin/action.yml").read_text()
 
         self.assertIn("id: legacy_verify", action)
@@ -120,18 +122,10 @@ class RequiredCiContractTest(unittest.TestCase):
         self.assertIn("LiquibaseChangelogDriftIT", required_runner)
         self.assertIn("DemoBaselineChangesetIT", required_runner)
 
-    def test_legacy_quarantine_uses_the_guard_but_stays_non_blocking(self):
+    def test_full_suite_uses_the_zero_skip_guard(self):
+        # A blocking suite that reports zero executed tests is vacuously green.
         action = (ROOT / ".github/actions/maven-verify-burnin/action.yml").read_text()
         self.assertIn("scripts/ci/verify-test-reports.py", action)
-
-        for relative_path in (
-            ".github/workflows/ci-pull-request.yml",
-            ".github/workflows/ci-feature-branch.yml",
-            ".github/workflows/ci-main.yml",
-        ):
-            workflow = (ROOT / relative_path).read_text()
-            quarantine = job_block(workflow, "legacy-integration-quarantine")
-            self.assertIn("continue-on-error: true", quarantine)
 
 
 if __name__ == "__main__":
