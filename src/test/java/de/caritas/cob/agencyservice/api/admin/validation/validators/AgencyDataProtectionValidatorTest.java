@@ -5,6 +5,8 @@ import de.caritas.cob.agencyservice.api.model.DataProtectionDTO;
 import de.caritas.cob.agencyservice.api.model.DataProtectionDTO.DataProtectionResponsibleEntityEnum;
 import de.caritas.cob.agencyservice.api.service.ApplicationSettingsService;
 import de.caritas.cob.agencyservice.api.service.TenantService;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
+import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.SettingDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
@@ -31,10 +33,13 @@ class AgencyDataProtectionValidatorTest {
 
   private @Mock ApplicationSettingsService applicationSettingsService;
 
+  private @Mock AuthenticatedUser authenticatedUser;
+
   @Test
   void validate_Should_ValidateForAgencyTenant_When_NonSingleDomainMultitenancy_And_CentralDataProtectionFeatureEnabled() {
     // given
     ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .tenantId(1L)
         .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
             DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
     ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
@@ -64,6 +69,7 @@ class AgencyDataProtectionValidatorTest {
   void validate_Should_NotValidateForAgencyTenant_When_NonSingleDomainMultitenancy_And_CentralDataProtectionFeatureDisabled() {
     // given
     ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .tenantId(1L)
         .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
             DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
     ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
@@ -86,6 +92,7 @@ class AgencyDataProtectionValidatorTest {
   void validate_Should_ValidateForAgencyTenantAndMainTenant_When_SingleDomainMultitenancy(boolean isAgencyTenantCentralDataProtectionEnabled, boolean isMainTenantCentralDataProtectionEnabled, int expectedValidationCalls) {
     // given
     ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .tenantId(1L)
         .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
             DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
     ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
@@ -102,6 +109,24 @@ class AgencyDataProtectionValidatorTest {
   }
 
 
+
+  @Test
+  void validate_Should_SkipValidationService_When_NoTenantCanBeResolved() {
+    // Single tenancy: no tenant id in the request, none in the token, none in the context.
+    TenantContext.clear();
+    Mockito.when(authenticatedUser.getTenantId()).thenReturn(null);
+    ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
+            DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
+    ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
+        false);
+
+    agencyDataProtectionValidator.validate(agencyToValidate);
+
+    Mockito.verify(tenantService, Mockito.never()).getRestrictedTenantDataByTenantId(Mockito.any());
+    Mockito.verify(agencyDataProtectionValidationService, Mockito.never())
+        .validate(agencyToValidate);
+  }
 
   private void givenAgencyTenant(ValidateAgencyDTO agency, boolean isCentralDataProtectionEnabled) {
     Mockito.when(tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId()))

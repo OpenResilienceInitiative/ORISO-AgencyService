@@ -22,6 +22,9 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidPostcodeE
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
+import de.caritas.cob.agencyservice.api.model.DataProtectionContactDTO;
+import de.caritas.cob.agencyservice.api.model.DataProtectionDTO;
+import de.caritas.cob.agencyservice.api.model.DataProtectionDTO.DataProtectionResponsibleEntityEnum;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
@@ -153,6 +156,65 @@ public class AgencyValidatorIT {
     UpdateAgencyDTO updateAgencyDTO = getValidUpdateAgencyDTO();
     updateAgencyDTO.setOffline(false);
     agencyValidator.validate(1L, updateAgencyDTO);
+  }
+
+  /**
+   * The legal contact of the selected responsible entity is mandatory wherever an agency is
+   * written, not only on the screen that happens to mark the fields as required. The update path
+   * has enforced this since ADR-003; creation went through {@code AgencyValidator.validate(
+   * AgencyDTO)}, which never carried the dataProtection block into the validator registry at all,
+   * so the very same payload stored unvalidated when it came in as a create.
+   */
+  @Test(expected = InvalidOfflineStatusException.class)
+  public void validate_Should_ThrowInvalidOfflineStatusException_WhenCreateAndSelectedDataProtectionContactIsIncomplete() {
+    givenCentralDataProtectionTemplateEnabled();
+    AgencyDTO agencyDTO = getValidAgencyDTO();
+    agencyDTO.setDataProtection(
+        new DataProtectionDTO()
+            .dataProtectionResponsibleEntity(DataProtectionResponsibleEntityEnum.AGENCY_RESPONSIBLE)
+            .agencyDataProtectionResponsibleContact(
+                new DataProtectionContactDTO()
+                    .nameAndLegalForm("  ")
+                    .postcode("79106")
+                    .city("Freiburg")
+                    .email("datenschutz@traeger.de")));
+
+    agencyValidator.validate(agencyDTO);
+  }
+
+  @Test
+  public void validate_Should_NotThrow_WhenCreateAndSelectedDataProtectionContactIsComplete() {
+    givenCentralDataProtectionTemplateEnabled();
+    AgencyDTO agencyDTO = getValidAgencyDTO();
+    agencyDTO.setDataProtection(
+        new DataProtectionDTO()
+            .dataProtectionResponsibleEntity(DataProtectionResponsibleEntityEnum.AGENCY_RESPONSIBLE)
+            .agencyDataProtectionResponsibleContact(
+                new DataProtectionContactDTO()
+                    .nameAndLegalForm("Traeger Nord gGmbH")
+                    .postcode("79106")
+                    .city("Freiburg")
+                    .email("datenschutz@traeger.de")));
+
+    agencyValidator.validate(agencyDTO);
+  }
+
+  /** A tenant without the central data-protection template keeps the old, unvalidated creation. */
+  @Test
+  public void validate_Should_NotValidateDataProtectionOnCreate_WhenCentralTemplateIsDisabled() {
+    AgencyDTO agencyDTO = getValidAgencyDTO();
+    agencyDTO.setDataProtection(
+        new DataProtectionDTO()
+            .dataProtectionResponsibleEntity(DataProtectionResponsibleEntityEnum.AGENCY_RESPONSIBLE)
+            .agencyDataProtectionResponsibleContact(new DataProtectionContactDTO()));
+
+    agencyValidator.validate(agencyDTO);
+  }
+
+  private void givenCentralDataProtectionTemplateEnabled() {
+    when(tenantService.getRestrictedTenantDataByTenantId(any()))
+        .thenReturn(new RestrictedTenantDTO()
+            .settings(new Settings().featureCentralDataProtectionTemplateEnabled(true)));
   }
 
   private AgencyDTO getValidAgencyDTO() {
