@@ -1466,6 +1466,17 @@ components:
 
     DataProtectionContactDTO:
         type: object
+        description: >
+          Legal (data protection) contact. The block selected by
+          `DataProtectionDTO.dataProtectionResponsibleEntity` must carry `nameAndLegalForm`,
+          `postcode`, `city` and `email` whenever the agency's tenant has
+          `featureCentralDataProtectionTemplateEnabled` (ADR-003) - on create and on update alike.
+          A violation is answered with 400 and a body naming the failing reason, e.g.
+          `DATA_PROTECTION_RESPONSIBLE_IS_EMPTY`.
+
+          The members stay optional in the schema on purpose: the requirement depends on which
+          entity is selected and on the tenant's feature flag, and the same DTO carries the two
+          unselected contact blocks, which may legitimately be empty.
         properties:
           nameAndLegalForm:
             type: string
