@@ -77,14 +77,12 @@ class RequiredCiContractTest(unittest.TestCase):
         self.assertNotIn("continue-on-error:", integration)
 
     def test_the_full_suite_blocks_and_the_quarantine_is_gone(self):
-        """#185 is retired: the suite that was tolerated red now blocks.
+        """The full suite blocks, and the machinery that tolerated it is gone.
 
-        It ran green three consecutive times on dev (67b90676, 3c08a731,
-        5aace67c) with all seven repair sub-issues closed, so the deadline job
-        that existed to force this decision has no remaining purpose. Pinned
-        here because re-adding `continue-on-error` would silently return the
-        suite to advisory, which is the state this repository spent two months
-        leaving behind.
+        Pinned here because re-adding `continue-on-error`, or reintroducing the
+        expiry job, would return the suite to advisory without anything saying
+        so: it would still appear in the checks list, still run, and still pass
+        the pull request while red.
         """
         for relative_path in (
             ".github/workflows/ci-pull-request.yml",

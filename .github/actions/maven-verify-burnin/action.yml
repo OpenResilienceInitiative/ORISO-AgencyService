@@ -3,10 +3,8 @@ name: Reusable full integration-test run
 # Runs the full `verify` lifecycle so the surefire `integration-tests` execution
 # (bound to the integration-test phase, includes **/*IT.*) actually runs.
 #
-# This was a time-bounded quarantine under #185: at the 2026-07-07 burn-in the
-# suite was 7 green / 16 red, so it ran non-blocking behind a deadline. The
-# repairs landed (seven sub-issues) and it went green three consecutive times on
-# dev, so the calling jobs now block on it. `-fae` keeps the report set complete.
+# The calling jobs block on this suite. `-fae` keeps the report set complete, so
+# a single failure does not hide the rest.
 
 inputs:
   java_version:

@@ -35,10 +35,6 @@ jobs:
         java_version: '21'
 
 
-  # Was the #185 quarantine, tolerated red until 2026-09-30. Retired on
-  # 2026-09-19: all seven sub-issues are closed and the suite ran green three
-  # consecutive times on dev (67b90676, 3c08a731, 5aace67c). It blocks now,
-  # which is what the deadline was there to force.
   full-integration-suite:
     name: full integration suite
     runs-on: ubuntu-latest
