@@ -49,6 +49,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
@@ -603,9 +604,34 @@ public class AgencyAdminService {
   /**
    * Returns all agencies for the provided tenant ID.
    *
+   * <p>The lookup runs through the tenant-unaware repository, so the tenant in the URL is the
+   * only filter. A Träger admin may therefore only ask for their own tenant; only the platform
+   * admin (tenant {@code 0}) and single-tenant mode (no tenant known) may name any tenant.
+   * Without this check a Träger admin of tenant A could list every agency of tenant B.
+   *
    * @param tenantId the provided tenantId
    */
   public List<Agency> getAgenciesByTenantId(Long tenantId) {
+    assertCallerMayReadTenant(tenantId);
     return this.agencyTenantUnawareRepository.findByTenantId(tenantId);
+  }
+
+  private void assertCallerMayReadTenant(Long requestedTenantId) {
+    Long callerTenantId = authenticatedUser.getTenantId();
+    if (callerTenantId == null) {
+      callerTenantId = TenantContext.getCurrentTenant();
+    }
+    if (callerTenantId == null || callerTenantId.equals(0L)) {
+      return;
+    }
+    if (!callerTenantId.equals(requestedTenantId)) {
+      log.warn(
+          "Admin user {} (tenant {}) may not list the agencies of tenant {}",
+          authenticatedUser.getUserId(),
+          callerTenantId,
+          requestedTenantId);
+      throw new AccessDeniedException(
+          "Access denied. Requested tenant does not match the caller's tenant.");
+    }
   }
 }
