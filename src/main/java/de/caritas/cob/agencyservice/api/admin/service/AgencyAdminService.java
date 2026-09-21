@@ -284,6 +284,9 @@ public class AgencyAdminService {
     }
     dataProtectionConverter.convertToEntity(agencyDTO.getDataProtection(), agencyBuilder);
     var agencyToCreate = agencyBuilder.build();
+    // ORISO-Admin#1026: counsellors of a new agency start with the strict topic permission.
+    agencyToCreate.setSettings(
+        agencySettingsService.withNewAgencyDefaults(agencyToCreate.getSettings()));
 
     if (featureTopicsEnabled) {
       List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopics(agencyToCreate,
@@ -435,7 +438,9 @@ public class AgencyAdminService {
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
     if (updateAgencyDTO.getSettings() != null) {
-      return agencySettingsService.toSettingsJson(updateAgencyDTO.getSettings());
+      return agencySettingsService.toSettingsJson(
+          agencySettingsService.keepStoredCounsellorTopicPermission(
+              updateAgencyDTO.getSettings(), agency.getSettings()));
     }
     return agency.getSettings();
   }

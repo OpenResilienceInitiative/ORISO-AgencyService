@@ -159,6 +159,16 @@ components:
     Settings:
       type: object
       properties:
+        counsellorTopicPermission:
+          type: string
+          enum: [NONE, SELECT_EXISTING, CREATE]
+          description: >-
+            Agency default "Berater:innen duerfen sich selbst Themen hinzufuegen"
+            (ORISO-Admin#1026): prefills the topic permission of every counsellor invited into
+            the agency. NONE = only the assigned department, SELECT_EXISTING = pick among the
+            agency's departments, CREATE = add further topics of the Traeger. Reads CREATE for
+            agencies that existed before the setting; new agencies start with NONE; an update
+            without this key leaves the stored value unchanged.
         featureStatisticsEnabled:
           type: boolean
           example: false

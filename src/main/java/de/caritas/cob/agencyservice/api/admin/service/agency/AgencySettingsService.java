@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.RuntimeJsonMappingException;
 import de.caritas.cob.agencyservice.api.model.Settings;
+import de.caritas.cob.agencyservice.api.model.Settings.CounsellorTopicPermissionEnum;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,11 @@ public class AgencySettingsService {
       new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
   public Settings toSettings(String settingsJson) {
+    return defaultCounsellorTopicPermission(storedSettings(settingsJson));
+  }
+
+  /** The stored document as it is, without read-time defaults. */
+  private Settings storedSettings(String settingsJson) {
     if (StringUtils.isBlank(settingsJson)) {
       return new Settings();
     }
@@ -62,6 +68,40 @@ public class AgencySettingsService {
     if (settings.getFeatureMediaUploadSupervisionChatsEnabled() == null) {
       settings.setFeatureMediaUploadSupervisionChatsEnabled(false);
     }
+  }
+
+  /**
+   * ORISO-Admin#1026: a stored settings document without the key belongs to an agency that existed
+   * before the setting — it keeps today's behaviour, CREATE. New agencies get NONE written
+   * explicitly on creation ({@link #withNewAgencyDefaults}).
+   */
+  private static Settings defaultCounsellorTopicPermission(Settings settings) {
+    if (settings.getCounsellorTopicPermission() == null) {
+      settings.setCounsellorTopicPermission(CounsellorTopicPermissionEnum.CREATE);
+    }
+    return settings;
+  }
+
+  /** The settings document a newly created agency starts with: counsellors get NONE. */
+  public String withNewAgencyDefaults(String settingsJson) {
+    Settings settings = storedSettings(settingsJson);
+    if (settings.getCounsellorTopicPermission() == null) {
+      settings.setCounsellorTopicPermission(CounsellorTopicPermissionEnum.NONE);
+    }
+    return toSettingsJson(settings);
+  }
+
+  /**
+   * An update that does not carry the topic permission keeps the stored one (ORISO-Admin#1026):
+   * the settings document is replaced as a whole, and a client that does not know the key must not
+   * flip the agency back to the legacy default.
+   */
+  public Settings keepStoredCounsellorTopicPermission(Settings update, String storedSettingsJson) {
+    if (update != null && update.getCounsellorTopicPermission() == null) {
+      update.setCounsellorTopicPermission(
+          toSettings(storedSettingsJson).getCounsellorTopicPermission());
+    }
+    return update;
   }
 
   public String toSettingsJson(Settings settings) {
