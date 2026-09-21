@@ -32,10 +32,21 @@ paths:
       parameters:
         - name: q
           in: query
-          description: The query parameter to search for
+          description: >-
+            The query parameter to search for. Matches the agency name, postcode or city, or the
+            name of one of the agency's topics (Fachbereich), case-insensitively.
           schema:
             type: string
             example: "Freiburg"
+        - name: excludeDeleted
+          in: query
+          description: >-
+            When true, soft-deleted agencies are left out (the invite-bar type-ahead,
+            ORISO-Admin#1026). Default false keeps the agency list unchanged.
+          required: false
+          schema:
+            type: boolean
+            default: false
         - name: page
           in: query
           description: Number of page where to start in the query (1 = first page)
@@ -1366,6 +1377,12 @@ components:
           type: integer
           format: int64
           example: 12
+        tenantName:
+          type: string
+          description: >-
+            Name of the agency's tenant (Träger). Filled in search results only, best effort
+            (null when TenantService cannot be reached).
+          example: "Caritas Köln"
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'

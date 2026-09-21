@@ -100,7 +100,7 @@ public class SearchResultLinkBuilder implements HalLinkBuilder {
   }
 
   private HalLink buildHalLinkForParams(Integer page, Integer perPage, String keyword) {
-    return buildHalLink(methodOn(AgencyadminApi.class).searchAgencies(page, perPage, keyword, null),
+    return buildHalLink(methodOn(AgencyadminApi.class).searchAgencies(page, perPage, keyword, null, null),
         MethodEnum.GET);
   }
 

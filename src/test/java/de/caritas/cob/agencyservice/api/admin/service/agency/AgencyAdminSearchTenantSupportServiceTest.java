@@ -117,22 +117,25 @@ class AgencyAdminSearchTenantSupportServiceTest {
   }
 
   @Test
-  void agenciesWithoutKeywordFilterPredicates_shouldReturnAdminAndTenantPredicates() {
+  void agenciesWithoutKeywordFilterPredicates_shouldReturnAdminTenantAndDeletedPredicates() {
     stubTenantIdPath();
     TenantContext.setCurrentTenant(1L);
     stubUnrestrictedTenantScope();
     when(criteriaBuilder.equal(tenantIdPath, 1L)).thenReturn(predicate);
     when(criteriaBuilder.and(predicate)).thenReturn(predicate);
 
-    Predicate[] predicates = service.agenciesWithoutKeywordFilterPredicates(criteriaBuilder, root);
+    Predicate[] predicates =
+        service.agenciesWithoutKeywordFilterPredicates(
+            AgencyAdminSearch.builder().build(), criteriaBuilder, root);
 
-    assertThat(predicates).hasSize(2);
+    // admin scope, tenant scope and the (here inactive) soft-delete filter of #1026
+    assertThat(predicates).hasSize(3);
     assertThat(predicates[0]).isNotNull();
     assertThat(predicates[1]).isSameAs(predicate);
   }
 
   @Test
-  void createSearchAgenciesWithKeywordFilterPredicate_shouldReturnThreePredicates() {
+  void createSearchAgenciesWithKeywordFilterPredicate_shouldReturnFourPredicates() {
     stubTenantIdPath();
     TenantContext.setCurrentTenant(1L);
     stubUnrestrictedTenantScope();
@@ -146,7 +149,7 @@ class AgencyAdminSearchTenantSupportServiceTest {
         service.createSearchAgenciesWithKeywordFilterPredicate(
             agencyAdminSearch, criteriaBuilder, root);
 
-    assertThat(predicates).hasSize(3);
+    assertThat(predicates).hasSize(4);
     verify(criteriaBuilder).or(any(Predicate.class), any(Predicate.class), any(Predicate.class));
     verify(criteriaBuilder, times(3)).like(any(Expression.class), eq("%berlin%"));
     verify(criteriaBuilder, times(3)).lower(any(Expression.class));
