@@ -3,10 +3,13 @@ package de.caritas.cob.agencyservice.api.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.caritas.cob.agencyservice.AgencyServiceApplication;
+import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.workflow.AgencyPurgeTransaction;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -80,6 +83,10 @@ class LiquibaseChangelogDriftIT {
 
   @Autowired private DataSource dataSource;
 
+  @Autowired private AgencyRepository agencyRepository;
+
+  @Autowired private AgencyPurgeTransaction agencyPurgeTransaction;
+
   /**
    * If the Spring context loads, Liquibase built the schema and Hibernate validated every entity
    * against it. Reaching the assertion means no drift.
@@ -87,5 +94,58 @@ class LiquibaseChangelogDriftIT {
   @Test
   void changelogMatchesJpaEntities_onFreshDatabase() {
     assertThat(dataSource).isNotNull();
+  }
+
+  /**
+   * Drafts are agency-owned dependants. The database cascade must let the scheduled agency purge
+   * remove them without teaching the purge workflow about this table, while drafts belonging to
+   * another agency remain untouched.
+   */
+  @Test
+  void agencyPurge_Should_cascadeOnlyThePurgedAgencysLegalDrafts() {
+    var jdbc = new JdbcTemplate(dataSource);
+    long purgedAgencyId = 9_900_001L;
+    long retainedAgencyId = 9_900_002L;
+
+    try {
+      insertAgency(jdbc, purgedAgencyId, "Purged draft owner");
+      insertAgency(jdbc, retainedAgencyId, "Retained draft owner");
+      insertDraft(jdbc, "purged-draft", purgedAgencyId);
+      insertDraft(jdbc, "retained-draft", retainedAgencyId);
+
+      agencyPurgeTransaction.purge(agencyRepository.findById(purgedAgencyId).orElseThrow());
+
+      assertThat(count(jdbc, "agency", purgedAgencyId)).isZero();
+      assertThat(count(jdbc, "agency_legal_draft", purgedAgencyId)).isZero();
+      assertThat(count(jdbc, "agency", retainedAgencyId)).isOne();
+      assertThat(count(jdbc, "agency_legal_draft", retainedAgencyId)).isOne();
+    } finally {
+      jdbc.update("DELETE FROM agency WHERE id IN (?, ?)", purgedAgencyId, retainedAgencyId);
+    }
+  }
+
+  private static void insertAgency(JdbcTemplate jdbc, long agencyId, String name) {
+    jdbc.update(
+        "INSERT INTO agency (id, name, id_old, consulting_type) VALUES (?, ?, ?, ?)",
+        agencyId,
+        name,
+        agencyId,
+        0);
+  }
+
+  private static void insertDraft(JdbcTemplate jdbc, String rowId, long agencyId) {
+    jdbc.update(
+        "INSERT INTO agency_legal_draft "
+            + "(row_id, agency_id, kind, content, consent_text, version, saved_at) "
+            + "VALUES (?, ?, 'DPP', '{}', '{}', 0, UTC_TIMESTAMP(6))",
+        rowId,
+        agencyId);
+  }
+
+  private static long count(JdbcTemplate jdbc, String table, long agencyId) {
+    return jdbc.queryForObject(
+        "SELECT COUNT(*) FROM " + table + " WHERE " + (table.equals("agency") ? "id" : "agency_id") + " = ?",
+        Long.class,
+        agencyId);
   }
 }

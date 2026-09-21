@@ -685,6 +685,109 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencies/{agencyId}/legal-drafts/{kind}:
+    parameters:
+      - name: agencyId
+        in: path
+        description: Owning agency (Beratungsstelle)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: kind
+        in: path
+        description: DPP is the privacy-policy contract spelling; IMPRINT is the imprint
+        required: true
+        schema:
+          type: string
+          enum: [ DPP, IMPRINT ]
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Reload one unpublished agency-owned legal draft. Agency ownership and tenant scope are
+        checked before draft existence, so 404 cannot be used to probe another agency.
+      operationId: getAgencyLegalDraft
+      responses:
+        200:
+          description: OK - complete draft and its opaque compare-and-swap revision
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalDraftDTO'
+        400:
+          description: BAD REQUEST - unsupported legal kind
+        401:
+          description: UNAUTHORIZED - no or invalid authentication
+        403:
+          description: FORBIDDEN - caller may not edit the agency
+        404:
+          description: NOT FOUND - agency or draft does not exist
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Create or atomically replace an unpublished agency-owned legal draft. Omit revision only
+        for the first create; updates must echo the exact revision returned by the previous read or
+        write. Draft saves never publish, add history, or propagate to departments.
+      operationId: saveAgencyLegalDraft
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/SaveAgencyLegalDraftDTO'
+      responses:
+        200:
+          description: OK - stored draft and its new revision
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalDraftDTO'
+        400:
+          description: BAD REQUEST - malformed revision or imprint consent wording
+        401:
+          description: UNAUTHORIZED - no or invalid authentication
+        403:
+          description: FORBIDDEN - caller may not edit the agency
+        404:
+          description: NOT FOUND - agency does not exist
+        409:
+          description: CONFLICT - draft exists on create or the supplied revision is stale
+      security:
+        - Bearer: [ ]
+    delete:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Discard exactly one draft revision. The revision includes a create-lifetime row id, so a
+        token from a deleted draft cannot delete a later draft recreated for the same agency/kind.
+      operationId: deleteAgencyLegalDraft
+      parameters:
+        - name: revision
+          in: query
+          description: Opaque revision returned by GET or PUT; echo unchanged
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: NO CONTENT - exact draft revision discarded
+        400:
+          description: BAD REQUEST - malformed revision
+        401:
+          description: UNAUTHORIZED - no or invalid authentication
+        403:
+          description: FORBIDDEN - caller may not edit the agency
+        404:
+          description: NOT FOUND - agency does not exist
+        409:
+          description: CONFLICT - supplied revision is stale or the draft was already discarded
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/agencies/{agencyId}/legal-versions:
     get:
       tags:
@@ -1912,6 +2015,57 @@ components:
           type: integer
           format: int64
           description: How many departments currently reference this text
+
+    SaveAgencyLegalDraftDTO:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          description: Language code to draft HTML. Values are sanitised before storage.
+          additionalProperties:
+            type: string
+        consentText:
+          type: object
+          description: >-
+            Privacy-consent wording by language. Accepted for DPP only; IMPRINT requests carrying
+            entries are rejected because an imprint is never consent-bearing.
+          additionalProperties:
+            type: string
+        revision:
+          type: string
+          nullable: true
+          description: Opaque CAS token from the previous GET/PUT; omit only for initial create
+
+    AgencyLegalDraftDTO:
+      type: object
+      required:
+        - kind
+        - content
+        - consentText
+        - revision
+        - savedAt
+      properties:
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        content:
+          type: object
+          additionalProperties:
+            type: string
+        consentText:
+          type: object
+          description: Empty for IMPRINT
+          additionalProperties:
+            type: string
+        revision:
+          type: string
+          description: Opaque row-lifetime/version token; clients must echo it unchanged
+        savedAt:
+          type: string
+          description: Local server timestamp in fixed yyyy-MM-ddTHH:mm:ss form
+          example: "2026-09-17T14:30:00"
 
     LegalTextVersionDTO:
       type: object
