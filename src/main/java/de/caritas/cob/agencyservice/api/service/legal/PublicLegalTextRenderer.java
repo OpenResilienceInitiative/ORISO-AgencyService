@@ -3,10 +3,14 @@ package de.caritas.cob.agencyservice.api.service.legal;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextTokens;
+import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.service.TopicService;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,7 +118,11 @@ public class PublicLegalTextRenderer {
                 language,
                 language != null && language.endsWith(META_KEY_SUFFIX)
                     ? text
-                    : LegalTextTokens.substitute(text, values)));
+                    // Träger and platform texts come from TenantService, whose sanitiser splits
+                    // every {{ into {<!-- -->{. Without restoring the known keys first, those
+                    // tokens reached the help-seeker unreplaced.
+                    : LegalTextTokens.substitute(
+                        LegalTextTokens.restoreKnownTokens(text), values)));
     try {
       return objectMapper.writeValueAsString(substituted);
     } catch (Exception e) {
@@ -133,11 +141,36 @@ public class PublicLegalTextRenderer {
     if (agency != null && agency.getName() != null) {
       values.put(LegalTextTokens.BERATUNGSSTELLE, LegalTextTokens.escapeForHtml(agency.getName()));
     }
+    var address = address(agency);
+    if (address != null) {
+      values.put(LegalTextTokens.ADRESSE, LegalTextTokens.escapeForHtml(address));
+    }
     var topicName = resolveTopicName(department.getTopicId());
     if (topicName != null) {
       values.put(LegalTextTokens.THEMA, LegalTextTokens.escapeForHtml(topicName));
     }
     return values;
+  }
+
+  /** "Street, postcode city" from the agency record; parts that are empty are left out. */
+  private static String address(Agency agency) {
+    if (agency == null) {
+      return null;
+    }
+    var place =
+        Stream.of(agency.getPostCode(), agency.getCity())
+            .map(PublicLegalTextRenderer::blankToNull)
+            .filter(Objects::nonNull)
+            .collect(Collectors.joining(" "));
+    var address =
+        Stream.of(blankToNull(agency.getStreet()), blankToNull(place))
+            .filter(Objects::nonNull)
+            .collect(Collectors.joining(", "));
+    return address.isEmpty() ? null : address;
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 
   private String resolveTopicName(Long topicId) {
