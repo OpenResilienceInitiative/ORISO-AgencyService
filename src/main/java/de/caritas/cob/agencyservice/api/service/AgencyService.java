@@ -8,6 +8,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsServi
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier;
+import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
@@ -442,8 +443,27 @@ public class AgencyService {
     }
   }
 
+  /**
+   * Tenant (Träger) lookup for the public agency response. A TenantService failure must not break
+   * the agency response (ORISO-AgencyService#293): it is logged and treated as "no Träger data",
+   * so the agency's own values are served.
+   */
+  private RestrictedTenantDTO findTenantDataRelevantForFeatureToggles(Agency agency) {
+    try {
+      return getTenantDataRelevantForFeatureToggles(agency);
+    } catch (RuntimeException exception) {
+      log.warn(
+          "Tenant lookup failed for agency {} (tenantId={}); serving the agency's own settings",
+          agency.getId(),
+          agency.getTenantId(),
+          exception);
+      return null;
+    }
+  }
+
   private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency) {
-    String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency);
+    RestrictedTenantDTO tenantData = findTenantDataRelevantForFeatureToggles(agency);
+    String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency, tenantData);
     return new AgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
@@ -467,7 +487,7 @@ public class AgencyService {
             agency.getAgencyTopics().stream()
                 .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
                 .toList())
-        .settings(buildAgencySettings(agency));
+        .settings(buildAgencySettings(agency, tenantData));
   }
 
   /**
@@ -479,16 +499,20 @@ public class AgencyService {
    * still attaches the raw controls via {@link
    * AgencyAdminControlsService#enrichSettingsWithAgencyAdminControls} so the Admin UI can render
    * disabled-not-hidden state.
+   *
+   * <p>Feature flags are served as effective values: Träger AND Beratungsstelle, a Träger
+   * "off" always wins (ORISO-AgencyService#293) — see {@link EffectiveAgencySettingsResolver}.
    */
-  private Settings buildAgencySettings(Agency agency) {
+  private Settings buildAgencySettings(Agency agency, RestrictedTenantDTO tenantData) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
+    EffectiveAgencySettingsResolver.applyTo(
+        settings, tenantData != null ? tenantData.getSettings() : null);
     effectivePermissionSettingsApplier.applyTo(settings, agencyAdminControlsService.getControls());
     return settings;
   }
 
-  protected String getRenderedAgencySpecificPrivacy(Agency agency) {
-    RestrictedTenantDTO tenantDataHoldingFeatureToggles = getTenantDataRelevantForFeatureToggles(
-        agency);
+  protected String getRenderedAgencySpecificPrivacy(
+      Agency agency, RestrictedTenantDTO tenantDataHoldingFeatureToggles) {
     de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings settings =
         tenantDataHoldingFeatureToggles != null ? tenantDataHoldingFeatureToggles.getSettings() : null;
     if (settings != null && settings.getFeatureCentralDataProtectionTemplateEnabled() != null
