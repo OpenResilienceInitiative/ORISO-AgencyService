@@ -8,6 +8,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.topicservice.generated.web.model.TopicDTO;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.owasp.html.HtmlPolicyBuilder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -61,6 +62,80 @@ class PublicLegalTextRendererTest {
     // The link targets live in the frontend deployment configuration; the backend does not know
     // them, so its token survives on purpose.
     assertThat(rendered.consentText()).contains("{{legal_links}}");
+  }
+
+  @Test
+  void render_Should_fillTheAddressOfTheBeratungsstelle() {
+    var department =
+        AgencyTopic.builder()
+            .topicId(42L)
+            .agency(
+                Agency.builder()
+                    .id(7L)
+                    .name("Caritas Freiburg")
+                    .street("Musterstraße 1")
+                    .postCode("79098")
+                    .city("Freiburg")
+                    .consultingTypeId(1)
+                    .build())
+            .build();
+    var text =
+        new ResolvedLegalText(
+            "{\"de\":\"<p>{{Beratungsstelle}}, {{Adresse}}</p>\"}",
+            null,
+            LegalTextSourceLevel.TENANT,
+            1L);
+
+    var rendered = renderer(false).render(text, department);
+
+    assertThat(rendered.content()).contains("Caritas Freiburg, Musterstraße 1, 79098 Freiburg");
+  }
+
+  @Test
+  void render_Should_leaveTheAddressToken_When_theAgencyHasNoAddress() {
+    var text =
+        new ResolvedLegalText(
+            "{\"de\":\"<p>{{Adresse}}</p>\"}", null, LegalTextSourceLevel.TENANT, 1L);
+
+    var rendered = renderer(false).render(text, department());
+
+    assertThat(rendered.content()).contains("{{Adresse}}");
+  }
+
+  @Test
+  void render_Should_substituteTokensThatTheTenantSanitizerSplit() {
+    // Träger texts are stored by TenantService, whose OWASP sanitiser turns {{ into {<!-- -->{.
+    var split =
+        new HtmlPolicyBuilder()
+            .allowElements("p")
+            .toFactory()
+            .sanitize("<p>{{Beratungsstelle}} in {{Adresse}}</p>");
+    assertThat(split).contains("{<!-- -->{");
+    var department =
+        AgencyTopic.builder()
+            .topicId(42L)
+            .agency(
+                Agency.builder()
+                    .id(7L)
+                    .name("Caritas Freiburg")
+                    .street("Musterstraße 1")
+                    .postCode("79098")
+                    .city("Freiburg")
+                    .consultingTypeId(1)
+                    .build())
+            .build();
+    var text =
+        new ResolvedLegalText(
+            "{\"de\":\"" + split.replace("\"", "\\\"") + "\"}",
+            null,
+            LegalTextSourceLevel.TENANT,
+            1L);
+
+    var rendered = renderer(false).render(text, department);
+
+    assertThat(rendered.content())
+        .contains("Caritas Freiburg in Musterstraße 1, 79098 Freiburg")
+        .doesNotContain("<!-- -->");
   }
 
   @Test
