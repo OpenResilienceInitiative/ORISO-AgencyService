@@ -284,7 +284,7 @@ public class AgencyAdminService {
     }
     dataProtectionConverter.convertToEntity(agencyDTO.getDataProtection(), agencyBuilder);
     var agencyToCreate = agencyBuilder.build();
-    // ORISO-Admin#1026: counsellors of a new agency start with the strict topic permission.
+    // Counsellors of a new agency start with the strict topic permission.
     agencyToCreate.setSettings(
         agencySettingsService.withNewAgencyDefaults(agencyToCreate.getSettings()));
 

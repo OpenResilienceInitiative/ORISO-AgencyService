@@ -21,15 +21,7 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * The agency default "Berater:innen dürfen sich selbst Themen hinzufügen" (ORISO-Admin#1026, slice
- * 6), a three-level setting: NONE, SELECT_EXISTING, CREATE. It prefills the topic permission of
- * every counsellor invited into the agency.
- *
- * <p>Agencies that existed before the setting keep today's behaviour (CREATE) without a data
- * migration: a stored settings document without the key reads as CREATE. New agencies start with
- * NONE. An update that does not mention the setting leaves it alone.
- */
+/** Legacy agencies read as CREATE without a data migration; new agencies start with NONE. */
 @RunWith(SpringRunner.class)
 @SpringBootTest(classes = AgencyServiceApplication.class)
 @TestPropertySource(properties = "spring.profiles.active=testing")

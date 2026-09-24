@@ -70,11 +70,7 @@ public class AgencySettingsService {
     }
   }
 
-  /**
-   * ORISO-Admin#1026: a stored settings document without the key belongs to an agency that existed
-   * before the setting — it keeps today's behaviour, CREATE. New agencies get NONE written
-   * explicitly on creation ({@link #withNewAgencyDefaults}).
-   */
+  /** A document without the key predates the setting and keeps the old behaviour, CREATE. */
   private static Settings defaultCounsellorTopicPermission(Settings settings) {
     if (settings.getCounsellorTopicPermission() == null) {
       settings.setCounsellorTopicPermission(CounsellorTopicPermissionEnum.CREATE);
@@ -92,8 +88,7 @@ public class AgencySettingsService {
   }
 
   /**
-   * An update that does not carry the topic permission keeps the stored one (ORISO-Admin#1026):
-   * the settings document is replaced as a whole, and a client that does not know the key must not
+   * The settings document is replaced as a whole; a client that does not know the key must not
    * flip the agency back to the legacy default.
    */
   public Settings keepStoredCounsellorTopicPermission(Settings update, String storedSettingsJson) {
