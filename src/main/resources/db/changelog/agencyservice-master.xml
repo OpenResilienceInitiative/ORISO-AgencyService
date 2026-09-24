@@ -94,6 +94,9 @@
        renders, so no Träger can edit away the platform's mandatory disclosure. -->
   <include file="db/changelog/changeset/0032_legal_consent_text/0032_changeSet.xml"/>
   <include file="db/changelog/changeset/0033_agency_geocoordinates/0033_changeSet.xml"/>
+  <!-- ORISO-AgencyService#297: agency-owned legal drafts. The row UUID plus optimistic version is
+       the CAS identity; deleting and recreating a draft therefore cannot revive an old token. -->
+  <include file="db/changelog/changeset/0034_agency_legal_draft/0034_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB
