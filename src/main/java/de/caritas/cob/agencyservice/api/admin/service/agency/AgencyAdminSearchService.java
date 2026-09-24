@@ -85,12 +85,7 @@ public class AgencyAdminSearchService {
     return searchAgencies(keyword, page, perPage, sort, false);
   }
 
-  /**
-   * Same as {@link #searchAgencies(String, Integer, Integer, Sort)}, with the invite-bar type-ahead
-   * additions (ORISO-Admin#1026): the keyword also matches the name of one of the agency's topics
-   * (Fachbereich), and {@code excludeDeleted} leaves soft-deleted agencies out. Every result carries
-   * its tenant's name (best effort) and its topic names resolved in the agency's own tenant.
-   */
+  /** The keyword also matches the agency's topic names (Fachbereich). */
   public AgencyAdminSearchResultDTO searchAgencies(final String keyword, final Integer page,
       final Integer perPage, Sort sort, boolean excludeDeleted) {
 
@@ -113,9 +108,8 @@ public class AgencyAdminSearchService {
       queryResult = withKeyword
           ? searchAgenciesByKeyword(entityManager, agencyAdminSearch)
           : searchAgenciesWithoutKeywordFilter(entityManager, agencyAdminSearch);
-      // Load the topics of the page while the entity manager is open. The paged queries no longer
-      // fetch-join them: a collection fetch plus setMaxResults made Hibernate page IN MEMORY, i.e.
-      // load every matching agency for each page. @BatchSize loads them 50 agencies at a time.
+      // No fetch-join in the paged queries: collection fetch + setMaxResults pages in memory.
+      // Load the topics here while the entity manager is open; @BatchSize batches them.
       queryResult.getResult().forEach(agency -> Hibernate.initialize(agency.getAgencyTopics()));
     }
 
@@ -164,11 +158,8 @@ public class AgencyAdminSearchService {
   }
 
   /**
-   * The agencies offering a topic whose name contains the keyword. Topics live in
-   * ConsultingTypeService per tenant, so the names are looked up in every tenant the caller may
-   * see: a tenant-bound admin's own tenant, for the platform admin every tenant that has agencies.
-   * The result is only a widening of the keyword match — the tenant and agency-admin scope
-   * predicates still apply to it.
+   * Topics live per tenant in ConsultingTypeService, so names are matched in every tenant the
+   * caller may see. The result only widens the keyword match; the scope predicates still apply.
    */
   private Set<Long> agencyIdsWithTopicNameMatching(EntityManager entityManager, String keyword) {
     if (!topicsFeatureEnabled || agencyTopicEnrichmentService == null) {

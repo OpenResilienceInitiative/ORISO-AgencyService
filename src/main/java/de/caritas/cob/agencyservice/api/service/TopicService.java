@@ -23,11 +23,7 @@ public class TopicService {
   private final @NonNull TenantHeaderSupplier tenantHeaderSupplier;
   private final @NonNull AuthenticatedUser authenticatedUser;
 
-  /**
-   * The topics of the current tenant context. Topics are tenant-scoped in ConsultingTypeService, so
-   * the cache key carries the tenant — without it the first tenant to fill the cache answered for
-   * every other tenant.
-   */
+  /** Keyed by tenant: otherwise the first tenant to fill the cache answers for all tenants. */
   @Cacheable(cacheNames = CacheManagerConfig.TOPICS_CACHE,
       key = "'current:' + T(de.caritas.cob.agencyservice.api.tenant.TenantContext).getCurrentTenant()")
   public List<TopicDTO> getAllTopics() {
@@ -36,10 +32,7 @@ public class TopicService {
     return controllerApi.getAllTopics();
   }
 
-  /**
-   * The topics of one given tenant, independent of the caller's own tenant — the platform admin
-   * (tenant 0) looks at agencies of every tenant (ORISO-Admin#1026 agency search).
-   */
+  /** Topics of a given tenant, not the caller's: the platform admin sees every tenant. */
   @Cacheable(cacheNames = CacheManagerConfig.TOPICS_CACHE, key = "'tenant:' + #tenantId")
   public List<TopicDTO> getAllTopicsOfTenant(Long tenantId) {
     TopicControllerApi controllerApi = topicServiceApiControllerFactory.createControllerApi();

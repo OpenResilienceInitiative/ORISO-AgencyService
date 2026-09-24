@@ -27,23 +27,13 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 
-/**
- * The agency type-ahead of the invite bar (ORISO-Admin#1026, slice 2) runs on the existing admin
- * search {@code GET /agencyadmin/agencies}: it matches the agency name OR the name of one of its
- * topics, is scoped server-side per role, can leave soft-deleted agencies out and carries what the
- * picker shows (id, name, postcode, city, tenant id + name, topic names).
- *
- * <p>Real database; only the remote services (ConsultingTypeService topics, TenantService,
- * UserService) are replaced. Topics live in ConsultingTypeService per tenant, so the mock answers
- * per tenant as the real service does.
- */
+/** Real database; only remote services are mocked, and topics are answered per tenant. */
 @SpringBootTest(classes = AgencyServiceApplication.class)
 @TestPropertySource(
     properties = {
         "spring.profiles.active=testing",
         "feature.topics.enabled=true",
-        // Production runs multi-tenant: the @Primary AgencyAdminSearchTenantSupportService and
-        // per-tenant topics are what the type-ahead really hits.
+        // Production runs multi-tenant, so this hits the @Primary tenant-support search.
         "multitenancy.enabled=true"})
 @AutoConfigureTestDatabase(replace = Replace.ANY)
 @Sql(scripts = {"/database/AgencyDatabase.sql", "/database/AgencyPickerSearch.sql"})
@@ -59,9 +49,7 @@ class AgencyAdminSearchPickerIT {
   @MockitoBean private TopicService topicService;
   @MockitoBean private TenantService tenantService;
 
-  /**
-   * AgencyController needs it as a constructor argument; it is not what this suite exercises.
-   */
+  /** Constructor dependency of AgencyController; not exercised here. */
   @MockitoBean
   private de.caritas.cob.agencyservice.api.service.TopicEnrichmentService topicEnrichmentService;
 

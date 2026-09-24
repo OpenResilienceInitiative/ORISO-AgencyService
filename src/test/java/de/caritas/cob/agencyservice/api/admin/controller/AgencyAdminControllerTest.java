@@ -173,7 +173,6 @@ public class AgencyAdminControllerTest {
   @Test
   public void searchAgencies_Should_passExcludeDeletedThrough_When_theTypeAheadAsksForIt()
       throws Exception {
-    // ORISO-Admin#1026: the invite-bar agency picker leaves soft-deleted agencies out.
     this.mvc
         .perform(get(AGENCY_SEARCH_PATH).param(PAGE_PARAM, "1").param(PER_PAGE_PARAM, "10")
             .param("q", "Schuldner").param("excludeDeleted", "true"))

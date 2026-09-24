@@ -128,7 +128,7 @@ class AgencyAdminSearchTenantSupportServiceTest {
         service.agenciesWithoutKeywordFilterPredicates(
             AgencyAdminSearch.builder().build(), criteriaBuilder, root);
 
-    // admin scope, tenant scope and the (here inactive) soft-delete filter of #1026
+    // admin scope, tenant scope and the (here inactive) soft-delete filter
     assertThat(predicates).hasSize(3);
     assertThat(predicates[0]).isNotNull();
     assertThat(predicates[1]).isSameAs(predicate);

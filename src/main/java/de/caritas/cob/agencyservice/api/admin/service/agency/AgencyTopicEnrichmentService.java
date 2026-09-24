@@ -28,11 +28,7 @@ public class AgencyTopicEnrichmentService {
   @Value("${multitenancy.enabled:false}")
   private boolean multitenancy;
 
-  /**
-   * Resolves the topic data of the agency's topics in the agency's OWN tenant. Topics live in
-   * ConsultingTypeService per tenant; resolving them in the caller's tenant left every topic name
-   * empty for the platform admin (tenant 0) looking at another tenant's agency.
-   */
+  /** Topics are per tenant: resolve them in the agency's tenant, not the caller's. */
   public Agency enrichAgencyWithTopics(Agency agency) {
     log.debug("Enriching agency with topics");
     var availableTopics = toTopicMap(topicsOfTenant(agency.getTenantId()));
@@ -59,17 +55,11 @@ public class AgencyTopicEnrichmentService {
     }
   }
 
-  /**
-   * All topics of one tenant, or of the current context when {@code tenantId} is null or the
-   * current tenant. Best
-   * effort: an unreachable ConsultingTypeService yields no topics (names stay empty) instead of
-   * failing the admin view.
-   */
+  /** Best effort: an unreachable ConsultingTypeService yields no topics instead of failing. */
   public List<de.caritas.cob.agencyservice.topicservice.generated.web.model.TopicDTO>
       topicsOfTenant(Long tenantId) {
     try {
-      // The caller's own tenant (or no tenant at all) keeps the established per-context lookup;
-      // only a foreign tenant — the platform admin's view — asks for that tenant explicitly.
+      // Only a foreign tenant (the platform admin's view) is asked for explicitly.
       var topics = !multitenancy
           || tenantId == null
           || tenantId.equals(TenantContext.getCurrentTenant())

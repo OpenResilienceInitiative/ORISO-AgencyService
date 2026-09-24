@@ -41,8 +41,8 @@ paths:
         - name: excludeDeleted
           in: query
           description: >-
-            When true, soft-deleted agencies are left out (the invite-bar type-ahead,
-            ORISO-Admin#1026). Default false keeps the agency list unchanged.
+            When true, soft-deleted agencies are left out. Default false keeps the agency list
+            unchanged.
           required: false
           schema:
             type: boolean
