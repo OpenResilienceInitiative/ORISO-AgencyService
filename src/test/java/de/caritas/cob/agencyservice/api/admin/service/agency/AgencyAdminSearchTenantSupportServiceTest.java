@@ -68,6 +68,8 @@ class AgencyAdminSearchTenantSupportServiceTest {
     TenantContext.clear();
     service = new AgencyAdminSearchTenantSupportService(
         entityManagerFactory, authenticatedUser, userAdminService);
+    // This subclass only exists with multitenancy switched on.
+    setField(service, "multitenancyEnabled", true);
   }
 
   @AfterEach
@@ -151,7 +153,7 @@ class AgencyAdminSearchTenantSupportServiceTest {
 
     assertThat(predicates).hasSize(4);
     verify(criteriaBuilder).or(any(Predicate.class), any(Predicate.class), any(Predicate.class));
-    verify(criteriaBuilder, times(3)).like(any(Expression.class), eq("%berlin%"));
+    verify(criteriaBuilder, times(3)).like(any(Expression.class), eq("%berlin%"), eq('!'));
     verify(criteriaBuilder, times(3)).lower(any(Expression.class));
   }
 
@@ -209,10 +211,11 @@ class AgencyAdminSearchTenantSupportServiceTest {
   }
 
   @Test
-  void agencyAdminFilterPredicate_shouldReturnConjunction_whenTenantContextIsZero() {
+  void agencyAdminFilterPredicate_shouldReturnConjunction_whenPlatformAdminIsInTenantZero() {
     TenantContext.setCurrentTenant(0L);
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     when(authenticatedUser.getTenantId()).thenReturn(0L);
+    when(authenticatedUser.isPlatformAdmin()).thenReturn(true);
 
     Predicate alwaysTruePredicate = mock(Predicate.class);
     when(criteriaBuilder.conjunction()).thenReturn(alwaysTruePredicate);
@@ -221,6 +224,20 @@ class AgencyAdminSearchTenantSupportServiceTest {
 
     assertThat(result).isSameAs(alwaysTruePredicate);
     verify(criteriaBuilder).conjunction();
+  }
+
+  @Test
+  void agencyAdminFilterPredicate_shouldStayInTenantZero_whenTenantZeroCallerIsNoPlatformAdmin() {
+    stubTenantIdPath();
+    TenantContext.setCurrentTenant(0L);
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+    when(criteriaBuilder.equal(tenantIdPath, 0L)).thenReturn(predicate);
+
+    Predicate result = service.agencyAdminFilterPredicate(criteriaBuilder, root);
+
+    assertThat(result).isSameAs(predicate);
+    verify(criteriaBuilder, never()).conjunction();
   }
 
   @Test
@@ -266,7 +283,8 @@ class AgencyAdminSearchTenantSupportServiceTest {
     when(root.get("postCode")).thenReturn(postCodePath);
     when(root.get("city")).thenReturn(cityPath);
     when(criteriaBuilder.lower(any(Expression.class))).thenReturn(lowerExpression);
-    when(criteriaBuilder.like(any(Expression.class), anyString())).thenReturn(likePredicate);
+    when(criteriaBuilder.like(any(Expression.class), anyString(), eq('!')))
+        .thenReturn(likePredicate);
     when(criteriaBuilder.or(likePredicate, likePredicate, likePredicate))
         .thenReturn(keywordPredicate);
   }

@@ -54,6 +54,7 @@ public class AgencyAdminSearchService {
   protected static final String CITY_SEARCH_FIELD = "city";
   protected static final String TENANT_ID_SEARCH_FIELD = "tenantId";
   protected static final String DELETE_DATE_FIELD = "deleteDate";
+  protected static final char LIKE_ESCAPE = '!';
   protected final @NonNull EntityManagerFactory entityManagerFactory;
 
   protected final @NonNull AuthenticatedUser authenticatedUser;
@@ -70,6 +71,9 @@ public class AgencyAdminSearchService {
 
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
+
+  @Value("${multitenancy.enabled:false}")
+  private boolean multitenancyEnabled;
 
   /**
    * Searches for agencies by a given keyword, limits the result by perPage and generates a
@@ -165,15 +169,12 @@ public class AgencyAdminSearchService {
     if (!topicsFeatureEnabled || agencyTopicEnrichmentService == null) {
       return Set.of();
     }
-    Long callerTenantId = callerTenantId();
-    Collection<Long> tenantIds;
-    if (callerTenantId == null || callerTenantId.equals(0L)) {
-      tenantIds = entityManager
-          .createQuery("select distinct a.tenantId from Agency a", Long.class)
-          .getResultList();
-    } else {
-      tenantIds = Collections.singletonList(callerTenantId);
-    }
+    Optional<Long> scopedTenantId = scopedTenantId();
+    Collection<Long> tenantIds = scopedTenantId.isPresent()
+        ? Collections.singletonList(scopedTenantId.get())
+        : entityManager
+            .createQuery("select distinct a.tenantId from Agency a", Long.class)
+            .getResultList();
     Set<Long> topicIds = new HashSet<>();
     String needle = keyword.trim().toLowerCase(Locale.ROOT);
     for (Long tenantId : tenantIds) {
@@ -193,9 +194,24 @@ public class AgencyAdminSearchService {
         .getResultList());
   }
 
-  private Long callerTenantId() {
+  /**
+   * Empty = every tenant. With multitenancy, tenant 0 widens the scope only for a platform admin or
+   * the technical user; any other tenant-0 caller stays in tenant 0 and sees no other tenant.
+   */
+  private Optional<Long> scopedTenantId() {
     Long tenantId = authenticatedUser.getTenantId();
-    return tenantId != null ? tenantId : TenantContext.getCurrentTenant();
+    if (tenantId == null) {
+      tenantId = TenantContext.getCurrentTenant();
+    }
+    if (tenantId == null) {
+      // Only without multitenancy; with it, the tenant-support subclass filters by TenantContext.
+      return Optional.empty();
+    }
+    if (tenantId.equals(0L) && (!multitenancyEnabled
+        || authenticatedUser.isPlatformAdmin() || authenticatedUser.isTechnicalUser())) {
+      return Optional.empty();
+    }
+    return Optional.of(tenantId);
   }
 
   public SearchResult<Agency> searchAgenciesByKeyword(EntityManager entityManager,
@@ -283,15 +299,10 @@ public class AgencyAdminSearchService {
   }
 
   private Predicate tenantScopePredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
-    Long tenantId = authenticatedUser.getTenantId();
-    if (tenantId == null) {
-      tenantId = TenantContext.getCurrentTenant();
-    }
-    // technical/super context is represented by tenant 0 and may see all tenants
-    if (tenantId == null || tenantId.equals(0L)) {
-      return alwaysTruePredicate(criteriaBuilder);
-    }
-    return criteriaBuilder.equal(root.get(TENANT_ID_SEARCH_FIELD), tenantId);
+    Optional<Long> tenantId = scopedTenantId();
+    return tenantId.isPresent()
+        ? criteriaBuilder.equal(root.get(TENANT_ID_SEARCH_FIELD), tenantId.get())
+        : alwaysTruePredicate(criteriaBuilder);
   }
 
   private Predicate alwaysFalsePredicate(CriteriaBuilder criteriaBuilder) {
@@ -362,15 +373,20 @@ public class AgencyAdminSearchService {
 
   private Predicate keywordTextPredicate(String keyword, CriteriaBuilder criteriaBuilder,
       Root<Agency> root) {
+    String pattern = "%" + escapeLikeWildcards(keyword.toLowerCase()) + "%";
     return criteriaBuilder.or(
-        criteriaBuilder.like(criteriaBuilder.lower(root.get(NAME_SEARCH_FIELD)),
-            "%" + keyword.toLowerCase() + "%"),
-        criteriaBuilder.like(
-            criteriaBuilder.lower(root.get(POST_CODE_SEARCH_FIELD)),
-            "%" + keyword.toLowerCase() + "%"),
-        criteriaBuilder.like(criteriaBuilder.lower(root.get(CITY_SEARCH_FIELD)),
-            "%" + keyword.toLowerCase() + "%")
+        criteriaBuilder.like(criteriaBuilder.lower(root.get(NAME_SEARCH_FIELD)), pattern,
+            LIKE_ESCAPE),
+        criteriaBuilder.like(criteriaBuilder.lower(root.get(POST_CODE_SEARCH_FIELD)), pattern,
+            LIKE_ESCAPE),
+        criteriaBuilder.like(criteriaBuilder.lower(root.get(CITY_SEARCH_FIELD)), pattern,
+            LIKE_ESCAPE)
     );
+  }
+
+  /** A typed "%" or "_" is text, not a wildcard; "!" because MariaDB mangles a backslash. */
+  static String escapeLikeWildcards(String text) {
+    return text.replace("!", "!!").replace("%", "!%").replace("_", "!_");
   }
 
   private boolean hasOnlySpecialCharacters(String str) {

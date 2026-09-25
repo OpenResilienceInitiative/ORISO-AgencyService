@@ -112,6 +112,45 @@ class AgencyAdminSearchPickerIT {
   }
 
   @Test
+  void search_Should_NotFindATopicOfAForeignTenant_When_TenantAdminSearches() {
+    actAsTenantAdmin();
+
+    // Topic 601 "Schuldnerberatung Nord" exists only in tenant 2.
+    assertThat(ids(search("schuldnerberatung nord", false))).isEmpty();
+  }
+
+  @Test
+  void search_Should_FindNothingAcrossTenants_When_TenantZeroCallerIsNoPlatformAdmin() {
+    TenantContext.setCurrentTenant(0L);
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+
+    assertThat(ids(search("zebrafink", false))).isEmpty();
+    assertThat(ids(search("schuldnerberatung nord", false))).isEmpty();
+  }
+
+  @Test
+  void search_Should_SeeEveryTenant_When_TechnicalUserSearches() {
+    TenantContext.setCurrentTenant(0L);
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    when(authenticatedUser.isTechnicalUser()).thenReturn(true);
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+
+    assertThat(ids(search("zebrafink", false)))
+        .containsExactlyInAnyOrder(9001L, 9002L, 9003L, 9004L);
+  }
+
+  @Test
+  void search_Should_TreatPercentAndUnderscoreAsPlainText() {
+    actAsTenantAdmin();
+
+    // Unescaped, "%" and "_" are LIKE wildcards and would match "Zebrafink Mitte".
+    assertThat(ids(search("zebra%mitte", false))).isEmpty();
+    assertThat(ids(search("zebrafink_mitte", false))).isEmpty();
+    assertThat(ids(search("zebrafink mitte", false))).containsExactly(9001L);
+  }
+
+  @Test
   void search_Should_CarryWhatThePickerShows() {
     actAsPlatformAdmin();
 
@@ -164,6 +203,7 @@ class AgencyAdminSearchPickerIT {
   private void actAsPlatformAdmin() {
     TenantContext.setCurrentTenant(0L);
     when(authenticatedUser.getTenantId()).thenReturn(0L);
+    when(authenticatedUser.isPlatformAdmin()).thenReturn(true);
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
   }
 
