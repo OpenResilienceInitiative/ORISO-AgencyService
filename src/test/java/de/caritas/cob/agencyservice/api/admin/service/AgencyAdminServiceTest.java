@@ -140,6 +140,9 @@ class AgencyAdminServiceTest {
   @Mock
   AgencySettingsService agencySettingsService;
 
+  @Mock
+  OneTopicPerAgencyPolicy oneTopicPerAgencyPolicy;
+
   @Captor
   private ArgumentCaptor<Agency> agencyArgumentCaptor;
 

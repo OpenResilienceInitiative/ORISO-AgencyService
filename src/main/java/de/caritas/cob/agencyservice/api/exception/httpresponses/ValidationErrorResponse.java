@@ -24,6 +24,7 @@ public record ValidationErrorResponse(
           DATA_PROTECTION_ALTERNATIVE_RESPONSIBLE_IS_EMPTY,
           DATA_PROTECTION_DTO_IS_NULL -> "dataProtection";
       case LEGAL_DRAFT_REVISION_CONFLICT -> "revision";
+      case ONE_TOPIC_PER_AGENCY -> "topicIds";
       default -> "agency";
     };
   }
@@ -51,6 +52,10 @@ public record ValidationErrorResponse(
       case AGENCY_ID_NOT_AVAILABLE -> "The agency ID is not available.";
       case LEGAL_DRAFT_REVISION_CONFLICT ->
           "The legal draft changed or was recreated; reload it before saving again.";
+      case ONE_TOPIC_PER_AGENCY ->
+          "This platform allows only one topic per agency; the agency cannot gain another topic.";
+      case SETTINGS_UNAVAILABLE ->
+          "The platform settings cannot be read right now; try again in a moment.";
     };
   }
 }
