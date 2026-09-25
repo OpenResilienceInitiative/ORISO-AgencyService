@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.api.controller;
 
 import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
 import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -30,6 +31,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import de.caritas.cob.agencyservice.api.service.ApplicationSettingsService;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.FeatureToggleDTO;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -70,6 +75,10 @@ class AgencyAdminControllerWithTopicsIT {
   @MockitoBean
   private TenantService tenantService;
 
+  // Multi-topic writes read the one-topic switch (#1264); pin it off instead of calling CTS.
+  @MockitoSpyBean
+  private ApplicationSettingsService applicationSettingsService;
+
   @BeforeEach
   public void setup() {
     TenantContext.clear();
@@ -80,6 +89,9 @@ class AgencyAdminControllerWithTopicsIT {
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO().settings(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings().featureCentralDataProtectionTemplateEnabled(false)));
     when(authenticatedUser.getTenantId()).thenReturn(1L);
+    doReturn(new ApplicationSettingsDTO()
+            .oneTopicPerAgencyEnabled(new FeatureToggleDTO().value(false).readOnly(false)))
+        .when(applicationSettingsService).fetchApplicationSettings();
   }
 
   private MockHttpServletRequestBuilder withCsrf(
