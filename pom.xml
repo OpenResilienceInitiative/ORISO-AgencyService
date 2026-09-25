@@ -27,6 +27,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <java.version>21</java.version>
+    <!-- CVE-2026-84939: Spring Boot 4.0.7 manages FreeMarker 2.3.34, which
+         allows path traversal through a malformed locale identifier. Keep the
+         fixed patch until the Spring Boot parent manages 2.3.35 or newer. -->
+    <freemarker.version>2.3.35</freemarker.version>
     <!-- CVE-2026-65182 / CVE-2026-65905 / CVE-2026-68525: three CRITICAL auth-bypass
          issues in the Tomcat 11.0.22 that spring-boot 4.0.7 manages; the Trivy publish
          gate rejects them as fixable. Boot 4.0.8 still only manages 11.0.24, so pin the
