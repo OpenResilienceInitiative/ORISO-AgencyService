@@ -167,7 +167,9 @@ components:
             the agency. NONE = only the assigned department, SELECT_EXISTING = pick among the
             agency's departments, CREATE = add further topics of the Traeger. Reads CREATE for
             agencies that existed before the setting; new agencies start with NONE; an update
-            without this key leaves the stored value unchanged.
+            without this key leaves the stored value unchanged. The prefill is done by the Admin
+            UI only: an invite that omits topicPermission is stored by the UserService as
+            SELECT_EXISTING, not as this agency default.
         featureStatisticsEnabled:
           type: boolean
           example: false
