@@ -163,6 +163,35 @@ class AgencyIdAllocationServiceIT {
   }
 
   @Test
+  void releaseUnconsumed_Should_makeReservedIdAssignableAgain_When_noAgencyUsesIt() {
+    allocationService.reserve(21L, null);
+
+    allocationService.releaseUnconsumed(21L);
+
+    assertThat(allocationService.checkAvailability(21L)).isEqualTo(AgencyIdStatus.FREE);
+  }
+
+  @Test
+  void releaseUnconsumed_Should_throwNotFound_When_noReservationExists() {
+    assertThatThrownBy(() -> allocationService.releaseUnconsumed(4711L))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void releaseUnconsumed_Should_refuseAndKeepReservation_When_anAgencyAlreadyUsesTheId() {
+    // a reservation row next to an agency row with the same ID: the reservation is no longer
+    // an open invite slot, so the service identity must not be able to touch it
+    seedAgencies(21, 21);
+    jdbcTemplate.update(
+        "INSERT INTO agency_id_reservation (agency_id, create_date)"
+            + " VALUES (21, CURRENT_TIMESTAMP)");
+
+    assertThatThrownBy(() -> allocationService.releaseUnconsumed(21L))
+        .isInstanceOf(ConflictException.class);
+    assertThat(reservationRepository.existsById(21L)).isTrue();
+  }
+
+  @Test
   void consumeReservation_Should_removeReservationExactlyOnce() {
     allocationService.reserve(21L, null);
 

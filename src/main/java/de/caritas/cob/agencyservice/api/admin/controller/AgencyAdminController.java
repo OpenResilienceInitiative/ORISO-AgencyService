@@ -17,6 +17,7 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminServic
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
+import de.caritas.cob.agencyservice.api.authorization.Authority.AuthorityValue;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
@@ -56,6 +57,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -220,13 +222,28 @@ public class AgencyAdminController implements AgencyadminApi {
    * Entry point to release an open agency ID reservation, e.g. when an unconsumed invite is
    * revoked (TEN-INV-U2).
    *
+   * <p>The Keycloak technical user (UserService invite cleanup, ORISO-Helm#367) may release only a
+   * reservation that was never consumed; agency admins keep the unchanged release.
+   *
    * @param agencyId the reserved agency ID (required)
    */
   @Override
-  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  @PreAuthorize(
+      "hasAuthority('AUTHORIZATION_AGENCY_ADMIN') or hasAuthority('AUTHORIZATION_TECHNICAL_USER')")
   public ResponseEntity<Void> releaseAgencyIdReservation(@PathVariable Long agencyId) {
-    agencyIdAllocationService.release(agencyId);
+    if (authenticatedUserHasAuthority(AuthorityValue.AGENCY_ADMIN)) {
+      agencyIdAllocationService.release(agencyId);
+    } else {
+      agencyIdAllocationService.releaseUnconsumed(agencyId);
+    }
     return ResponseEntity.noContent().build();
+  }
+
+  private static boolean authenticatedUserHasAuthority(String authority) {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null
+        && authentication.getAuthorities().stream()
+            .anyMatch(granted -> authority.equals(granted.getAuthority()));
   }
 
   /**
