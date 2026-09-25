@@ -176,6 +176,103 @@ class AgencyAdminSearchPickerIT {
         .containsExactly(9004L);
   }
 
+  @Test
+  void search_Should_KeepTheOwnTenant_When_TenantAdminFiltersByTheOwnTenant() {
+    actAsTenantAdmin();
+
+    assertThat(ids(searchInTenant("zebrafink", OWN_TENANT)))
+        .containsExactlyInAnyOrder(9001L, 9002L, 9004L);
+  }
+
+  @Test
+  void search_Should_FindNothing_When_TenantAdminFiltersByAForeignTenant() {
+    actAsTenantAdmin();
+
+    // The filter only narrows; it never widens the own-tenant scope to tenant 2.
+    assertThat(ids(searchInTenant("zebrafink", OTHER_TENANT))).isEmpty();
+    assertThat(ids(searchInTenant("", OTHER_TENANT))).isEmpty();
+  }
+
+  @Test
+  void search_Should_ShowEveryTenant_When_PlatformAdminSetsNoTenant() {
+    actAsPlatformAdmin();
+
+    assertThat(ids(searchInTenant("zebrafink", null)))
+        .containsExactlyInAnyOrder(9001L, 9002L, 9003L, 9004L);
+  }
+
+  @Test
+  void search_Should_ShowOnlyTheChosenTenant_When_PlatformAdminFiltersByTenant() {
+    actAsPlatformAdmin();
+
+    assertThat(ids(searchInTenant("zebrafink", OTHER_TENANT))).containsExactly(9003L);
+    assertThat(ids(searchInTenant("zebrafink", OWN_TENANT)))
+        .containsExactlyInAnyOrder(9001L, 9002L, 9004L);
+    // Without a keyword the seed's own tenant-2 agencies come along, but never another tenant's.
+    assertThat(searchInTenant("", OTHER_TENANT))
+        .extracting(agency -> agency.getEmbedded().getTenantId())
+        .isNotEmpty()
+        .containsOnly(OTHER_TENANT);
+  }
+
+  @Test
+  void search_Should_MatchTopicsOfTheChosenTenantOnly_When_PlatformAdminFiltersByTenant() {
+    actAsPlatformAdmin();
+
+    // "schuldner" matches topic 501 (tenant 1) and 601 (tenant 2); tenant 2 keeps only 601.
+    assertThat(ids(searchInTenant("schuldner", OTHER_TENANT))).containsExactly(9003L);
+    assertThat(ids(searchInTenant("schuldnerberatung nord", OWN_TENANT))).isEmpty();
+  }
+
+  @Test
+  void search_Should_FilterInTheQuery_When_ThePageIsSmallerThanTheHits() {
+    actAsPlatformAdmin();
+
+    // Sorted by name, page 1 of size 1 across all tenants is "Zebrafink Alt" (tenant 1).
+    var result = agencyAdminSearchService.searchAgencies("zebrafink", 1, 1, byName(),
+        new AgencySearchFilter(false, OTHER_TENANT));
+
+    assertThat(ids(result.getEmbedded())).containsExactly(9003L);
+    assertThat(result.getTotal()).isEqualTo(1);
+  }
+
+  @Test
+  void search_Should_StayWithinAdministeredAgencies_When_AgencyAdminFiltersByTenant() {
+    actAsAgencyAdminOf(9002L);
+
+    assertThat(ids(searchInTenant("zebrafink", OWN_TENANT))).containsExactly(9002L);
+    assertThat(ids(searchInTenant("zebrafink", OTHER_TENANT))).isEmpty();
+  }
+
+  @Test
+  void search_Should_ShowOnlyTheChosenTenant_When_TechnicalUserFiltersByTenant() {
+    TenantContext.setCurrentTenant(0L);
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    when(authenticatedUser.isTechnicalUser()).thenReturn(true);
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+
+    assertThat(ids(searchInTenant("zebrafink", OTHER_TENANT))).containsExactly(9003L);
+  }
+
+  @Test
+  void search_Should_FindNothing_When_TenantZeroCallerIsNoPlatformAdminAndFiltersByTenant() {
+    TenantContext.setCurrentTenant(0L);
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+
+    assertThat(ids(searchInTenant("zebrafink", OWN_TENANT))).isEmpty();
+  }
+
+  private List<AgencyAdminFullResponseDTO> searchInTenant(String q, Long tenantId) {
+    return agencyAdminSearchService
+        .searchAgencies(q, 1, 50, byName(), new AgencySearchFilter(false, tenantId))
+        .getEmbedded();
+  }
+
+  private static Sort byName() {
+    return new Sort().field(Sort.FieldEnum.NAME).order(Sort.OrderEnum.ASC);
+  }
+
   private List<AgencyAdminFullResponseDTO> search(String q, boolean excludeDeleted) {
     return agencyAdminSearchService
         .searchAgencies(

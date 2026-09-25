@@ -31,7 +31,7 @@ public class AgencyAdminSearchTenantSupportService extends AgencyAdminSearchServ
     return new Predicate[]{
         tenantPredicate(criteriaBuilder, root),
         keywordSearchPredicate(agencyAdminSearch, criteriaBuilder, root),
-        deletedFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
         agencyAdminFilterPredicate(criteriaBuilder, root)};
   }
 
@@ -51,7 +51,7 @@ public class AgencyAdminSearchTenantSupportService extends AgencyAdminSearchServ
     return new Predicate[] {
         agencyAdminFilterPredicate(criteriaBuilder, root),
         tenantPredicate(criteriaBuilder, root),
-        deletedFilterPredicate(agencyAdminSearch, criteriaBuilder, root)};
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root)};
   }
 
 }

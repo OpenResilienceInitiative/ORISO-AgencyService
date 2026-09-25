@@ -277,14 +277,14 @@ class AgencyAdminSearchServiceSearchIT {
     SearchResultLinks searchResultLinks = agencyAdminSearchResultDTO.getLinks();
     assertThat(searchResultLinks.getSelf(), notNullValue());
     assertThat(searchResultLinks.getSelf().getHref(),
-        endsWith("/agencyadmin/agencies?page=1&perPage=20&q=a{&excludeDeleted}"));
+        endsWith("/agencyadmin/agencies?page=1&perPage=20&q=a{&excludeDeleted,tenantId}"));
     assertThat(searchResultLinks.getPrevious(), nullValue());
     assertThat(searchResultLinks.getNext(), notNullValue());
     assertThat(searchResultLinks.getNext().getHref(),
-        endsWith("/agencyadmin/agencies?page=2&perPage=20&q=a{&excludeDeleted}"));
+        endsWith("/agencyadmin/agencies?page=2&perPage=20&q=a{&excludeDeleted,tenantId}"));
     assertThat(searchResultLinks.getSearch(), notNullValue());
     assertThat(searchResultLinks.getSearch().getHref(),
-        endsWith("/agencyadmin/agencies?page=1&perPage=20{&q,excludeDeleted}"));
+        endsWith("/agencyadmin/agencies?page=1&perPage=20{&q,excludeDeleted,tenantId}"));
   }
 
   @Test

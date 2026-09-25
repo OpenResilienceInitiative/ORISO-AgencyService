@@ -89,10 +89,15 @@ public class AgencyAdminSearchService {
     return searchAgencies(keyword, page, perPage, sort, false);
   }
 
-  /** The keyword also matches the agency's topic names (Fachbereich). */
   public AgencyAdminSearchResultDTO searchAgencies(final String keyword, final Integer page,
       final Integer perPage, Sort sort, boolean excludeDeleted) {
+    return searchAgencies(keyword, page, perPage, sort,
+        new AgencySearchFilter(excludeDeleted, null));
+  }
 
+  /** The keyword also matches the agency's topic names (Fachbereich). */
+  public AgencyAdminSearchResultDTO searchAgencies(final String keyword, final Integer page,
+      final Integer perPage, Sort sort, AgencySearchFilter filter) {
     SearchResult<Agency> queryResult = new SearchResult<>(Lists.newArrayList(), 0L);
     boolean withKeyword = !(isBlank(keyword) || hasOnlySpecialCharacters(keyword));
 
@@ -105,9 +110,11 @@ public class AgencyAdminSearchService {
           .ascending(
               sort != null && sort.getOrder() != null ? sort.getOrder().equals(OrderEnum.ASC)
                   : true)
-          .excludeDeleted(excludeDeleted)
-          .topicMatchedAgencyIds(
-              withKeyword ? agencyIdsWithTopicNameMatching(entityManager, keyword) : Set.of())
+          .excludeDeleted(filter.excludeDeleted())
+          .tenantId(filter.tenantId())
+          .topicMatchedAgencyIds(withKeyword
+              ? agencyIdsWithTopicNameMatching(entityManager, keyword, filter.tenantId())
+              : Set.of())
           .build();
       queryResult = withKeyword
           ? searchAgenciesByKeyword(entityManager, agencyAdminSearch)
@@ -165,13 +172,20 @@ public class AgencyAdminSearchService {
    * Topics live per tenant in ConsultingTypeService, so names are matched in every tenant the
    * caller may see. The result only widens the keyword match; the scope predicates still apply.
    */
-  private Set<Long> agencyIdsWithTopicNameMatching(EntityManager entityManager, String keyword) {
+  private Set<Long> agencyIdsWithTopicNameMatching(
+      EntityManager entityManager, String keyword, Long requestedTenantId) {
     if (!topicsFeatureEnabled || agencyTopicEnrichmentService == null) {
       return Set.of();
     }
     Optional<Long> scopedTenantId = scopedTenantId();
-    Collection<Long> tenantIds = scopedTenantId.isPresent()
-        ? Collections.singletonList(scopedTenantId.get())
+    if (requestedTenantId != null && scopedTenantId.isPresent()
+        && !scopedTenantId.get().equals(requestedTenantId)) {
+      return Set.of();
+    }
+    // A requested tenant also keeps topic IDs of other tenants from matching.
+    Optional<Long> tenantToMatch = scopedTenantId.or(() -> Optional.ofNullable(requestedTenantId));
+    Collection<Long> tenantIds = tenantToMatch.isPresent()
+        ? Collections.singletonList(tenantToMatch.get())
         : entityManager
             .createQuery("select distinct a.tenantId from Agency a", Long.class)
             .getResultList();
@@ -244,7 +258,7 @@ public class AgencyAdminSearchService {
       Root<Agency> root) {
     return new Predicate[]{
         keywordSearchPredicate(agencyAdminSearch, criteriaBuilder, root),
-        deletedFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
         agencyAdminFilterPredicate(criteriaBuilder, root)};
   }
 
@@ -272,15 +286,20 @@ public class AgencyAdminSearchService {
   protected Predicate[] agenciesWithoutKeywordFilterPredicates(
       AgencyAdminSearch agencyAdminSearch, CriteriaBuilder criteriaBuilder, Root<Agency> root) {
     return new Predicate[]{
-        deletedFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
         agencyAdminFilterPredicate(criteriaBuilder, root)};
   }
 
-  protected Predicate deletedFilterPredicate(AgencyAdminSearch agencyAdminSearch,
+  /** The optional filters; they are ANDed with the role scope, so they can only narrow it. */
+  protected Predicate searchFilterPredicate(AgencyAdminSearch agencyAdminSearch,
       CriteriaBuilder criteriaBuilder, Root<Agency> root) {
-    return agencyAdminSearch.isExcludeDeleted()
+    Predicate notDeleted = agencyAdminSearch.isExcludeDeleted()
         ? criteriaBuilder.isNull(root.get(DELETE_DATE_FIELD))
         : criteriaBuilder.conjunction();
+    Predicate inTenant = agencyAdminSearch.getTenantId() != null
+        ? criteriaBuilder.equal(root.get(TENANT_ID_SEARCH_FIELD), agencyAdminSearch.getTenantId())
+        : criteriaBuilder.conjunction();
+    return criteriaBuilder.and(notDeleted, inTenant);
   }
 
   Predicate agencyAdminFilterPredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {

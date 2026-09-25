@@ -15,6 +15,9 @@ public class AgencyAdminSearch {
 
   private boolean excludeDeleted;
 
+  /** Requested tenant (Träger); null = every tenant in the caller's scope. */
+  private Long tenantId;
+
   /** Agencies offering a topic whose name matches the keyword; empty, never null. */
   @Builder.Default
   private java.util.Set<Long> topicMatchedAgencyIds = java.util.Set.of();

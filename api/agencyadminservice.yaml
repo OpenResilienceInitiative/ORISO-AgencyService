@@ -47,6 +47,17 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: tenantId
+          in: query
+          description: >-
+            Only agencies of this tenant (Träger). Applied in the query, so paging and total count
+            only that tenant. It narrows the caller's role scope and never widens it: a tenant
+            outside that scope returns an empty result. Omitted = every tenant in scope.
+          required: false
+          schema:
+            type: integer
+            format: int64
+            example: 40
         - name: page
           in: query
           description: Number of page where to start in the query (1 = first page)
