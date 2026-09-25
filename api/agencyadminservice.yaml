@@ -100,7 +100,7 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Get an agency including platform agency admin controls in settings.agencyAdminControls [Authorization: Role: agency-admin]'
+      summary: 'Get an agency including platform agency admin controls in settings.agencyAdminControls [Authorization: Role: agency-admin, restricted-agency-admin, technical]'
       operationId: getAgency
       parameters:
         - name: agencyId
