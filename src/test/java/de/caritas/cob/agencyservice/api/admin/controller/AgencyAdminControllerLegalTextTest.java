@@ -50,6 +50,10 @@ class AgencyAdminControllerLegalTextTest {
   @Mock private AgencyIdAllocationService agencyIdAllocationService;
 
   @Mock private de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService agencyLegalDraftService;
+  @Mock
+  private de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalProposalFacade
+      agencyLegalProposalFacade;
+
 
   @InjectMocks private AgencyAdminController controller;
 
