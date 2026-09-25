@@ -45,6 +45,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
@@ -64,6 +65,7 @@ class AgencyAdminControllerOneTopicPerAgencyIT {
   private static final String MULTI_TOPIC_AGENCY_PATH = "/agencyadmin/agencies/1";
   private static final String SINGLE_TOPIC_AGENCY_PATH = "/agencyadmin/agencies/2";
   private static final String REASON = "ONE_TOPIC_PER_AGENCY";
+  private static final String SETTINGS_UNAVAILABLE = "SETTINGS_UNAVAILABLE";
 
   private MockMvc mockMvc;
 
@@ -181,10 +183,49 @@ class AgencyAdminControllerOneTopicPerAgencyIT {
         .andExpect(jsonPath("_embedded.topics.length()").value(2));
   }
 
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  void createAgency_Should_answer503_When_settingsAreUnavailableAndTwoTopicsAreRequested()
+      throws Exception {
+    settingsServiceDown();
+
+    create(List.of(1L, 2L))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("X-Reason", SETTINGS_UNAVAILABLE));
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  void updateAgency_Should_answer503_When_settingsAreUnavailableAndASecondTopicIsAdded()
+      throws Exception {
+    settingsServiceDown();
+
+    update(SINGLE_TOPIC_AGENCY_PATH, List.of(2L, 3L))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("X-Reason", SETTINGS_UNAVAILABLE));
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  void updateAgency_Should_saveUnrelatedChange_When_settingsAreUnavailable() throws Exception {
+    settingsServiceDown();
+
+    update(MULTI_TOPIC_AGENCY_PATH, List.of(0L, 1L))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("_embedded.topics.length()").value(2));
+  }
+
   private void switchOneTopicPerAgency(boolean enabled) {
-    when(applicationSettingsService.getApplicationSettings())
-        .thenReturn(new ApplicationSettingsDTO()
-            .oneTopicPerAgencyEnabled(new FeatureToggleDTO().value(enabled).readOnly(false)));
+    var settings = new ApplicationSettingsDTO()
+        .oneTopicPerAgencyEnabled(new FeatureToggleDTO().value(enabled).readOnly(false));
+    when(applicationSettingsService.getApplicationSettings()).thenReturn(settings);
+    when(applicationSettingsService.fetchApplicationSettings()).thenReturn(settings);
+  }
+
+  private void settingsServiceDown() {
+    var outage = new ResourceAccessException("ConsultingTypeService down");
+    when(applicationSettingsService.getApplicationSettings()).thenThrow(outage);
+    when(applicationSettingsService.fetchApplicationSettings()).thenThrow(outage);
   }
 
   private ResultActions create(List<Long> topicIds) throws Exception {

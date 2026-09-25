@@ -54,6 +54,8 @@ public record ValidationErrorResponse(
           "The legal draft changed or was recreated; reload it before saving again.";
       case ONE_TOPIC_PER_AGENCY ->
           "This platform allows only one topic per agency; the agency cannot gain another topic.";
+      case SETTINGS_UNAVAILABLE ->
+          "The platform settings cannot be read right now; try again in a moment.";
     };
   }
 }
