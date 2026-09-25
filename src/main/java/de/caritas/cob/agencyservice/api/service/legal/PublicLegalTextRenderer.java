@@ -3,9 +3,13 @@ package de.caritas.cob.agencyservice.api.service.legal;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextTokens;
+import de.caritas.cob.agencyservice.api.model.DataProtectionContactDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
+import de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
+import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.service.TopicService;
+import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -63,6 +67,10 @@ public class PublicLegalTextRenderer {
   @Autowired(required = false)
   private TopicService topicService;
 
+  /** For the Träger DPO a Beratungsstelle without its own inherits (ORISO-Admin#1067). */
+  @Autowired(required = false)
+  private TenantService tenantService;
+
   /**
    * Substitutes the server-owned tokens in a resolved text and its consent sentence.
    *
@@ -83,6 +91,10 @@ public class PublicLegalTextRenderer {
       return resolved;
     }
     var values = serverOwnedValues(department);
+    if (mentionsDpo(resolved)) {
+      values.put(
+          LegalTextTokens.DATENSCHUTZBEAUFTRAGTE, dataProtectionOfficer(department.getAgency()));
+    }
     if (values.isEmpty()) {
       return resolved;
     }
@@ -150,6 +162,89 @@ public class PublicLegalTextRenderer {
       values.put(LegalTextTokens.THEMA, LegalTextTokens.escapeForHtml(topicName));
     }
     return values;
+  }
+
+  private static boolean mentionsDpo(ResolvedLegalText resolved) {
+    var key = LegalTextTokens.DATENSCHUTZBEAUFTRAGTE + "}}";
+    return (resolved.content() != null && resolved.content().contains(key))
+        || (resolved.consentText() != null && resolved.consentText().contains(key));
+  }
+
+  /**
+   * Beratungsstelle → Träger → empty. Unlike {@code {{Thema}}} an unknown DPO renders empty: it is
+   * optional everywhere, so "nothing entered" is a legitimate answer, not a gap for the client.
+   * The platform DPO is never used here (never inherited down).
+   */
+  private String dataProtectionOfficer(Agency agency) {
+    var own = agencyDpo(agency);
+    var dpo = own != null ? own : traegerDpo(agency);
+    return dpo == null ? "" : LegalTextTokens.escapeForHtml(dpo);
+  }
+
+  /** Only when the Beratungsstelle chose "Datenschutzbeauftragte:r" and entered a name. */
+  private static String agencyDpo(Agency agency) {
+    if (agency == null
+        || agency.getDataProtectionResponsibleEntity()
+            != DataProtectionResponsibleEntity.DATA_PROTECTION_OFFICER) {
+      return null;
+    }
+    DataProtectionContactDTO contact;
+    try {
+      contact = JsonConverter.convertFromJsonNullSafe(agency.getDataProtectionOfficerContactData());
+    } catch (Exception e) {
+      log.warn("Unreadable DPO contact of agency {}; falling back to the Träger", agency.getId());
+      return null;
+    }
+    if (contact == null || blankToNull(contact.getNameAndLegalForm()) == null) {
+      return null;
+    }
+    return contactLine(
+        contact.getNameAndLegalForm(),
+        contact.getStreet(),
+        contact.getPostcode(),
+        contact.getCity(),
+        contact.getPhoneNumber(),
+        contact.getEmail());
+  }
+
+  private String traegerDpo(Agency agency) {
+    if (tenantService == null || agency == null || agency.getTenantId() == null) {
+      return null;
+    }
+    try {
+      var tenant = tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
+      var dpo = tenant == null ? null : tenant.getDataProtectionOfficer();
+      if (dpo == null || blankToNull(dpo.getNameAndLegalForm()) == null) {
+        return null;
+      }
+      return contactLine(
+          dpo.getNameAndLegalForm(),
+          dpo.getStreet(),
+          dpo.getPostcode(),
+          dpo.getCity(),
+          dpo.getPhoneNumber(),
+          dpo.getEmail());
+    } catch (Exception e) {
+      log.warn(
+          "Could not read the Träger DPO for agency {}; rendering the placeholder empty: {}",
+          agency.getId(),
+          e.getMessage());
+      return null;
+    }
+  }
+
+  /** One line — the token may sit mid-sentence: "Name, Street, Postcode City, Phone, E-Mail". */
+  private static String contactLine(
+      String name, String street, String postcode, String city, String phone, String email) {
+    var place =
+        Stream.of(postcode, city)
+            .map(PublicLegalTextRenderer::blankToNull)
+            .filter(Objects::nonNull)
+            .collect(Collectors.joining(" "));
+    return Stream.of(name, street, place, phone, email)
+        .map(PublicLegalTextRenderer::blankToNull)
+        .filter(Objects::nonNull)
+        .collect(Collectors.joining(", "));
   }
 
   /** "Street, postcode city" from the agency record; parts that are empty are left out. */

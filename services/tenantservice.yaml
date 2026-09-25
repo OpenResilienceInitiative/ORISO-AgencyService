@@ -1094,6 +1094,8 @@ components:
           type: string
           example: subdomain
           maxLength: 100
+        dataProtectionOfficer:
+          $ref: '#/components/schemas/TenantDataProtectionOfficerDTO'
         theming:
           $ref: '#/components/schemas/Theming'
         content:
@@ -1665,6 +1667,24 @@ components:
         createDate:
           type: string
         updateDate:
+          type: string
+    TenantDataProtectionOfficerDTO:
+      type: object
+      description: >-
+        Optional DPO of the Träger (ORISO-Admin#1067); a Beratungsstelle without its own inherits
+        it for the {{Datenschutzbeauftragte}} legal-text placeholder.
+      properties:
+        nameAndLegalForm:
+          type: string
+        street:
+          type: string
+        postcode:
+          type: string
+        city:
+          type: string
+        phoneNumber:
+          type: string
+        email:
           type: string
     TenantsSearchResultDTO:
       type: object
