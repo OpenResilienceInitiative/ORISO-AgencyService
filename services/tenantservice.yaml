@@ -732,24 +732,25 @@ paths:
         '500':
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/{id}/legal-drafts/{kind}:
+    # Path-level parameters, as in the provider: oasdiff reads operation-level copies as removed.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [PRIVACY, IMPRINT]
     get:
       tags:
         - tenant-controller
       summary: 'A Träger''s saved legal draft; read with the caller''s token when a Träger forwards it (ORISO-AgencyService#303)'
       operationId: getTenantLegalDraft
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: kind
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [PRIVACY, IMPRINT]
       responses:
         '200':
           description: Successful operation
