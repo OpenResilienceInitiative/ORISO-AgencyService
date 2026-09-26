@@ -23,7 +23,7 @@ public record ValidationErrorResponse(
           DATA_PROTECTION_RESPONSIBLE_IS_EMPTY,
           DATA_PROTECTION_ALTERNATIVE_RESPONSIBLE_IS_EMPTY,
           DATA_PROTECTION_DTO_IS_NULL -> "dataProtection";
-      case LEGAL_DRAFT_REVISION_CONFLICT -> "revision";
+      case LEGAL_DRAFT_REVISION_CONFLICT, LEGAL_PROPOSAL_CONFLICT -> "revision";
       default -> "agency";
     };
   }
@@ -51,6 +51,8 @@ public record ValidationErrorResponse(
       case AGENCY_ID_NOT_AVAILABLE -> "The agency ID is not available.";
       case LEGAL_DRAFT_REVISION_CONFLICT ->
           "The legal draft changed or was recreated; reload it before saving again.";
+      case LEGAL_PROPOSAL_CONFLICT ->
+          "The legal template offer changed, was already decided, or the request key was reused.";
     };
   }
 }

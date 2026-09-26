@@ -731,6 +731,67 @@ paths:
           description: FORBIDDEN - not authorized to access this tenant
         '500':
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenantadmin/{id}/legal-drafts/{kind}:
+    # Path-level parameters, as in the provider: oasdiff reads operation-level copies as removed.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [PRIVACY, IMPRINT]
+    get:
+      tags:
+        - tenant-controller
+      summary: 'A Träger''s saved legal draft; read with the caller''s token when a Träger forwards it (ORISO-AgencyService#303)'
+      operationId: getTenantLegalDraft
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantLegalDraftDTO'
+        '403':
+          description: FORBIDDEN
+        '404':
+          description: NOT FOUND - no saved draft or tenant
+  /tenantadmin/{id}/legal-versions:
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Publication history of a Träger''s imprint or privacy policy, newest first (ORISO-Admin#270)'
+      operationId: getTenantLegalTextVersions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [DPP, IMPRINT]
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TenantLegalTextVersionDTO'
+        '403':
+          description: FORBIDDEN
   /tenantadmin/media:
     post:
       tags:
@@ -787,6 +848,47 @@ paths:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
 components:
   schemas:
+    TenantLegalDraftDTO:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [PRIVACY, IMPRINT]
+        content:
+          type: object
+          additionalProperties:
+            type: string
+        privacyConsent:
+          type: object
+          additionalProperties:
+            type: string
+        revision:
+          type: string
+        updatedAt:
+          type: string
+    TenantLegalTextVersionDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [DPP, IMPRINT]
+        ownerLevel:
+          type: string
+          enum: [PLATFORM, TENANT]
+        ownerId:
+          type: integer
+          format: int64
+        content:
+          type: string
+        publishedAt:
+          type: string
+        publishedBy:
+          type: string
+        supersededAt:
+          type: string
     TranslationApiKeysDTO:
       type: object
       description: Masked machine-translation provider API keys. A key is shown as its first characters plus the last 4 (e.g. "sk-…abcd"); null means no key is configured for that provider.
