@@ -5,6 +5,7 @@ import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsFacade;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySearchFilter;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdStepDirection;
@@ -125,15 +126,20 @@ public class AgencyAdminController implements AgencyadminApi {
    *
    * @param page    Number of page where to start in the query (1 = first page) (required)
    * @param perPage Number of items which are being returned per page (required)
-   * @param q       The query parameter to search for (optional)
+   * @param q       The query parameter to search for: agency name, postcode, city or topic name
+   *                (optional)
+   * @param excludeDeleted leave soft-deleted agencies out (optional, default false)
+   * @param tenantId only agencies of this tenant, within the caller's scope (optional)
    * @return an entity containing the search result
    */
   @Override
   public ResponseEntity<AgencyAdminSearchResultDTO> searchAgencies(
-      Integer page, Integer perPage, String q, Sort sort) {
+      Integer page, Integer perPage, String q, Boolean excludeDeleted, Long tenantId, Sort sort) {
 
     var agencyAdminSearchResultDTO =
-        this.agencyAdminSearchService.searchAgencies(q, page, perPage, sort);
+        this.agencyAdminSearchService.searchAgencies(
+            q, page, perPage, sort,
+            new AgencySearchFilter(Boolean.TRUE.equals(excludeDeleted), tenantId));
 
     return new ResponseEntity<>(agencyAdminSearchResultDTO, HttpStatus.OK);
   }
