@@ -7,6 +7,7 @@ required_tests=(
   ActuatorControllerIT
   AgencyMatrixPasswordBackfillIT
   InternalMatrixServiceAccountAuthorizationIT
+  TechnicalUserAgencyReadAuthorizationIT
   AgencyControllerIT
   AgencyControllerAuthorizationIT
   TracingConfigVerificationIT
