@@ -23,10 +23,26 @@ public class TopicService {
   private final @NonNull TenantHeaderSupplier tenantHeaderSupplier;
   private final @NonNull AuthenticatedUser authenticatedUser;
 
-  @Cacheable(cacheNames = CacheManagerConfig.TOPICS_CACHE)
+  /** Keyed by tenant: otherwise the first tenant to fill the cache answers for all tenants. */
+  @Cacheable(cacheNames = CacheManagerConfig.TOPICS_CACHE,
+      key = "'current:' + T(de.caritas.cob.agencyservice.api.tenant.TenantContext).getCurrentTenant()")
   public List<TopicDTO> getAllTopics() {
     TopicControllerApi controllerApi = topicServiceApiControllerFactory.createControllerApi();
     addDefaultHeaders(controllerApi.getApiClient());
+    return controllerApi.getAllTopics();
+  }
+
+  /** Topics of a given tenant, not the caller's: the platform admin sees every tenant. */
+  @Cacheable(cacheNames = CacheManagerConfig.TOPICS_CACHE, key = "'tenant:' + #tenantId")
+  public List<TopicDTO> getAllTopicsOfTenant(Long tenantId) {
+    TopicControllerApi controllerApi = topicServiceApiControllerFactory.createControllerApi();
+    var headers = new HttpHeaders();
+    headers.add("Authorization", "Bearer " + authenticatedUser.getAccessToken());
+    if (tenantId != null) {
+      headers.add("tenantId", tenantId.toString());
+    }
+    headers.forEach(
+        (key, value) -> controllerApi.getApiClient().addDefaultHeader(key, value.iterator().next()));
     return controllerApi.getAllTopics();
   }
 

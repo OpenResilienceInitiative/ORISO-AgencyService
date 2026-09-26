@@ -13,5 +13,11 @@ public class AgencyAdminSearch {
   private String sortField;
   private boolean ascending;
 
+  private boolean excludeDeleted;
+
+  /** Agencies offering a topic whose name matches the keyword; empty, never null. */
+  @Builder.Default
+  private java.util.Set<Long> topicMatchedAgencyIds = java.util.Set.of();
+
 
 }

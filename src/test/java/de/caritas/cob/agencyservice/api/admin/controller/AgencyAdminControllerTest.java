@@ -156,7 +156,7 @@ public class AgencyAdminControllerTest {
         .andExpect(jsonPath("$._links.agencies").exists())
         .andExpect(
             jsonPath(
-                "$._links.agencies.href", endsWith("/agencyadmin/agencies?page=1&perPage=20{&q}")));
+                "$._links.agencies.href", endsWith("/agencyadmin/agencies?page=1&perPage=20{&q,excludeDeleted}")));
   }
 
   @Test
@@ -167,7 +167,19 @@ public class AgencyAdminControllerTest {
         .andExpect(status().isOk());
 
     Mockito.verify(this.agencyAdminFullResponseDTO, Mockito.times(1))
-        .searchAgencies(any(), eq(0), eq(1), any());
+        .searchAgencies(any(), eq(0), eq(1), any(), eq(false));
+  }
+
+  @Test
+  public void searchAgencies_Should_passExcludeDeletedThrough_When_theTypeAheadAsksForIt()
+      throws Exception {
+    this.mvc
+        .perform(get(AGENCY_SEARCH_PATH).param(PAGE_PARAM, "1").param(PER_PAGE_PARAM, "10")
+            .param("q", "Schuldner").param("excludeDeleted", "true"))
+        .andExpect(status().isOk());
+
+    Mockito.verify(this.agencyAdminFullResponseDTO, Mockito.times(1))
+        .searchAgencies(eq("Schuldner"), eq(1), eq(10), any(), eq(true));
   }
 
   @Test
@@ -188,7 +200,7 @@ public class AgencyAdminControllerTest {
     var sortCaptor = org.mockito.ArgumentCaptor.forClass(
         de.caritas.cob.agencyservice.api.model.Sort.class);
     Mockito.verify(this.agencyAdminFullResponseDTO, Mockito.times(8))
-        .searchAgencies(any(), eq(1), eq(10), sortCaptor.capture());
+        .searchAgencies(any(), eq(1), eq(10), sortCaptor.capture(), eq(false));
     var boundFields = sortCaptor.getAllValues().stream()
         .map(s -> s == null || s.getField() == null ? null : s.getField().name())
         .toList();
