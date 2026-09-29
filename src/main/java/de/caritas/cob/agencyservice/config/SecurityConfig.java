@@ -118,6 +118,13 @@ public class SecurityConfig {
                 "/agencyadmin/agencyids/reservations/*/")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
                 AuthorityValue.TECHNICAL_USER)
+            // UserService re-checks an invite's agency when the anonymous invitee accepts
+            // (ORISO-Admin#1026); only this view carries the delete date. One agency by ID, no
+            // search and no sub-resources.
+            .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies/{agencyId:\\d+}",
+                "/agencyadmin/agencies/{agencyId:\\d+}/")
+            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
+                AuthorityValue.TECHNICAL_USER)
             .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
             // /agencies/topics enriches via an authenticated ConsultingTypeService call and is
