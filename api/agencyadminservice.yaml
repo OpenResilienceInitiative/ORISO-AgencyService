@@ -32,10 +32,32 @@ paths:
       parameters:
         - name: q
           in: query
-          description: The query parameter to search for
+          description: >-
+            The query parameter to search for. Matches the agency name, postcode or city, or the
+            name of one of the agency's topics (Fachbereich), case-insensitively.
           schema:
             type: string
             example: "Freiburg"
+        - name: excludeDeleted
+          in: query
+          description: >-
+            When true, soft-deleted agencies are left out. Default false keeps the agency list
+            unchanged.
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: tenantId
+          in: query
+          description: >-
+            Only agencies of this tenant (Träger). Applied in the query, so paging and total count
+            only that tenant. It narrows the caller's role scope and never widens it: a tenant
+            outside that scope returns an empty result. Omitted = every tenant in scope.
+          required: false
+          schema:
+            type: integer
+            format: int64
+            example: 40
         - name: page
           in: query
           description: Number of page where to start in the query (1 = first page)
@@ -1798,6 +1820,12 @@ components:
           type: integer
           format: int64
           example: 12
+        tenantName:
+          type: string
+          description: >-
+            Name of the agency's tenant (Träger). Filled in search results only, best effort
+            (null when TenantService cannot be reached).
+          example: "Caritas Köln"
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'

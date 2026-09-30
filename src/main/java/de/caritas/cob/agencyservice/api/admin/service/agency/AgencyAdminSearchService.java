@@ -5,6 +5,7 @@ import static io.micrometer.common.util.StringUtils.isBlank;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.hallink.SearchResultLinkBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
+import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
@@ -15,6 +16,7 @@ import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import jakarta.persistence.EntityManager;
+import org.hibernate.Hibernate;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -24,7 +26,14 @@ import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import lombok.NonNull;
@@ -44,6 +53,8 @@ public class AgencyAdminSearchService {
   protected static final String POST_CODE_SEARCH_FIELD = "postCode";
   protected static final String CITY_SEARCH_FIELD = "city";
   protected static final String TENANT_ID_SEARCH_FIELD = "tenantId";
+  protected static final String DELETE_DATE_FIELD = "deleteDate";
+  protected static final char LIKE_ESCAPE = '!';
   protected final @NonNull EntityManagerFactory entityManagerFactory;
 
   protected final @NonNull AuthenticatedUser authenticatedUser;
@@ -53,10 +64,16 @@ public class AgencyAdminSearchService {
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
 
+  @Autowired(required = false)
+  private TenantService tenantService;
+
   private AgencyRepository agencyRepository;
 
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
+
+  @Value("${multitenancy.enabled:false}")
+  private boolean multitenancyEnabled;
 
   /**
    * Searches for agencies by a given keyword, limits the result by perPage and generates a
@@ -69,32 +86,59 @@ public class AgencyAdminSearchService {
    */
   public AgencyAdminSearchResultDTO searchAgencies(final String keyword, final Integer page,
       final Integer perPage, Sort sort) {
+    return searchAgencies(keyword, page, perPage, sort, false);
+  }
 
+  public AgencyAdminSearchResultDTO searchAgencies(final String keyword, final Integer page,
+      final Integer perPage, Sort sort, boolean excludeDeleted) {
+    return searchAgencies(keyword, page, perPage, sort,
+        new AgencySearchFilter(excludeDeleted, null));
+  }
+
+  /** The keyword also matches the agency's topic names (Fachbereich). */
+  public AgencyAdminSearchResultDTO searchAgencies(final String keyword, final Integer page,
+      final Integer perPage, Sort sort, AgencySearchFilter filter) {
     SearchResult<Agency> queryResult = new SearchResult<>(Lists.newArrayList(), 0L);
-
-    var agencyAdminSearch = AgencyAdminSearch.builder()
-        .keyword(keyword)
-        .pageNumber(page)
-        .pageSize(perPage)
-        .sortField(sort != null && sort.getField() != null ? sort.getField().getValue() : null)
-        .ascending(
-            sort != null && sort.getOrder() != null ? sort.getOrder().equals(OrderEnum.ASC) : true)
-        .build();
+    boolean withKeyword = !(isBlank(keyword) || hasOnlySpecialCharacters(keyword));
 
     try (EntityManager entityManager = entityManagerFactory.createEntityManager()) {
-      queryResult = isBlank(keyword) || hasOnlySpecialCharacters(keyword)
-          ? searchAgenciesWithoutKeywordFilter(entityManager, agencyAdminSearch)
-          : searchAgenciesByKeyword(entityManager, agencyAdminSearch);
+      var agencyAdminSearch = AgencyAdminSearch.builder()
+          .keyword(keyword)
+          .pageNumber(page)
+          .pageSize(perPage)
+          .sortField(sort != null && sort.getField() != null ? sort.getField().getValue() : null)
+          .ascending(
+              sort != null && sort.getOrder() != null ? sort.getOrder().equals(OrderEnum.ASC)
+                  : true)
+          .excludeDeleted(filter.excludeDeleted())
+          .tenantId(filter.tenantId())
+          .topicMatchedAgencyIds(withKeyword
+              ? agencyIdsWithTopicNameMatching(entityManager, keyword, filter.tenantId())
+              : Set.of())
+          .build();
+      queryResult = withKeyword
+          ? searchAgenciesByKeyword(entityManager, agencyAdminSearch)
+          : searchAgenciesWithoutKeywordFilter(entityManager, agencyAdminSearch);
+      // No fetch-join in the paged queries: collection fetch + setMaxResults pages in memory.
+      // Load the topics here while the entity manager is open; @BatchSize batches them.
+      queryResult.getResult().forEach(agency -> Hibernate.initialize(agency.getAgencyTopics()));
     }
 
-    var resultStream = queryResult.getResult().stream();
+    var agencies = queryResult.getResult();
     if (topicsFeatureEnabled) {
-      resultStream = resultStream.map(agencyTopicEnrichmentService::enrichAgencyWithTopics);
+      agencyTopicEnrichmentService.enrichAgenciesWithTopics(agencies);
     }
 
-    var resultList = resultStream
-        .map(AgencyAdminFullResponseDTOBuilder::new)
-        .map(AgencyAdminFullResponseDTOBuilder::fromAgency)
+    Map<Long, Optional<String>> tenantNames = new HashMap<>();
+    var resultList = agencies.stream()
+        .map(agency -> {
+          var dto = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency();
+          if (dto.getEmbedded() != null && agency.getTenantId() != null) {
+            dto.getEmbedded().setTenantName(tenantNames
+                .computeIfAbsent(agency.getTenantId(), this::tenantName).orElse(null));
+          }
+          return dto;
+        })
         .toList();
 
     SearchResultLinks searchResultLinks = SearchResultLinkBuilder.getInstance()
@@ -110,6 +154,80 @@ public class AgencyAdminSearchService {
         .total(queryResult.getTotalSize().intValue());
   }
 
+  /** Best effort: a tenant name that cannot be resolved leaves the field empty, never fails. */
+  private Optional<String> tenantName(Long tenantId) {
+    if (tenantService == null) {
+      return Optional.empty();
+    }
+    try {
+      var tenant = tenantService.getRestrictedTenantDataByTenantId(tenantId);
+      return Optional.ofNullable(tenant == null ? null : tenant.getName());
+    } catch (RuntimeException exception) {
+      log.warn("Could not resolve the name of tenant {} for the agency search", tenantId);
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * Topics live per tenant in ConsultingTypeService, so names are matched in every tenant the
+   * caller may see. The result only widens the keyword match; the scope predicates still apply.
+   */
+  private Set<Long> agencyIdsWithTopicNameMatching(
+      EntityManager entityManager, String keyword, Long requestedTenantId) {
+    if (!topicsFeatureEnabled || agencyTopicEnrichmentService == null) {
+      return Set.of();
+    }
+    Optional<Long> scopedTenantId = scopedTenantId();
+    if (requestedTenantId != null && scopedTenantId.isPresent()
+        && !scopedTenantId.get().equals(requestedTenantId)) {
+      return Set.of();
+    }
+    // A requested tenant also keeps topic IDs of other tenants from matching.
+    Optional<Long> tenantToMatch = scopedTenantId.or(() -> Optional.ofNullable(requestedTenantId));
+    Collection<Long> tenantIds = tenantToMatch.isPresent()
+        ? Collections.singletonList(tenantToMatch.get())
+        : entityManager
+            .createQuery("select distinct a.tenantId from Agency a", Long.class)
+            .getResultList();
+    Set<Long> topicIds = new HashSet<>();
+    String needle = keyword.trim().toLowerCase(Locale.ROOT);
+    for (Long tenantId : tenantIds) {
+      agencyTopicEnrichmentService.topicsOfTenant(tenantId).stream()
+          .filter(topic -> topic.getId() != null && topic.getName() != null)
+          .filter(topic -> topic.getName().toLowerCase(Locale.ROOT).contains(needle))
+          .forEach(topic -> topicIds.add(topic.getId()));
+    }
+    if (topicIds.isEmpty()) {
+      return Set.of();
+    }
+    return new HashSet<>(entityManager
+        .createQuery(
+            "select distinct t.agency.id from AgencyTopic t where t.topicId in :topicIds",
+            Long.class)
+        .setParameter("topicIds", topicIds)
+        .getResultList());
+  }
+
+  /**
+   * Empty = every tenant. With multitenancy, tenant 0 widens the scope only for a platform admin or
+   * the technical user; any other tenant-0 caller stays in tenant 0 and sees no other tenant.
+   */
+  private Optional<Long> scopedTenantId() {
+    Long tenantId = authenticatedUser.getTenantId();
+    if (tenantId == null) {
+      tenantId = TenantContext.getCurrentTenant();
+    }
+    if (tenantId == null) {
+      // Only without multitenancy; with it, the tenant-support subclass filters by TenantContext.
+      return Optional.empty();
+    }
+    if (tenantId.equals(0L) && (!multitenancyEnabled
+        || authenticatedUser.isPlatformAdmin() || authenticatedUser.isTechnicalUser())) {
+      return Optional.empty();
+    }
+    return Optional.of(tenantId);
+  }
+
   public SearchResult<Agency> searchAgenciesByKeyword(EntityManager entityManager,
       AgencyAdminSearch agencyAdminSearch) {
     CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
@@ -117,7 +235,6 @@ public class AgencyAdminSearchService {
     CriteriaQuery<Agency> criteriaQuery = criteriaBuilder.createQuery(Agency.class);
     Root<Agency> root = criteriaQuery.from(Agency.class);
     root.alias("agency");
-    root.fetch("agencyTopics", jakarta.persistence.criteria.JoinType.LEFT);
 
     Predicate[] searchAgenciesWithKeywordFilterPredicate = createSearchAgenciesWithKeywordFilterPredicate(
         agencyAdminSearch, criteriaBuilder, root);
@@ -140,7 +257,8 @@ public class AgencyAdminSearchService {
       AgencyAdminSearch agencyAdminSearch, CriteriaBuilder criteriaBuilder,
       Root<Agency> root) {
     return new Predicate[]{
-        keywordSearchPredicate(agencyAdminSearch.getKeyword(), criteriaBuilder, root),
+        keywordSearchPredicate(agencyAdminSearch, criteriaBuilder, root),
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
         agencyAdminFilterPredicate(criteriaBuilder, root)};
   }
 
@@ -150,9 +268,9 @@ public class AgencyAdminSearchService {
     CriteriaQuery<Agency> criteriaQuery = criteriaBuilder.createQuery(Agency.class);
     Root<Agency> root = criteriaQuery.from(Agency.class);
     root.alias("agency");
-    root.fetch("agencyTopics", jakarta.persistence.criteria.JoinType.LEFT);
 
-    criteriaQuery.where(agenciesWithoutKeywordFilterPredicates(criteriaBuilder, root));
+    criteriaQuery.where(
+        agenciesWithoutKeywordFilterPredicates(agencyAdminSearch, criteriaBuilder, root));
 
     var agencies = applySortingAndPagination(entityManager, agencyAdminSearch,
         criteriaBuilder, criteriaQuery, root);
@@ -160,14 +278,28 @@ public class AgencyAdminSearchService {
     CriteriaQuery<Long> countQuery = criteriaBuilder.createQuery(Long.class);
     Root<Agency> countRoot = countQuery.from(Agency.class);
     countQuery.select(criteriaBuilder.count(countRoot)).where(
-        agenciesWithoutKeywordFilterPredicates(criteriaBuilder, countRoot));
+        agenciesWithoutKeywordFilterPredicates(agencyAdminSearch, criteriaBuilder, countRoot));
     Long totalResultSize = entityManager.createQuery(countQuery).getSingleResult();
     return new SearchResult<>(agencies, totalResultSize);
   }
 
-  protected Predicate[] agenciesWithoutKeywordFilterPredicates(CriteriaBuilder criteriaBuilder,
-      Root<Agency> root) {
-    return new Predicate[]{agencyAdminFilterPredicate(criteriaBuilder, root)};
+  protected Predicate[] agenciesWithoutKeywordFilterPredicates(
+      AgencyAdminSearch agencyAdminSearch, CriteriaBuilder criteriaBuilder, Root<Agency> root) {
+    return new Predicate[]{
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
+        agencyAdminFilterPredicate(criteriaBuilder, root)};
+  }
+
+  /** The optional filters; they are ANDed with the role scope, so they can only narrow it. */
+  protected Predicate searchFilterPredicate(AgencyAdminSearch agencyAdminSearch,
+      CriteriaBuilder criteriaBuilder, Root<Agency> root) {
+    Predicate notDeleted = agencyAdminSearch.isExcludeDeleted()
+        ? criteriaBuilder.isNull(root.get(DELETE_DATE_FIELD))
+        : criteriaBuilder.conjunction();
+    Predicate inTenant = agencyAdminSearch.getTenantId() != null
+        ? criteriaBuilder.equal(root.get(TENANT_ID_SEARCH_FIELD), agencyAdminSearch.getTenantId())
+        : criteriaBuilder.conjunction();
+    return criteriaBuilder.and(notDeleted, inTenant);
   }
 
   Predicate agencyAdminFilterPredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
@@ -186,15 +318,10 @@ public class AgencyAdminSearchService {
   }
 
   private Predicate tenantScopePredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
-    Long tenantId = authenticatedUser.getTenantId();
-    if (tenantId == null) {
-      tenantId = TenantContext.getCurrentTenant();
-    }
-    // technical/super context is represented by tenant 0 and may see all tenants
-    if (tenantId == null || tenantId.equals(0L)) {
-      return alwaysTruePredicate(criteriaBuilder);
-    }
-    return criteriaBuilder.equal(root.get(TENANT_ID_SEARCH_FIELD), tenantId);
+    Optional<Long> tenantId = scopedTenantId();
+    return tenantId.isPresent()
+        ? criteriaBuilder.equal(root.get(TENANT_ID_SEARCH_FIELD), tenantId.get())
+        : alwaysTruePredicate(criteriaBuilder);
   }
 
   private Predicate alwaysFalsePredicate(CriteriaBuilder criteriaBuilder) {
@@ -253,17 +380,32 @@ public class AgencyAdminSearchService {
     }
   }
 
-  protected Predicate keywordSearchPredicate(String keyword, CriteriaBuilder criteriaBuilder,
+  protected Predicate keywordSearchPredicate(AgencyAdminSearch agencyAdminSearch,
+      CriteriaBuilder criteriaBuilder, Root<Agency> root) {
+    String keyword = agencyAdminSearch.getKeyword();
+    Predicate textMatch = keywordTextPredicate(keyword, criteriaBuilder, root);
+    Set<Long> topicMatches = agencyAdminSearch.getTopicMatchedAgencyIds();
+    return topicMatches == null || topicMatches.isEmpty()
+        ? textMatch
+        : criteriaBuilder.or(textMatch, root.get("id").in(topicMatches));
+  }
+
+  private Predicate keywordTextPredicate(String keyword, CriteriaBuilder criteriaBuilder,
       Root<Agency> root) {
+    String pattern = "%" + escapeLikeWildcards(keyword.toLowerCase()) + "%";
     return criteriaBuilder.or(
-        criteriaBuilder.like(criteriaBuilder.lower(root.get(NAME_SEARCH_FIELD)),
-            "%" + keyword.toLowerCase() + "%"),
-        criteriaBuilder.like(
-            criteriaBuilder.lower(root.get(POST_CODE_SEARCH_FIELD)),
-            "%" + keyword.toLowerCase() + "%"),
-        criteriaBuilder.like(criteriaBuilder.lower(root.get(CITY_SEARCH_FIELD)),
-            "%" + keyword.toLowerCase() + "%")
+        criteriaBuilder.like(criteriaBuilder.lower(root.get(NAME_SEARCH_FIELD)), pattern,
+            LIKE_ESCAPE),
+        criteriaBuilder.like(criteriaBuilder.lower(root.get(POST_CODE_SEARCH_FIELD)), pattern,
+            LIKE_ESCAPE),
+        criteriaBuilder.like(criteriaBuilder.lower(root.get(CITY_SEARCH_FIELD)), pattern,
+            LIKE_ESCAPE)
     );
+  }
+
+  /** A typed "%" or "_" is text, not a wildcard; "!" because MariaDB mangles a backslash. */
+  static String escapeLikeWildcards(String text) {
+    return text.replace("!", "!!").replace("%", "!%").replace("_", "!_");
   }
 
   private boolean hasOnlySpecialCharacters(String str) {
