@@ -111,6 +111,9 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
 
   List<Agency> findAllByDeleteDateNotNull();
 
+  /** Recipients of a Träger's "all Beratungsstellen" forward (ORISO-AgencyService#303). */
+  List<Agency> findByTenantIdAndDeleteDateNullOrderByIdAsc(Long tenantId);
+
   Agency save(Agency agency);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)

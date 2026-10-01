@@ -43,8 +43,12 @@ public class HttpTenantFilter extends OncePerRequestFilter {
       Long tenantId = tenantResolverService.resolve(request);
       log.debug("Setting current tenant context to: " + tenantId);
       TenantContext.setCurrentTenant(tenantId);
-      filterChain.doFilter(request, response);
-      TenantContext.clear();
+      try {
+        filterChain.doFilter(request, response);
+      } finally {
+        // Pooled threads must not carry this tenant into the next request.
+        TenantContext.clear();
+      }
     } else {
       log.debug(
           "Skipping tenant filter for request: {} as it belongs to a tenancy whitelist.",

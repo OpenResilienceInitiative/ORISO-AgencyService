@@ -5,6 +5,7 @@ import de.caritas.cob.agencyservice.api.admin.service.AgencyAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsFacade;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResponseDTOBuilder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
+import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySearchFilter;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdStepDirection;
@@ -13,10 +14,20 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentDataProtec
 import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftView;
+import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalProposalFacade;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalDraftArchiveDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptRequestDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptionDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalDismissRequestDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalDistributionDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalDistributionRequestDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyLegalTemplateVersionDTO;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextAdminService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalTextVersionAdminService;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.admin.validation.AgencyValidator;
+import de.caritas.cob.agencyservice.api.authorization.Authority.AuthorityValue;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
@@ -56,6 +67,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -84,6 +96,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull LegalTextAdminService legalTextAdminService;
   private final @NonNull LegalTextVersionAdminService legalTextVersionAdminService;
   private final @NonNull AgencyLegalDraftService agencyLegalDraftService;
+  private final @NonNull AgencyLegalProposalFacade agencyLegalProposalFacade;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   /**
@@ -113,15 +126,20 @@ public class AgencyAdminController implements AgencyadminApi {
    *
    * @param page    Number of page where to start in the query (1 = first page) (required)
    * @param perPage Number of items which are being returned per page (required)
-   * @param q       The query parameter to search for (optional)
+   * @param q       The query parameter to search for: agency name, postcode, city or topic name
+   *                (optional)
+   * @param excludeDeleted leave soft-deleted agencies out (optional, default false)
+   * @param tenantId only agencies of this tenant, within the caller's scope (optional)
    * @return an entity containing the search result
    */
   @Override
   public ResponseEntity<AgencyAdminSearchResultDTO> searchAgencies(
-      Integer page, Integer perPage, String q, Sort sort) {
+      Integer page, Integer perPage, String q, Boolean excludeDeleted, Long tenantId, Sort sort) {
 
     var agencyAdminSearchResultDTO =
-        this.agencyAdminSearchService.searchAgencies(q, page, perPage, sort);
+        this.agencyAdminSearchService.searchAgencies(
+            q, page, perPage, sort,
+            new AgencySearchFilter(Boolean.TRUE.equals(excludeDeleted), tenantId));
 
     return new ResponseEntity<>(agencyAdminSearchResultDTO, HttpStatus.OK);
   }
@@ -220,13 +238,28 @@ public class AgencyAdminController implements AgencyadminApi {
    * Entry point to release an open agency ID reservation, e.g. when an unconsumed invite is
    * revoked (TEN-INV-U2).
    *
+   * <p>The Keycloak technical user (UserService invite cleanup, ORISO-Helm#367) may release only a
+   * reservation that was never consumed; agency admins keep the unchanged release.
+   *
    * @param agencyId the reserved agency ID (required)
    */
   @Override
-  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  @PreAuthorize(
+      "hasAuthority('AUTHORIZATION_AGENCY_ADMIN') or hasAuthority('AUTHORIZATION_TECHNICAL_USER')")
   public ResponseEntity<Void> releaseAgencyIdReservation(@PathVariable Long agencyId) {
-    agencyIdAllocationService.release(agencyId);
+    if (authenticatedUserHasAuthority(AuthorityValue.AGENCY_ADMIN)) {
+      agencyIdAllocationService.release(agencyId);
+    } else {
+      agencyIdAllocationService.releaseUnconsumed(agencyId);
+    }
     return ResponseEntity.noContent().build();
+  }
+
+  private static boolean authenticatedUserHasAuthority(String authority) {
+    var authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authentication != null
+        && authentication.getAuthorities().stream()
+            .anyMatch(granted -> authority.equals(granted.getAuthority()));
   }
 
   /**
@@ -612,13 +645,66 @@ public class AgencyAdminController implements AgencyadminApi {
     return ResponseEntity.noContent().build();
   }
 
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_TENANT_ADMIN')")
+  public ResponseEntity<AgencyLegalProposalDistributionDTO> distributeAgencyLegalProposal(
+      AgencyLegalProposalDistributionRequestDTO request) {
+    var outcome = agencyLegalProposalFacade.distribute(request);
+    return ResponseEntity.status(outcome.created() ? HttpStatus.CREATED : HttpStatus.OK)
+        .body(outcome.body());
+  }
+
+  @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_TENANT_ADMIN')")
+  public ResponseEntity<List<AgencyLegalTemplateVersionDTO>> getAgencyLegalTemplateHistory(
+      String kind, Long tenantId) {
+    return ResponseEntity.ok(agencyLegalProposalFacade.templateHistory(kind, tenantId));
+  }
+
+  @Override
+  public ResponseEntity<List<AgencyLegalProposalDTO>> getAgencyLegalProposals(
+      Long agencyId, String kind) {
+    return ResponseEntity.ok(agencyLegalProposalFacade.list(agencyId, kind));
+  }
+
+  @Override
+  public ResponseEntity<AgencyLegalProposalDTO> getAgencyLegalProposal(
+      Long agencyId, Long proposalId) {
+    return ResponseEntity.ok(agencyLegalProposalFacade.get(agencyId, proposalId));
+  }
+
+  @Override
+  public ResponseEntity<AgencyLegalProposalDTO> dismissAgencyLegalProposal(
+      Long agencyId, Long proposalId, AgencyLegalProposalDismissRequestDTO request) {
+    return ResponseEntity.ok(agencyLegalProposalFacade.dismiss(agencyId, proposalId, request));
+  }
+
+  @Override
+  public ResponseEntity<AgencyLegalProposalAdoptionDTO> adoptAgencyLegalProposal(
+      Long agencyId, Long proposalId, AgencyLegalProposalAdoptRequestDTO request) {
+    return ResponseEntity.ok(agencyLegalProposalFacade.adopt(agencyId, proposalId, request));
+  }
+
+  @Override
+  public ResponseEntity<List<AgencyLegalDraftArchiveDTO>> getAgencyLegalDraftArchives(
+      Long agencyId, String kind) {
+    return ResponseEntity.ok(agencyLegalProposalFacade.archives(agencyId, kind));
+  }
+
+  @Override
+  public ResponseEntity<AgencyLegalDraftArchiveDTO> getAgencyLegalDraftArchive(
+      Long agencyId, Long archiveId) {
+    return ResponseEntity.ok(agencyLegalProposalFacade.archive(agencyId, archiveId));
+  }
+
   private AgencyLegalDraftDTO toAgencyLegalDraftDto(AgencyLegalDraftView view) {
     return new AgencyLegalDraftDTO()
         .kind(AgencyLegalDraftDTO.KindEnum.fromValue(view.kind().name()))
         .content(view.content())
         .consentText(view.consentText())
         .revision(view.revision())
-        .savedAt(formatVersionTimestamp(view.savedAt()));
+        .savedAt(formatVersionTimestamp(view.savedAt()))
+        .originProposalId(view.originProposalId());
   }
 
   /** One archived version, verbatim; authorised against the version's stored owner. */
