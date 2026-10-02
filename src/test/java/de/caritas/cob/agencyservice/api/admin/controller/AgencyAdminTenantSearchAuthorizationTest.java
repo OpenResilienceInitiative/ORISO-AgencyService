@@ -93,6 +93,7 @@ class AgencyAdminTenantSearchAuthorizationTest {
 
     mvc.perform(get(SEARCH_PATH)
             .param("tenantId", "2")
+            .param("page", "1")
             .param("perPage", "50")
             .header("Authorization", "Bearer tenant-token"))
         .andExpect(status().isOk())
@@ -106,6 +107,7 @@ class AgencyAdminTenantSearchAuthorizationTest {
 
     mvc.perform(get(SEARCH_PATH)
             .param("q", "zebrafink")
+            .param("page", "1")
             .param("perPage", "50")
             .header("Authorization", "Bearer tenant-token"))
         .andExpect(status().isOk())
@@ -121,6 +123,7 @@ class AgencyAdminTenantSearchAuthorizationTest {
 
     mvc.perform(get(SEARCH_PATH)
             .param("q", "zebrafink")
+            .param("page", "1")
             .param("perPage", "50")
             .header("Authorization", "Bearer tenant-token"))
         .andExpect(status().isOk())
