@@ -38,3 +38,14 @@ log
 # Python bytecode from local pytest runs — never belongs in the tree.
 __pycache__/
 *.py[cod]
+
+# Understand Anything: generated graphs are published daily as release assets
+# (ORISO-Docs, tag ua-graph-latest) and fetched at runtime - never commit them.
+.understand-anything/knowledge-graph.json
+.understand-anything/meta.json
+.understand-anything/fingerprints.json
+.understand-anything/domain-graph.json
+.understand-anything/diff-overlay.json
+.understand-anything/*.bak*
+.understand-anything/intermediate/
+.understand-anything/tmp/
