@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyContactDetailsDTO;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import jakarta.servlet.http.Cookie;
 import java.util.Optional;
@@ -40,6 +41,7 @@ class InternalMatrixServiceAccountAuthorizationIT {
 
   private static final String MATRIX_CREDENTIALS_PATH =
       "/internal/agencies/42/matrix-service-account";
+  private static final String CONTACT_DETAILS_PATH = "/internal/agencies/42/contact-details";
   private static final String CSRF_HEADER = "csrfHeader";
   private static final String CSRF_VALUE = "test";
   private static final Cookie CSRF_COOKIE = new Cookie("csrfCookie", CSRF_VALUE);
@@ -63,6 +65,32 @@ class InternalMatrixServiceAccountAuthorizationIT {
         .andExpect(status().isUnauthorized());
 
     verifyNoInteractions(agencyService);
+  }
+
+  @Test
+  void getContactDetailsRequiresAuthentication() throws Exception {
+    mockMvc.perform(get(CONTACT_DETAILS_PATH).param("tenantId", "7")).andExpect(status().isUnauthorized());
+    verifyNoInteractions(agencyService);
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  void getContactDetailsRejectsNonTechnicalUser() throws Exception {
+    mockMvc.perform(get(CONTACT_DETAILS_PATH).param("tenantId", "7")).andExpect(status().isForbidden());
+    verifyNoInteractions(agencyService);
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_TECHNICAL_USER"})
+  void getContactDetailsReturnsTenantScopedFieldsToTechnicalUser() throws Exception {
+    when(agencyService.getContactDetails(42L, 7L))
+        .thenReturn(
+            Optional.of(
+                new AgencyContactDetailsDTO(
+                    42L, 7L, "Centre", "+49 30 123", "centre@example.org", "Mon-Fri 9-17")));
+    mockMvc
+        .perform(get(CONTACT_DETAILS_PATH).param("tenantId", "7").accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk());
   }
 
   @Test
