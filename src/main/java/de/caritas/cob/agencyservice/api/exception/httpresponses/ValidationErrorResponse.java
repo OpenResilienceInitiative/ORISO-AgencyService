@@ -23,7 +23,7 @@ public record ValidationErrorResponse(
           DATA_PROTECTION_RESPONSIBLE_IS_EMPTY,
           DATA_PROTECTION_ALTERNATIVE_RESPONSIBLE_IS_EMPTY,
           DATA_PROTECTION_DTO_IS_NULL -> "dataProtection";
-      case LEGAL_DRAFT_REVISION_CONFLICT -> "revision";
+      case LEGAL_DRAFT_REVISION_CONFLICT, LEGAL_PROPOSAL_CONFLICT -> "revision";
       case ONE_TOPIC_PER_AGENCY -> "topicIds";
       default -> "agency";
     };
@@ -56,6 +56,8 @@ public record ValidationErrorResponse(
           "This platform allows only one topic per agency; the agency cannot gain another topic.";
       case SETTINGS_UNAVAILABLE ->
           "The platform settings cannot be read right now; try again in a moment.";
+      case LEGAL_PROPOSAL_CONFLICT ->
+          "The legal template offer changed, was already decided, or the request key was reused.";
     };
   }
 }

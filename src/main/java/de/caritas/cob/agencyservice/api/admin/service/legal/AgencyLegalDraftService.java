@@ -136,7 +136,8 @@ public class AgencyLegalDraftService {
         readLanguageMap(draft.getContent()),
         readLanguageMap(draft.getConsentText()),
         DraftRevision.format(draft.getRowId(), draft.getVersion()),
-        draft.getSavedAt());
+        draft.getSavedAt(),
+        draft.getOriginProposalId());
   }
 
   private Map<String, String> readLanguageMap(String json) {

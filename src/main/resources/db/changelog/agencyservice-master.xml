@@ -97,6 +97,10 @@
   <!-- ORISO-AgencyService#297: agency-owned legal drafts. The row UUID plus optimistic version is
        the CAS identity; deleting and recreating a draft therefore cannot revive an old token. -->
   <include file="db/changelog/changeset/0034_agency_legal_draft/0034_changeSet.xml"/>
+  <!-- ORISO-AgencyService#303 / ORISO-Admin#1070: Träger -> Beratungsstelle legal templates.
+       Immutable per-recipient snapshots, adoption copies into the agency draft, replaced drafts
+       are archived. Nothing here publishes. -->
+  <include file="db/changelog/changeset/0035_agency_legal_proposal/0035_changeSet.xml"/>
 
   <!--
     L1 gap detection (2026-07-04): the consolidated changelog was run against a fresh MariaDB

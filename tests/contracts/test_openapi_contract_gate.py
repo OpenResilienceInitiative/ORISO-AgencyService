@@ -75,24 +75,43 @@ class OpenApiContractGateTest(unittest.TestCase):
                 self.assertNotIn("format", schemas[schema_name])
 
     def test_pull_request_uses_coordinated_provider_commits(self):
+        # What has to hold is the shape, not one particular commit: on a pull
+        # request each coordinated provider is checked out at an immutable
+        # 40-character SHA, and everywhere else it follows pre-dev.
+        #
+        # This used to repeat the two SHAs as literals here, so a coordinated
+        # bump meant editing the workflow and this file in step. Branches that
+        # updated one and not the other went red on a mismatch that said
+        # nothing about the contracts — the failure this test exists to catch.
         workflow = (ROOT / ".github/workflows/openapi-contracts.yml").read_text()
-        self.assertRegex(
-            workflow,
-            re.compile(
-                r"repository: OpenResilienceInitiative/ORISO-TenantService.*"
-                r"998e0ce87ccb3330e42199d801c567fbb6c4e08f",
-                re.DOTALL,
-            ),
-        )
-        self.assertRegex(
-            workflow,
-            re.compile(
-                r"repository: OpenResilienceInitiative/ORISO-UserService.*"
-                r"d205cf89eadd07c7ee4ec72a2f20950a8dc3e628",
-                re.DOTALL,
-            ),
-        )
-        self.assertIn("|| 'pre-dev'", workflow)
+
+        for provider in ("ORISO-TenantService", "ORISO-UserService"):
+            with self.subTest(provider=provider):
+                match = re.search(
+                    r"repository: OpenResilienceInitiative/"
+                    + re.escape(provider)
+                    + r"\s*\n\s*ref: (?P<ref>.+)\n",
+                    workflow,
+                )
+                self.assertIsNotNone(
+                    match, f"{provider} is not checked out by the contract workflow"
+                )
+                ref = match.group("ref")
+                self.assertRegex(
+                    ref,
+                    r"github\.event_name == 'pull_request'",
+                    f"{provider} must pin a commit on the pull-request path",
+                )
+                self.assertRegex(
+                    ref,
+                    r"'[0-9a-f]{40}'",
+                    f"{provider} must pin a full 40-character commit SHA, not a branch",
+                )
+                self.assertIn(
+                    "|| 'pre-dev'",
+                    ref,
+                    f"{provider} must follow pre-dev outside pull requests",
+                )
 
     def test_contract_gate_tests_are_executed_by_ci(self):
         # A gate assertion that never runs protects nothing. Without a job that

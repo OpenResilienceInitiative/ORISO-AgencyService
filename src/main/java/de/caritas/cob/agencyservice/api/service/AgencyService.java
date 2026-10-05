@@ -15,6 +15,7 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerEr
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.model.AgencyDepartmentDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyContactDetailsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
@@ -241,6 +242,24 @@ public class AgencyService {
     return agencyRepository
         .findById(agencyId)
         .map(this::matrixCredentialsDto);
+  }
+
+  public Optional<AgencyContactDetailsDTO> getContactDetails(Long agencyId, Long tenantId) {
+    if (agencyId == null || agencyId <= 0 || tenantId == null || tenantId <= 0) {
+      return Optional.empty();
+    }
+    return agencyRepository
+        .findByIdAndDeleteDateNull(agencyId)
+        .filter(agency -> tenantId.equals(agency.getTenantId()))
+        .map(
+            agency ->
+                new AgencyContactDetailsDTO(
+                    agency.getId(),
+                    agency.getTenantId(),
+                    agency.getName(),
+                    agency.getPhone(),
+                    agency.getEmail(),
+                    agency.getOpeningHours()));
   }
 
   private AgencyMatrixCredentialsDTO matrixCredentialsDto(Agency agency) {

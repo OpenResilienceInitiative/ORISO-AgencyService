@@ -82,6 +82,35 @@ import org.springframework.test.util.ReflectionTestUtils;
 @RunWith(MockitoJUnitRunner.class)
 public class AgencyServiceTest {
 
+  @org.junit.Test
+  public void contactDetailsRequireMatchingTenantAndActiveAgency() {
+    Agency agency =
+        Agency.builder()
+            .id(42L)
+            .tenantId(7L)
+            .name("Counselling Centre")
+            .consultingTypeId(1)
+            .phone("+49 30 123")
+            .email("centre@example.org")
+            .openingHours("Mon-Fri 9-17")
+            .build();
+    when(agencyRepository.findByIdAndDeleteDateNull(42L)).thenReturn(Optional.of(agency));
+
+    var details = agencyService.getContactDetails(42L, 7L);
+
+    org.assertj.core.api.Assertions.assertThat(details).isPresent();
+    org.assertj.core.api.Assertions.assertThat(details.orElseThrow().phone())
+        .isEqualTo("+49 30 123");
+    org.assertj.core.api.Assertions.assertThat(details.orElseThrow().email())
+        .isEqualTo("centre@example.org");
+    org.assertj.core.api.Assertions.assertThat(details.orElseThrow().openingHours())
+        .isEqualTo("Mon-Fri 9-17");
+    org.assertj.core.api.Assertions.assertThat(agencyService.getContactDetails(42L, 8L))
+        .isEmpty();
+    org.assertj.core.api.Assertions.assertThat(agencyService.getContactDetails(43L, 7L))
+        .isEmpty();
+  }
+
   /**
    * ADR-021 decision 9: AgencyService no longer decides what is in force — it asks the resolver.
    * The default here is "nothing authored anywhere", so a test that cares about the legal flags has
