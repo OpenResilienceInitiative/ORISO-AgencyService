@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Platform policy "one topic per agency" (ADR-014 amendment 2026-09-25). The data model stays
@@ -52,7 +53,8 @@ public class OneTopicPerAgencyPolicy {
     try {
       // Uncached: the shared settings cache lags up to 600 s behind a switch change.
       settings = applicationSettingsService.fetchApplicationSettings();
-    } catch (RestClientException e) {
+    } catch (RestClientException | ResponseStatusException e) {
+      // The rest template throws ResponseStatusException (not RestClientException) on 4xx/5xx.
       log.warn("Could not read oneTopicPerAgencyEnabled; refusing the topic-adding write.", e);
       throw new ServiceUnavailableException(SETTINGS_UNAVAILABLE);
     }

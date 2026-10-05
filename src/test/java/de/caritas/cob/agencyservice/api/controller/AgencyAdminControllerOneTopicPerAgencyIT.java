@@ -31,10 +31,13 @@ import java.util.List;
 import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
@@ -47,6 +50,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * ADR-014 amendment 2026-09-25 (ORISO-UserService#1264): the global switch
@@ -205,6 +209,18 @@ class AgencyAdminControllerOneTopicPerAgencyIT {
         .andExpect(header().string("X-Reason", SETTINGS_UNAVAILABLE));
   }
 
+  @ParameterizedTest
+  @ValueSource(ints = {401, 403, 500, 502})
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  void updateAgency_Should_answer503_When_settingsServiceAnswersWithAnErrorStatus(int upstream)
+      throws Exception {
+    settingsServiceAnswersWith(HttpStatus.valueOf(upstream));
+
+    update(SINGLE_TOPIC_AGENCY_PATH, List.of(2L, 3L))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("X-Reason", SETTINGS_UNAVAILABLE));
+  }
+
   @Test
   @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
   void updateAgency_Should_saveUnrelatedChange_When_settingsAreUnavailable() throws Exception {
@@ -226,6 +242,13 @@ class AgencyAdminControllerOneTopicPerAgencyIT {
     var outage = new ResourceAccessException("ConsultingTypeService down");
     when(applicationSettingsService.getApplicationSettings()).thenThrow(outage);
     when(applicationSettingsService.fetchApplicationSettings()).thenThrow(outage);
+  }
+
+  private void settingsServiceAnswersWith(HttpStatus upstream) {
+    // What CustomResponseErrorHandler throws for any 4xx/5xx of the ConsultingTypeService.
+    var failure = new ResponseStatusException(upstream, "GET /settings");
+    when(applicationSettingsService.getApplicationSettings()).thenThrow(failure);
+    when(applicationSettingsService.fetchApplicationSettings()).thenThrow(failure);
   }
 
   private ResultActions create(List<Long> topicIds) throws Exception {
