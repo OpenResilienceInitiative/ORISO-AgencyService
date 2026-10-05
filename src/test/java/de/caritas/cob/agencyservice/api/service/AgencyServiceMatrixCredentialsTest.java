@@ -3,6 +3,8 @@ package de.caritas.cob.agencyservice.api.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
@@ -49,7 +51,7 @@ class AgencyServiceMatrixCredentialsTest {
       new AgencyMatrixPasswordCipher(APP_KEY);
 
   @Test
-  void getMatrixCredentialsShouldDecryptStoredPassword() {
+  void getMatrixCredentialsShouldNotDecryptStoredPassword() {
     var agency =
         Agency.builder()
             .id(7L)
@@ -63,7 +65,7 @@ class AgencyServiceMatrixCredentialsTest {
     var credentials = agencyService.getMatrixCredentials(7L).orElseThrow();
 
     assertThat(credentials.getMatrixUserId()).isEqualTo("@agency:matrix");
-    assertThat(credentials.getMatrixPassword()).isEqualTo("plain-secret");
+    verify(matrixPasswordCipher, never()).decrypt(anyString());
   }
 
   @Test
@@ -77,12 +79,44 @@ class AgencyServiceMatrixCredentialsTest {
 
     var credentials = agencyService.provisionMatrixCredentials(9L).orElseThrow();
 
-    assertThat(credentials.getMatrixPassword()).isEqualTo("new-secret");
+    assertThat(credentials.getMatrixUserId()).isEqualTo("@agency:matrix");
+    verify(matrixPasswordCipher, never()).decrypt(anyString());
 
     var passwordCaptor = ArgumentCaptor.forClass(String.class);
     verify(agencyRepository)
         .updateMatrixCredentials(eq(9L), eq("@agency:matrix"), passwordCaptor.capture());
     assertThat(passwordCaptor.getValue()).startsWith("enc:");
     assertThat(matrixPasswordCipher.decrypt(passwordCaptor.getValue())).isEqualTo("new-secret");
+  }
+
+  @Test
+  void existingAccountProvisionResponseDoesNotDecryptOrRotatePassword() {
+    var agency = Agency.builder().id(7L).name("Synthetic centre").consultingTypeId(1).matrixUserId("@agency:matrix")
+        .matrixPassword("enc:unreadable-with-current-key").build();
+    when(agencyRepository.findById(7L)).thenReturn(Optional.of(agency));
+
+    assertThat(agencyService.provisionMatrixCredentials(7L).orElseThrow().getMatrixUserId())
+        .isEqualTo("@agency:matrix");
+    verify(matrixPasswordCipher, never()).decrypt(anyString());
+    org.mockito.Mockito.verifyNoInteractions(matrixProvisioningService);
+    verify(agencyRepository, never()).updateMatrixCredentials(
+        org.mockito.ArgumentMatchers.anyLong(), anyString(), anyString());
+  }
+
+  @Test
+  void identityReadDoesNotDependOnStoredPasswordOrEncryptionKey() {
+    var agency = Agency.builder().id(7L).name("Synthetic centre").consultingTypeId(1).matrixUserId("@agency:matrix")
+        .matrixPassword("enc:unreadable-with-current-key").build();
+    when(agencyRepository.findById(7L)).thenReturn(Optional.of(agency));
+    assertThat(agencyService.getMatrixCredentials(7L).orElseThrow().getMatrixUserId())
+        .isEqualTo("@agency:matrix");
+    verify(matrixPasswordCipher, never()).decrypt(anyString());
+  }
+
+  @Test
+  void missingAgencyHasNoIdentity() {
+    when(agencyRepository.findById(7L)).thenReturn(Optional.empty());
+    assertThat(agencyService.getMatrixCredentials(7L)).isEmpty();
+    org.mockito.Mockito.verifyNoInteractions(matrixPasswordCipher);
   }
 }

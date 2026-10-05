@@ -6,7 +6,6 @@ import lombok.Value;
 public class AgencyMatrixCredentialsDTO {
 
   String matrixUserId;
-  String matrixPassword;
 }
 
 
