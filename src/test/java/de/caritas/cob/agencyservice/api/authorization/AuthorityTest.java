@@ -18,6 +18,16 @@ public class AuthorityTest {
   }
 
   @Test
+  public void fromRoleName_Should_allowAgencySearchWithoutAgencyManagement_When_roleNameIsTenantAdmin() {
+    Authority authority = fromRoleName("tenant-admin");
+
+    assertThat(authority.getAuthorities()).containsOnly(
+        AuthorityValue.TENANT_ADMIN,
+        AuthorityValue.GET_ALL_AGENCIES,
+        AuthorityValue.SEARCH_AGENCIES);
+  }
+
+  @Test
   public void fromRoleName_Should_returnNull_When_roleNameIsNull() {
     Authority authority = fromRoleName(null);
 
