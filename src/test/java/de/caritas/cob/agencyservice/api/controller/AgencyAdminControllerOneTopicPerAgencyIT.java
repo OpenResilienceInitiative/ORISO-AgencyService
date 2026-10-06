@@ -1,6 +1,11 @@
 package de.caritas.cob.agencyservice.api.controller;
 
 import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -10,6 +15,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import de.caritas.cob.agencyservice.api.admin.service.AgencyTopicMergeService;
+import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
+import org.springframework.transaction.annotation.Propagation;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Executors;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
@@ -79,6 +93,9 @@ class AgencyAdminControllerOneTopicPerAgencyIT {
   @MockitoBean private AuthenticatedUser authenticatedUser;
   @MockitoBean private TenantService tenantService;
   @MockitoBean private ApplicationSettingsService applicationSettingsService;
+  @MockitoSpyBean
+  private AgencyTopicMergeService topicMergeService;
+  @Autowired private AgencyTopicRepository agencyTopicRepository;
 
   @BeforeEach
   void setup() throws Exception {
@@ -229,6 +246,47 @@ class AgencyAdminControllerOneTopicPerAgencyIT {
     update(MULTI_TOPIC_AGENCY_PATH, List.of(0L, 1L))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.topics.length()").value(2));
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN"})
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentSingleTopicUpdates_cannotLeaveTwoTopics() throws Exception {
+    switchOneTopicPerAgency(true);
+    update(SINGLE_TOPIC_AGENCY_PATH, List.of()).andExpect(status().isOk());
+    var firstRead = new CountDownLatch(1);
+    var secondRead = new CountDownLatch(1);
+    var calls = new AtomicInteger();
+    doAnswer(invocation -> {
+      if (calls.incrementAndGet() == 1) {
+        firstRead.countDown();
+        secondRead.await(1, TimeUnit.SECONDS);
+      } else {
+        secondRead.countDown();
+      }
+      return invocation.callRealMethod();
+    }).when(topicMergeService).getMergedTopicsForUpdate(any(),
+        anyList(), anyList());
+    var executor = Executors.newFixedThreadPool(2);
+    try {
+      var first = executor.submit(() -> concurrentUpdate(0L));
+      assertThat(firstRead.await(5, TimeUnit.SECONDS)).isTrue();
+      var second = executor.submit(() -> concurrentUpdate(1L));
+      assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+      assertThat(second.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+      assertThat(agencyTopicRepository.findAllByAgencyId(2L)).hasSize(1);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  private int concurrentUpdate(long topicId) throws Exception {
+    var dto = new UpdateAgencyDTO().topicIds(List.of(topicId)).name("Concurrent centre").offline(true).external(false);
+    return mockMvc.perform(withCsrf(put(SINGLE_TOPIC_AGENCY_PATH))
+      .with(user("admin")
+          .authorities(new SimpleGrantedAuthority("AUTHORIZATION_AGENCY_ADMIN")))
+      .contentType(APPLICATION_JSON).content(JsonConverter.convertToJson(dto)))
+      .andReturn().getResponse().getStatus();
   }
 
   private void switchOneTopicPerAgency(boolean enabled) {

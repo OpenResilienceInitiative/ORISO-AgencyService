@@ -340,7 +340,7 @@ public class AgencyAdminService {
    */
   @Transactional
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
-    var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
+    var agency = agencyRepository.findLockedById(agencyId).orElseThrow(NotFoundException::new);
     applySettingsUpdate(updateAgencyDTO);
     // Read the stored wording before the merge overwrites it: what makes an agency-level save a
     // publish is that the wording CHANGED, and afterwards there is nothing left to compare against.
