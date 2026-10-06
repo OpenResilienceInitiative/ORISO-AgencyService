@@ -227,7 +227,7 @@ public class AgencyService {
             agency.getName(), agency.getId(), creds.getUserId());
       }
 
-      return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId(), creds.getPassword()));
+      return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId()));
     } catch (Exception ex) {
       log.warn(
           "Matrix provisioning failed for agency {} (id={}): {}",
@@ -263,9 +263,7 @@ public class AgencyService {
   }
 
   private AgencyMatrixCredentialsDTO matrixCredentialsDto(Agency agency) {
-    return new AgencyMatrixCredentialsDTO(
-        agency.getMatrixUserId(),
-        matrixPasswordCipher.decrypt(agency.getMatrixPassword()));
+    return new AgencyMatrixCredentialsDTO(agency.getMatrixUserId());
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
