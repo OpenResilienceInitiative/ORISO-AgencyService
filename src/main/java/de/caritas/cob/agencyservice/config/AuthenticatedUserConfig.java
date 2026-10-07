@@ -50,7 +50,11 @@ public class AuthenticatedUserConfig {
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
     authenticatedUser.setUserId(resolveUserId(claimMap));
-    authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
+    if (taskIdentity != null && taskIdentity.allowsAnyTask(authenticationToken)) {
+      authenticatedUser.setUsername("service:" + authenticationToken.getToken().getClaimAsString("azp"));
+    } else {
+      authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
+    }
     authenticatedUser.setTenantId(getTenantId(claimMap));
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
         Collectors.toSet()));
