@@ -111,6 +111,20 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/agencyadmin/agencies", "/agencyadmin/agencies/")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
                 AuthorityValue.TECHNICAL_USER)
+            // UserService releases reservations of revoked/expired invites from a scheduler as
+            // the technical user (ORISO-Helm#367). The method then limits that identity to
+            // reservations that were never consumed.
+            .requestMatchers(HttpMethod.DELETE, "/agencyadmin/agencyids/reservations/*",
+                "/agencyadmin/agencyids/reservations/*/")
+            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
+                AuthorityValue.TECHNICAL_USER)
+            // UserService re-checks an invite's agency when the anonymous invitee accepts
+            // (ORISO-Admin#1026); only this view carries the delete date. One agency by ID, no
+            // search and no sub-resources.
+            .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies/{agencyId:\\d+}",
+                "/agencyadmin/agencies/{agencyId:\\d+}/")
+            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
+                AuthorityValue.TECHNICAL_USER)
             .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
             // /agencies/topics enriches via an authenticated ConsultingTypeService call and is

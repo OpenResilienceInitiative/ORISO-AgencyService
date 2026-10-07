@@ -55,4 +55,8 @@ public class AgencyLegalDraft {
 
   @Column(name = "saved_at", nullable = false)
   private LocalDateTime savedAt;
+
+  /** The forwarded template this draft was adopted from; a copy, it no longer follows the source. */
+  @Column(name = "origin_proposal_id")
+  private Long originProposalId;
 }

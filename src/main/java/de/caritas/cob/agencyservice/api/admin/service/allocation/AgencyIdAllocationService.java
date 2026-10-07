@@ -133,6 +133,27 @@ public class AgencyIdAllocationService {
   }
 
   /**
+   * Releases a reservation only while it was never consumed, i.e. no agency row carries the ID.
+   * This is the release path of the service identity (UserService cleanup of revoked or expired
+   * invites, ORISO-Helm#367); it must never be able to free an ID that a real agency already
+   * uses.
+   *
+   * @throws NotFoundException when no reservation exists (already released or consumed)
+   * @throws ConflictException when an agency already uses the ID; the reservation is kept
+   */
+  @Transactional
+  public void releaseUnconsumed(long agencyId) {
+    var reservation = reservationRepository.findById(agencyId)
+        .orElseThrow(NotFoundException::new);
+    if (isAssigned(agencyId)) {
+      log.warn("Refusing to release agency ID reservation {}: an agency already uses the ID",
+          agencyId);
+      throw new ConflictException(AGENCY_ID_NOT_AVAILABLE);
+    }
+    reservationRepository.delete(reservation);
+  }
+
+  /**
    * Consumes a reservation because the real agency is being created with that ID. Participates
    * in the caller's transaction so entity creation and reservation consumption are atomic. The
    * delete runs as plain JDBC so it is effective immediately — a subsequent
