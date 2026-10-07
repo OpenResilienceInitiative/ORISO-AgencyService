@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.config.security;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import org.springframework.core.env.Environment;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -27,10 +28,8 @@ public class TechnicalServiceIdentity {
         || jwt.getExpiresAt() == null || !jwt.getExpiresAt().isAfter(Instant.now())) {
       return false;
     }
-    Object realm = jwt.getClaims().get("realm_access");
-    if (!(realm instanceof Map<?, ?> access)
-        || !(access.get("roles") instanceof Collection<?> roles)
-        || roles.size() != 1 || !roles.contains("technical")) {
+    Collection<?> roles = realmRoles(jwt);
+    if (roles.size() != 1 || !roles.contains("technical")) {
       return false;
     }
     Object resources = jwt.getClaims().get("resource_access");
@@ -40,13 +39,17 @@ public class TechnicalServiceIdentity {
 
   /** A claimed technical identity must not fall through to human role or profile handling. */
   public void requireValidIfTechnical(Jwt jwt) {
-    Object realm = jwt.getClaims().get("realm_access");
-    boolean technicalRole = realm instanceof Map<?, ?> access
-        && access.get("roles") instanceof Collection<?> roles && roles.contains("technical");
+    boolean technicalRole = realmRoles(jwt).contains("technical");
     boolean boundClient = !clientId.isBlank() && clientId.equals(jwt.getClaims().get("azp"));
     boolean boundSubject = !subject.isBlank() && subject.equals(jwt.getClaims().get("sub"));
     if ((technicalRole || boundClient || boundSubject) && !allows(jwt)) {
       throw new InvalidBearerTokenException("Technical service identity does not match its binding");
     }
+  }
+
+  private Collection<?> realmRoles(Jwt jwt) {
+    Object realm = jwt.getClaims().get("realm_access");
+    return realm instanceof Map<?, ?> access && access.get("roles") instanceof Collection<?> roles
+        ? roles : List.of();
   }
 }
