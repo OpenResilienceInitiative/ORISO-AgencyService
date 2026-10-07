@@ -1,7 +1,6 @@
 package de.caritas.cob.agencyservice.config.security;
 
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Component
-@RequiredArgsConstructor
 public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
   private final @NonNull AuthorisationService authorisationService;
@@ -26,14 +24,19 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
 
   private final JwtAuthConverterProperties properties;
 
+  private final TechnicalServiceIdentity technicalServiceIdentity;
+
   public JwtAuthConverter(
-      JwtAuthConverterProperties properties, AuthorisationService authorisationService) {
+      JwtAuthConverterProperties properties, AuthorisationService authorisationService,
+      TechnicalServiceIdentity technicalServiceIdentity) {
     this.properties = properties;
     this.authorisationService = authorisationService;
+    this.technicalServiceIdentity = technicalServiceIdentity;
   }
 
   @Override
   public AbstractAuthenticationToken convert(Jwt jwt) {
+    technicalServiceIdentity.requireValidIfTechnical(jwt);
     var authorities = getGrantedAuthorities(jwt);
     return new JwtAuthenticationToken(jwt, authorities, getPrincipalClaimName(jwt));
   }
