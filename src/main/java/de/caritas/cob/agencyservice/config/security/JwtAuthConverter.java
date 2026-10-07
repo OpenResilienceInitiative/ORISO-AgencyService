@@ -32,6 +32,13 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
     this.authorisationService = authorisationService;
   }
 
+  private TaskServiceIdentity taskServiceIdentity;
+
+  public JwtAuthConverter(JwtAuthConverterProperties properties, AuthorisationService authorisationService, TaskServiceIdentity taskServiceIdentity) {
+    this(properties, authorisationService);
+    this.taskServiceIdentity = taskServiceIdentity;
+  }
+
   @Override
   public AbstractAuthenticationToken convert(Jwt jwt) {
     var authorities = getGrantedAuthorities(jwt);
@@ -39,6 +46,9 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
   }
 
   private Collection<GrantedAuthority> getGrantedAuthorities(Jwt jwt) {
+    if (TaskServiceIdentity.hasTaskRole(jwt) || (taskServiceIdentity != null && taskServiceIdentity.isTaskToken(jwt))) {
+      return java.util.List.of();
+    }
     Collection<GrantedAuthority> convertedGrantedAuthorities =
         jwtGrantedAuthoritiesConverter.convert(jwt);
     if (convertedGrantedAuthorities != null) {

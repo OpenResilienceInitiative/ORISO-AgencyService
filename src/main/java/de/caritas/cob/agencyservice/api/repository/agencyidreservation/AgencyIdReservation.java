@@ -41,6 +41,9 @@ public class AgencyIdReservation implements Persistable<Long> {
   @Column(name = "tenant_id")
   private Long tenantId;
 
+  @Column(name = "reservation_token", length = 64)
+  private String reservationToken;
+
   @Column(name = "create_date", nullable = false)
   private LocalDateTime createDate;
 
@@ -51,6 +54,9 @@ public class AgencyIdReservation implements Persistable<Long> {
     var reservation = new AgencyIdReservation();
     reservation.agencyId = agencyId;
     reservation.tenantId = tenantId;
+    byte[] random = new byte[32];
+    new java.security.SecureRandom().nextBytes(random);
+    reservation.reservationToken = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(random);
     reservation.createDate = LocalDateTime.now(ZoneOffset.UTC);
     reservation.isNew = true;
     return reservation;
