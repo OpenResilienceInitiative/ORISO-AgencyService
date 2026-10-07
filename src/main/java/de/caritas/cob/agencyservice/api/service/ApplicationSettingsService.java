@@ -26,6 +26,13 @@ public class ApplicationSettingsService {
 
   @Cacheable(value = CacheManagerConfig.APPLICATION_SETTINGS_CACHE)
   public ApplicationSettingsDTO getApplicationSettings() {
+    return fetchApplicationSettings();
+  }
+
+  /**
+   * Reads the settings past the cache, for hard switches that must apply on the next request.
+   */
+  public ApplicationSettingsDTO fetchApplicationSettings() {
     ApplicationsettingsControllerApi controllerApi = applicationSettingsApiControllerFactory.createControllerApi();
     addDefaultHeaders(controllerApi.getApiClient());
     return controllerApi.getApplicationSettings();

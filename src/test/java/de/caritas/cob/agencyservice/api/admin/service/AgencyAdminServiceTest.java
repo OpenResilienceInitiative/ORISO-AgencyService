@@ -140,6 +140,9 @@ class AgencyAdminServiceTest {
   @Mock
   AgencySettingsService agencySettingsService;
 
+  @Mock
+  OneTopicPerAgencyPolicy oneTopicPerAgencyPolicy;
+
   @Captor
   private ArgumentCaptor<Agency> agencyArgumentCaptor;
 
@@ -179,7 +182,7 @@ class AgencyAdminServiceTest {
 
   @Test
   void updateAgency_Should_ThrowNotFoundException_WhenAgencyIsNotFound() {
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.empty());
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.empty());
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
 
@@ -347,7 +350,7 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionResponsibleEntity(DataProtectionResponsibleEntity.DATA_PROTECTION_OFFICER);
 
     agency.setCounsellingRelations(null);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -370,7 +373,7 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionOfficerContactData(JsonConverter.convertToJson(dataProtectionContactDTO));
     agency.setDataProtectionAlternativeContactData(null);
     agency.setDataProtectionAgencyResponsibleContactData(null);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -397,7 +400,7 @@ class AgencyAdminServiceTest {
     agency.setCounsellingRelations(null);
     agency.setOpeningHours("Mo-Fr 9-17 Uhr");
     clearDataProtection(agency);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -443,7 +446,7 @@ class AgencyAdminServiceTest {
     agency.setLat(52.520008);
     agency.setLng(13.404954);
     clearDataProtection(agency);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -466,7 +469,7 @@ class AgencyAdminServiceTest {
     agency.setLat(52.520008);
     agency.setLng(13.404954);
     clearDataProtection(agency);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -489,7 +492,7 @@ class AgencyAdminServiceTest {
     agency.setCounsellingRelations(null);
     agency.setOpeningHours("Mo-Fr 9-17 Uhr");
     clearDataProtection(agency);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -518,7 +521,7 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionAlternativeContactData(JsonConverter.convertToJson(new DataProtectionContactDTO()));
     agency.setDataProtectionOfficerContactData(null);
     agency.setDataProtectionAgencyResponsibleContactData(null);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -540,7 +543,7 @@ class AgencyAdminServiceTest {
     var agency = this.easyRandom.nextObject(Agency.class);
     clearDataProtection(agency);
     agency.setCounsellingRelations(null);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
     when(agencyTopicRepository.findAllByAgencyId(anyLong()))
         .thenReturn(Lists.newArrayList(AgencyTopic.builder().topicId(1L).build()));
@@ -567,7 +570,7 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionAgencyResponsibleContactData(null);
     agency.setDataProtectionResponsibleEntity(DataProtectionResponsibleEntity.AGENCY_RESPONSIBLE);
     agency.setCounsellingRelations(AgencyAdminResponseDTO.CounsellingRelationsEnum.PARENTAL_COUNSELLING.getValue());
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
 
@@ -700,7 +703,7 @@ class AgencyAdminServiceTest {
     var agency = this.easyRandom.nextObject(Agency.class);
     clearDataProtection(agency);
     agency.setCounsellingRelations(null);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
     when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>DSE</p><script>x</script>")))
         .thenReturn("{\"de\":\"<p>DSE</p>\"}");
@@ -727,7 +730,7 @@ class AgencyAdminServiceTest {
     var agency = this.easyRandom.nextObject(Agency.class);
     clearDataProtection(agency);
     agency.setCounsellingRelations(null);
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -749,7 +752,7 @@ class AgencyAdminServiceTest {
     agency.setCounsellingRelations(null);
     agency.setId(AGENCY_ID);
     agency.setContentDpp("{\"de\":\"<p>alt</p>\"}");
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>neu</p>")))
         .thenReturn("{\"de\":\"<p>neu</p>\"}");
@@ -780,7 +783,7 @@ class AgencyAdminServiceTest {
     agency.setCounsellingRelations(null);
     agency.setContentDpp("{\"de\":\"<p>bestehende DSE</p>\"}");
     agency.setContentImprint("{\"de\":\"<p>bestehendes Impressum</p>\"}");
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -802,7 +805,7 @@ class AgencyAdminServiceTest {
     clearDataProtection(agency);
     agency.setCounsellingRelations(null);
     agency.setContentImprint("{\"de\":\"<p>bestehendes Impressum</p>\"}");
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
     when(legalContentSanitizer.sanitizeToJson(Map.of("de", "<p>neue DSE</p>")))
         .thenReturn("{\"de\":\"<p>neue DSE</p>\"}");
@@ -829,7 +832,7 @@ class AgencyAdminServiceTest {
     clearDataProtection(agency);
     agency.setCounsellingRelations(null);
     agency.setContentDpp("{\"de\":\"<p>bestehende DSE</p>\"}");
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
     var updateAgencyDTO = this.easyRandom.nextObject(UpdateAgencyDTO.class);
@@ -850,7 +853,7 @@ class AgencyAdminServiceTest {
     clearDataProtection(agency);
     agency.setCounsellingRelations(null);
     agency.setContentDpp("{\"de\":\"<p>bestehende DSE</p>\"}");
-    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
     when(legalContentSanitizer.sanitizeToJson(Map.of("de", ""))).thenReturn("{\"de\":\"\"}");
 
