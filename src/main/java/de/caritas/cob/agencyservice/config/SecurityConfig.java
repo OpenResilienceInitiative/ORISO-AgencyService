@@ -41,6 +41,8 @@ public class SecurityConfig {
   @Autowired
   AuthorisationService authorisationService;
   @Autowired
+  private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskServiceIdentity;
+  @Autowired
   JwtAuthConverterProperties jwtAuthConverterProperties;
 
 
@@ -109,22 +111,23 @@ public class SecurityConfig {
             // blanket /agencyadmin/** rule below answers 403 before the method-level rule is
             // ever evaluated.
             .requestMatchers(HttpMethod.POST, "/agencyadmin/agencies", "/agencyadmin/agencies/")
-            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
-                AuthorityValue.TECHNICAL_USER)
+            .access(legacyOrTask("CONFIG_WIZARD", AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN, AuthorityValue.TECHNICAL_USER))
             // UserService releases reservations of revoked/expired invites from a scheduler as
             // the technical user (ORISO-Helm#367). The method then limits that identity to
             // reservations that were never consumed.
             .requestMatchers(HttpMethod.DELETE, "/agencyadmin/agencyids/reservations/*",
                 "/agencyadmin/agencyids/reservations/*/")
-            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
-                AuthorityValue.TECHNICAL_USER)
+            .access(legacyOrTask("INVITE_RESERVATIONS", AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN, AuthorityValue.TECHNICAL_USER))
             // UserService re-checks an invite's agency when the anonymous invitee accepts
             // (ORISO-Admin#1026); only this view carries the delete date. One agency by ID, no
             // search and no sub-resources.
             .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies/{agencyId:\\d+}",
                 "/agencyadmin/agencies/{agencyId:\\d+}/")
-            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
-                AuthorityValue.TECHNICAL_USER)
+            .access(legacyOrTask("CONFIG_WIZARD", AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN, AuthorityValue.TECHNICAL_USER))
+                        .requestMatchers(HttpMethod.GET, "/agencyadmin/agencyids/*/availability")
+            .access(legacyOrTask("INVITE_RESERVATIONS", AuthorityValue.AGENCY_ADMIN))
+            .requestMatchers(HttpMethod.POST, "/agencyadmin/agencyids/reservations")
+            .access(legacyOrTask("INVITE_RESERVATIONS", AuthorityValue.AGENCY_ADMIN))
             .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
             // /agencies/topics enriches via an authenticated ConsultingTypeService call and is
@@ -132,6 +135,12 @@ public class SecurityConfig {
             // in the request-scoped AuthenticatedUser bean.
             .requestMatchers("/agencies/topics", "/agencies/topics/").authenticated()
             .requestMatchers("/agencies/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/internal/agencies/*/contact-details")
+            .access(legacyOrTask("NOTIFICATION_DISPATCH", AuthorityValue.TECHNICAL_USER))
+            .requestMatchers(HttpMethod.GET, "/internal/agencies/*/matrix-service-account")
+            .access(legacyOrTask("MATRIX_AGENCY", AuthorityValue.TECHNICAL_USER))
+            .requestMatchers(HttpMethod.POST, "/internal/agencies/*/matrix-service-account")
+            .access(legacyOrTask("MATRIX_AGENCY_PROVISION", AuthorityValue.TECHNICAL_USER))
             .requestMatchers("/internal/agencies/**").hasAuthority(AuthorityValue.TECHNICAL_USER)
             .anyRequest().denyAll())
         .oauth2ResourceServer(oauth2 -> oauth2.jwt(
@@ -139,9 +148,18 @@ public class SecurityConfig {
     return httpSecurity.build();
   }
 
+  private org.springframework.security.authorization.AuthorizationManager<org.springframework.security.web.access.intercept.RequestAuthorizationContext> legacyOrTask(String task, String... authorities) {
+    return (authentication, context) -> {
+      var caller = authentication.get();
+      boolean legacy = caller != null && caller.getAuthorities().stream()
+          .anyMatch(granted -> java.util.Arrays.asList(authorities).contains(granted.getAuthority()));
+      return new org.springframework.security.authorization.AuthorizationDecision(legacy || ("MATRIX_AGENCY_PROVISION".equals(task) ? taskServiceIdentity.allowsMatrixProvision(caller) : taskServiceIdentity.allows(caller, task)));
+    };
+  }
+
   @Bean
   public JwtAuthConverter jwtAuthConverter() {
-    return new JwtAuthConverter(jwtAuthConverterProperties, authorisationService);
+    return new JwtAuthConverter(jwtAuthConverterProperties, authorisationService, taskServiceIdentity);
   }
 
 

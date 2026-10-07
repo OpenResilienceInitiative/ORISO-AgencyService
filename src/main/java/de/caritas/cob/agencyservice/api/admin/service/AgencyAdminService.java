@@ -61,6 +61,9 @@ import org.springframework.transaction.support.TransactionOperations;
 @RequiredArgsConstructor
 @Slf4j
 public class AgencyAdminService {
+  @org.springframework.beans.factory.annotation.Autowired
+  private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskIdentity;
+
 
   private final @NonNull AgencyRepository agencyRepository;
 
@@ -170,7 +173,7 @@ public class AgencyAdminService {
 
     var savedAgency = agencyDTO.getReservedAgencyId() == null
         ? saveWithReservationGuard(agency)
-        : saveWithReservedId(agency, agencyDTO.getReservedAgencyId());
+        : saveWithReservedId(agency, agencyDTO.getReservedAgencyId(), agencyDTO.getReservationToken());
     agencyService.provisionMatrixCredentials(savedAgency);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(savedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(savedAgency);
@@ -212,10 +215,13 @@ public class AgencyAdminService {
    * guard exists to arbitrate a <em>generated</em> ID against open reservations. On this path the
    * reservation is the thing being consumed, and re-inserting it would collide with itself.
    */
-  private Agency saveWithReservedId(Agency agency, Long reservedAgencyId) {
+  private Agency saveWithReservedId(Agency agency, Long reservedAgencyId, String proof) {
     return agencyCreationTransaction.execute(status -> {
-      agencyIdAllocationService.claimReservedId(
-          reservedAgencyId, agency.getTenantId(), agency.getName());
+      if (taskIdentity != null && taskIdentity.current("CONFIG_WIZARD")) {
+        agencyIdAllocationService.claimReservedId(reservedAgencyId, agency.getTenantId(), agency.getName(), proof, true);
+      } else {
+        agencyIdAllocationService.claimReservedId(reservedAgencyId, agency.getTenantId(), agency.getName());
+      }
       agency.setId(reservedAgencyId);
       return agencyRepository.save(agency);
     });

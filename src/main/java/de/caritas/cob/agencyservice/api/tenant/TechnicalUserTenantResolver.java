@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class TechnicalUserTenantResolver implements TenantResolver {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskIdentity;
 
   @Override
   public Optional<Long> resolve(HttpServletRequest request) {
@@ -23,7 +25,13 @@ public class TechnicalUserTenantResolver implements TenantResolver {
 
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication != null) {
+      if (!(authentication.getPrincipal() instanceof Jwt)) {
+        return false;
+      }
       Jwt jwt = (Jwt) authentication.getPrincipal();
+      if (de.caritas.cob.agencyservice.config.security.TaskServiceIdentity.hasTaskRole(jwt) || (taskIdentity != null && taskIdentity.isTaskToken(jwt))) {
+        return false;
+      }
       return getRealmRoles(jwt).contains("technical");
     }
     return false;

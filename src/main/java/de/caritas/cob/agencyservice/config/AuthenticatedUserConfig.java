@@ -26,6 +26,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  */
 @Configuration
 public class AuthenticatedUserConfig {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskIdentity;
+
 
   private static final String CLAIM_NAME_USER_ID = "userId";
   private static final String CLAIM_NAME_SUBJECT = "sub";
@@ -56,6 +59,9 @@ public class AuthenticatedUserConfig {
   }
 
   public Collection<String> extractRealmRoles(Jwt jwt) {
+    if (de.caritas.cob.agencyservice.config.security.TaskServiceIdentity.hasTaskRole(jwt) || (taskIdentity != null && taskIdentity.isTaskToken(jwt))) {
+      return java.util.List.of();
+    }
     Map<String, Object> realmAccess = (Map<String, Object>) jwt.getClaims().get("realm_access");
     if (realmAccess != null) {
       var roles = (List<String>) realmAccess.get("roles");
