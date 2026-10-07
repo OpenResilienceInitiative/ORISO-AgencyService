@@ -36,7 +36,7 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
 
   @Override
   public AbstractAuthenticationToken convert(Jwt jwt) {
-    technicalServiceIdentity.requireValidIfTechnical(jwt);
+    technicalServiceIdentity.requireValidAtAuthentication(jwt);
     var authorities = getGrantedAuthorities(jwt);
     return new JwtAuthenticationToken(jwt, authorities, getPrincipalClaimName(jwt));
   }

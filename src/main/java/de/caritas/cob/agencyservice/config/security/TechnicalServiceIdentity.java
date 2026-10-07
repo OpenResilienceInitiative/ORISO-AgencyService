@@ -21,11 +21,11 @@ public class TechnicalServiceIdentity {
     subject = environment.getProperty("TECHNICAL_SERVICE_SUBJECT", "").trim();
   }
 
+  /** Identity claims remain stable for an already authenticated request, including across expiry. */
   public boolean allows(Jwt jwt) {
     if (clientId.isBlank() || subject.isBlank()
         || !clientId.equals(jwt.getClaims().get("azp"))
-        || !subject.equals(jwt.getClaims().get("sub"))
-        || jwt.getExpiresAt() == null || !jwt.getExpiresAt().isAfter(Instant.now())) {
+        || !subject.equals(jwt.getClaims().get("sub"))) {
       return false;
     }
     Collection<?> roles = realmRoles(jwt);
@@ -35,6 +35,15 @@ public class TechnicalServiceIdentity {
     Object resources = jwt.getClaims().get("resource_access");
     return !jwt.getClaims().containsKey("resource_access")
         || resources instanceof Map<?, ?> resourceAccess && resourceAccess.isEmpty();
+  }
+
+  /** Validate expiry at bearer entry, before any technical authority or tenant is assigned. */
+  public void requireValidAtAuthentication(Jwt jwt) {
+    requireValidIfTechnical(jwt);
+    if (allows(jwt) && (jwt.getExpiresAt() == null
+        || !jwt.getExpiresAt().isAfter(Instant.now()))) {
+      throw new InvalidBearerTokenException("Technical service token is expired or lacks expiry");
+    }
   }
 
   /** A claimed technical identity must not fall through to human role or profile handling. */
