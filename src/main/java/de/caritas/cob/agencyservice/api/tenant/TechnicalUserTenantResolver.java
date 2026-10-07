@@ -29,7 +29,10 @@ public class TechnicalUserTenantResolver implements TenantResolver {
         return false;
       }
       Jwt jwt = (Jwt) authentication.getPrincipal();
-      if (de.caritas.cob.agencyservice.config.security.TaskServiceIdentity.hasTaskRole(jwt) || (taskIdentity != null && taskIdentity.isTaskToken(jwt))) {
+      if (taskIdentity != null && taskIdentity.isTaskToken(jwt)) {
+        return taskIdentity.allowsAnyTask(authentication);
+      }
+      if (de.caritas.cob.agencyservice.config.security.TaskServiceIdentity.hasTaskRole(jwt)) {
         return false;
       }
       return getRealmRoles(jwt).contains("technical");

@@ -97,9 +97,22 @@ public class TaskServiceIdentity {
         || roles.stream().anyMatch(FORBIDDEN::contains)) {
       return false;
     }
+    Set<String> allowedRoles = switch (task) {
+      case "NOTIFICATION_DISPATCH" -> Set.of("notification-dispatch", "notifications-technical");
+      case "MATRIX_AGENCY" -> Set.of("matrix-agency", "matrix-agency-provision");
+      default -> Set.of(role);
+    };
+    if (roles.stream().anyMatch(grant -> !allowedRoles.contains(grant))) {
+      return false;
+    }
     Object resources = jwt.getClaims().get("resource_access");
     return !(resources instanceof Map<?, ?> resourceAccess)
         || !resourceAccess.containsKey("realm-management");
+  }
+
+  /** Resolve a routing context only; receiving operations retain their individual guards. */
+  public boolean allowsAnyTask(Authentication authentication) {
+    return ROLES.keySet().stream().anyMatch(task -> allows(authentication, task));
   }
 
   public boolean allowsMatrixProvision(Authentication authentication) {
