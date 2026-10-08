@@ -53,7 +53,8 @@ public final class JwtAuthenticatedUserHelper {
     var previous = RequestContextHolder.getRequestAttributes();
     RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     try {
-      return new AuthenticatedUserConfig(new TechnicalServiceIdentity(new MockEnvironment()))
+      return new AuthenticatedUserConfig(new TechnicalServiceIdentity(new MockEnvironment()),
+          new de.caritas.cob.agencyservice.config.security.TaskServiceIdentity(new MockEnvironment()))
           .getAuthenticatedUser();
     } finally {
       RequestContextHolder.setRequestAttributes(previous);

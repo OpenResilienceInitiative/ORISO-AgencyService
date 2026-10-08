@@ -50,6 +50,13 @@ class AuthorisationServiceTest {
   }
 
   @Test
+  void taskTokenNeverProjectsInheritedHumanRolesOrAuthorities() {
+    Jwt jwt = buildJwtWithRealmRoles(List.of("config-wizard", "agency-admin", "tenant-admin"));
+    assertThat(authorisationService.extractRealmRoles(jwt)).isEmpty();
+    assertThat(authorisationService.extractRealmAuthorities(jwt)).isEmpty();
+  }
+
+  @Test
   void extractRealmRoles_Should_returnEmptyList_When_realmAccessPresentButRolesNull() {
     Jwt jwt = buildJwtWithNullRoles();
 

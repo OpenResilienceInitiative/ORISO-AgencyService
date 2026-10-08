@@ -17,6 +17,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class AuthorisationService {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private TaskServiceIdentity taskIdentity;
+
 
   private final RoleAuthorizationAuthorityMapper roleAuthorizationAuthorityMapper =
       new RoleAuthorizationAuthorityMapper();
@@ -40,6 +43,9 @@ public class AuthorisationService {
   }
 
   public Collection<String> extractRealmRoles(Jwt jwt) {
+    if (TaskServiceIdentity.hasTaskRole(jwt) || (taskIdentity != null && taskIdentity.isTaskToken(jwt))) {
+      return List.of();
+    }
     Map<String, Object> realmAccess = (Map<String, Object>) jwt.getClaims().get("realm_access");
     if (realmAccess != null) {
       var roles = (List<String>) realmAccess.get("roles");

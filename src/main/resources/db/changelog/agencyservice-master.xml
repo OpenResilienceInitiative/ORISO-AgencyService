@@ -116,4 +116,5 @@
     refreshed separately.
   -->
 
+  <include file="db/changelog/changeset/0040_task_reservation_proof/0040_changeSet.xml"/>
 </databaseChangeLog>

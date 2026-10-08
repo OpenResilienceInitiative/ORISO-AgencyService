@@ -80,6 +80,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Api(tags = "admin-agency-controller")
 @RequiredArgsConstructor
 public class AgencyAdminController implements AgencyadminApi {
+  @org.springframework.beans.factory.annotation.Autowired
+  private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskIdentity;
+
 
   /** Fixed wire shape for the ADR-021 version timestamps; see {@code formatVersionTimestamp}. */
   private static final DateTimeFormatter LEGAL_TEXT_VERSION_TIMESTAMP =
@@ -161,7 +164,8 @@ public class AgencyAdminController implements AgencyadminApi {
   @PreAuthorize(
       "hasAuthority('AUTHORIZATION_AGENCY_ADMIN')"
           + " or (hasAuthority('AUTHORIZATION_TECHNICAL_USER')"
-          + " and #agencyDTO.reservedAgencyId != null)")
+          + " and #agencyDTO.reservedAgencyId != null)"
+          + " or (@taskServiceIdentity.allows(authentication, 'CONFIG_WIZARD') and #agencyDTO.reservedAgencyId != null and #agencyDTO.reservationToken != null)")
   public ResponseEntity<AgencyAdminFullResponseDTO> createAgency(AgencyDTO agencyDTO) {
 
 
@@ -179,7 +183,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return the authoritative {@link AgencyIdAvailabilityResponseDTO}
    */
   @Override
-  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN') or @taskServiceIdentity.allows(authentication, 'INVITE_RESERVATIONS')")
   public ResponseEntity<AgencyIdAvailabilityResponseDTO> getAgencyIdAvailability(
       @PathVariable Long agencyId) {
     var status = agencyIdAllocationService.checkAvailability(agencyId);
@@ -224,13 +228,13 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return the reserved agency ID
    */
   @Override
-  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN') or @taskServiceIdentity.allows(authentication, 'INVITE_RESERVATIONS')")
   public ResponseEntity<AgencyIdResponseDTO> reserveAgencyId(
       AgencyIdReservationRequestDTO agencyIdReservationRequestDTO) {
     var reservedId = agencyIdAllocationService.reserve(
         agencyIdReservationRequestDTO.getAgencyId(),
         agencyIdReservationRequestDTO.getTenantId());
-    return new ResponseEntity<>(new AgencyIdResponseDTO().agencyId(reservedId),
+    return new ResponseEntity<>(new AgencyIdResponseDTO().agencyId(reservedId).token(agencyIdAllocationService.newlyReservedProof(reservedId)),
         HttpStatus.CREATED);
   }
 
@@ -245,9 +249,11 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   @PreAuthorize(
-      "hasAuthority('AUTHORIZATION_AGENCY_ADMIN') or hasAuthority('AUTHORIZATION_TECHNICAL_USER')")
-  public ResponseEntity<Void> releaseAgencyIdReservation(@PathVariable Long agencyId) {
-    if (authenticatedUserHasAuthority(AuthorityValue.AGENCY_ADMIN)) {
+      "hasAuthority('AUTHORIZATION_AGENCY_ADMIN') or hasAuthority('AUTHORIZATION_TECHNICAL_USER') or @taskServiceIdentity.allows(authentication, 'INVITE_RESERVATIONS')")
+  public ResponseEntity<Void> releaseAgencyIdReservation(@PathVariable Long agencyId, String reservationToken) {
+    if (taskIdentity.current("INVITE_RESERVATIONS")) {
+      agencyIdAllocationService.releaseUnconsumedWithProof(agencyId, reservationToken);
+    } else if (authenticatedUserHasAuthority(AuthorityValue.AGENCY_ADMIN)) {
       agencyIdAllocationService.release(agencyId);
     } else {
       agencyIdAllocationService.releaseUnconsumed(agencyId);

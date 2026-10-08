@@ -33,7 +33,7 @@ class JwtAuthConverterTest {
         .withProperty("TECHNICAL_SERVICE_SUBJECT", "technical-subject");
     var identity = new TechnicalServiceIdentity(bindings);
     var converter = new JwtAuthConverter(new JwtAuthConverterProperties(),
-        new AuthorisationService(), identity);
+        new AuthorisationService(), identity, new TaskServiceIdentity(bindings));
     var jwt = Jwt.withTokenValue("test-token").header("alg", "none").subject("technical-subject")
         .claim("azp", "backend-technical").expiresAt(authenticatedAt.plusSeconds(1))
         .claim("realm_access", Map.of("roles", List.of("technical"))).build();
@@ -49,12 +49,12 @@ class JwtAuthConverterTest {
 
       assertAll(
           () -> {
-            var principal = new AuthenticatedUserConfig(identity).getAuthenticatedUser();
+            var principal = new AuthenticatedUserConfig(identity, new TaskServiceIdentity(bindings)).getAuthenticatedUser();
             assertThat(principal.getUsername()).isEqualTo("backend-technical");
             assertThat(principal.getUserId()).isEqualTo("technical-subject");
             assertThat(principal.getTenantId()).isEqualTo(0L);
           },
-          () -> assertThat(new TechnicalUserTenantResolver(identity).resolve(request)).contains(0L),
+          () -> assertThat(new TechnicalUserTenantResolver(identity, new TaskServiceIdentity(bindings)).resolve(request)).contains(0L),
           () -> assertThatExceptionOfType(InvalidBearerTokenException.class)
               .isThrownBy(() -> converter.convert(jwt)));
     } finally {
@@ -71,7 +71,7 @@ class JwtAuthConverterTest {
         .withProperty("TECHNICAL_SERVICE_SUBJECT", "technical-subject")
         .withProperty(missingBinding, " ");
     var converter = new JwtAuthConverter(new JwtAuthConverterProperties(),
-        new AuthorisationService(), new TechnicalServiceIdentity(bindings));
+        new AuthorisationService(), new TechnicalServiceIdentity(bindings), new TaskServiceIdentity(bindings));
     var jwt = Jwt.withTokenValue("test-token").header("alg", "none").subject("technical-subject")
         .claim("azp", "backend-technical").claim("username", "human-looking-profile")
         .expiresAt(Instant.now().plusSeconds(60))

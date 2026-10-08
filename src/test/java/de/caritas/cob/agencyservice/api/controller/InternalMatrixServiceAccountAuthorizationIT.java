@@ -36,7 +36,12 @@ import org.springframework.web.context.WebApplicationContext;
       "spring.profiles.active=testing",
       "csrf.header.property=csrfHeader",
       "csrf.cookie.property=csrfCookie",
-      "service.encryption.appkey=test-agency-matrix-encryption-key"
+      "service.encryption.appkey=test-agency-matrix-encryption-key",
+      "TASK_IDENTITY_AUDIENCE=agencyservice",
+      "IDENTITY_NOTIFICATION_DISPATCH_CLIENT_ID=backend-notification-dispatch",
+      "IDENTITY_NOTIFICATION_DISPATCH_SERVICE_SUBJECT=dispatch-subject",
+      "IDENTITY_MATRIX_AGENCY_CLIENT_ID=backend-matrix-agency",
+      "IDENTITY_MATRIX_AGENCY_SERVICE_SUBJECT=matrix-subject"
     })
 class InternalMatrixServiceAccountAuthorizationIT {
 
@@ -147,6 +152,46 @@ class InternalMatrixServiceAccountAuthorizationIT {
     mockMvc.perform(post(MATRIX_CREDENTIALS_PATH).cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE)).andExpect(status().isUnauthorized());
     verifyNoInteractions(agencyRepository);
+  }
+
+  @Test
+  void dispatcherReadsOnlyMatchingTenantContactsAndNeverMatrixCredentials() throws Exception {
+    when(agencyRepository.findByIdAndDeleteDateNull(42L)).thenReturn(Optional.of(
+        Agency.builder().id(42L).tenantId(7L).name("Centre").consultingTypeId(1)
+            .email("centre@example.org").build()));
+    var caller = task("dispatch-subject", "backend-notification-dispatch", "notification-dispatch", "agencyservice");
+    mockMvc.perform(get(CONTACT_DETAILS_PATH).param("tenantId", "7").with(caller))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("centre@example.org"));
+    mockMvc.perform(get(CONTACT_DETAILS_PATH).param("tenantId", "8").with(caller))
+        .andExpect(status().isNotFound());
+    mockMvc.perform(get(MATRIX_CREDENTIALS_PATH).with(caller)).andExpect(status().isForbidden());
+    mockMvc.perform(post(MATRIX_CREDENTIALS_PATH).cookie(CSRF_COOKIE).header(CSRF_HEADER, CSRF_VALUE).with(caller))
+        .andExpect(status().isForbidden());
+    mockMvc.perform(get(CONTACT_DETAILS_PATH).param("tenantId", "7")
+        .with(task("foreign", "backend-notification-dispatch", "notification-dispatch", "agencyservice")))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void matrixReadRoleCannotProvisionUnlessProvisionCapabilityIsPresent() throws Exception {
+    when(agencyRepository.findById(42L)).thenReturn(Optional.of(existingAgencyAccount()));
+    var reader = task("matrix-subject", "backend-matrix-agency", "matrix-agency", "agencyservice");
+    mockMvc.perform(get(MATRIX_CREDENTIALS_PATH).with(reader)).andExpect(status().isOk())
+        .andExpect(jsonPath("$.matrixPassword").doesNotExist());
+    mockMvc.perform(post(MATRIX_CREDENTIALS_PATH).cookie(CSRF_COOKIE).header(CSRF_HEADER, CSRF_VALUE).with(reader))
+        .andExpect(status().isForbidden());
+    var provisioner = task("matrix-subject", "backend-matrix-agency", "matrix-agency,matrix-agency-provision", "agencyservice");
+    mockMvc.perform(post(MATRIX_CREDENTIALS_PATH).cookie(CSRF_COOKIE).header(CSRF_HEADER, CSRF_VALUE).with(provisioner))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.matrixPassword").doesNotExist());
+    mockMvc.perform(get(CONTACT_DETAILS_PATH).param("tenantId", "7").with(provisioner))
+        .andExpect(status().isForbidden());
+  }
+
+  private org.springframework.test.web.servlet.request.RequestPostProcessor task(String subject, String client, String role, String audience) {
+    return org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt()
+        .jwt(token -> token.subject(subject).claim("azp", client).audience(java.util.List.of(audience))
+            .issuedAt(java.time.Instant.now().minusSeconds(10)).expiresAt(java.time.Instant.now().plusSeconds(60))
+            .claim("tenantId", 0L).claim("realm_access", java.util.Map.of("roles", java.util.Arrays.asList(role.split(",")))));
   }
 
   private Agency existingAgencyAccount() {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+  <changeSet id="taskReservationOwnershipProof" author="oriso">
+    <addColumn tableName="agency_id_reservation"><column name="reservation_token" type="VARCHAR(64)"/></addColumn>
+    <rollback><dropColumn tableName="agency_id_reservation" columnName="reservation_token"/></rollback>
+  </changeSet>
+</databaseChangeLog>

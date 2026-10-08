@@ -42,7 +42,10 @@ import org.springframework.test.web.servlet.MockMvc;
       "csrf.header.property=csrfHeader",
       "csrf.cookie.property=csrfCookie",
       "IDENTITY_TECHNICAL_CLIENT_ID=backend-technical",
-      "TECHNICAL_SERVICE_SUBJECT=11111111-1111-4111-8111-111111111111"
+      "TECHNICAL_SERVICE_SUBJECT=11111111-1111-4111-8111-111111111111",
+      "TASK_IDENTITY_AUDIENCE=agencyservice",
+      "IDENTITY_CONFIG_WIZARD_CLIENT_ID=backend-config-wizard",
+      "IDENTITY_CONFIG_WIZARD_SERVICE_SUBJECT=wizard-subject"
     })
 @Sql(
     statements =
@@ -78,6 +81,43 @@ class TechnicalUserAgencyReadAuthorizationIT {
         .claim("azp", "backend-technical")
         .expiresAt(Instant.now().plusSeconds(60))
         .claim("realm_access", Map.of("roles", List.of("technical")));
+  }
+
+  @Test
+  void dedicatedWizardBearerReadsAgencyWithoutLegacyRoleOrHumanProfile() throws Exception {
+    when(jwtDecoder.decode(any(String.class))).thenReturn(wizardToken().build());
+    mvc.perform(get(SOFT_DELETED_AGENCY).header("Authorization", "Bearer wizard-token"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$._embedded.id").value(9101));
+    mvc.perform(get("/agencyadmin/agencies").header("Authorization", "Bearer wizard-token"))
+        .andExpect(status().isForbidden());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"subject", "client", "audience", "expiry", "missing-expiry", "missing-role", "human-role"})
+  void malformedWizardCannotFallThroughToHumanAuthority(String defect) throws Exception {
+    var token = wizardToken().claim("username", "human-looking").claim("tenantId", 7L);
+    switch (defect) {
+      case "subject" -> token.subject("foreign-subject");
+      case "client" -> token.claim("azp", "foreign-client");
+      case "audience" -> token.audience(List.of("foreign-service"));
+      case "expiry" -> token.expiresAt(Instant.now().minusSeconds(1));
+      case "missing-expiry" -> token.claims(claims -> claims.remove("exp"));
+      case "missing-role" -> token.claim("realm_access", Map.of("roles", List.of("agency-admin")));
+      case "human-role" -> token.claim("realm_access", Map.of("roles", List.of("config-wizard", "agency-admin")));
+      default -> throw new AssertionError(defect);
+    }
+    when(jwtDecoder.decode(any(String.class))).thenReturn(token.build());
+    mvc.perform(get(SOFT_DELETED_AGENCY).header("Authorization", "Bearer wizard-token"))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/agencyadmin/agencies").header("Authorization", "Bearer wizard-token"))
+        .andExpect(status().isForbidden());
+  }
+
+  private Jwt.Builder wizardToken() {
+    return Jwt.withTokenValue("wizard-token").header("alg", "none").subject("wizard-subject")
+        .claim("azp", "backend-config-wizard").audience(List.of("agencyservice"))
+        .expiresAt(Instant.now().plusSeconds(60))
+        .claim("realm_access", Map.of("roles", List.of("config-wizard")));
   }
 
   @Test
