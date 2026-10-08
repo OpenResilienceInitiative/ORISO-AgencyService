@@ -40,6 +40,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 })
 class TaskReservationAuthorityIT {
   @Autowired private MockMvc mvc;
+  @MockitoBean private org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder;
   @Autowired private de.caritas.cob.agencyservice.config.security.JwtAuthConverter jwtAuthConverter;
   @Autowired private AgencyIdReservationRepository reservations;
   @MockitoBean private TenantService tenantService;
@@ -115,12 +116,19 @@ class TaskReservationAuthorityIT {
   @Test
   void taskWithInheritedAdministrativeGrantCannotUseHumanBranch() throws Exception {
     for (String roles : List.of("config-wizard,agency-admin", "config-wizard,tenant-admin", "config-wizard,realm-admin", "config-wizard,technical")) {
-      var caller = task("wizard-subject", "backend-config-wizard", roles);
-      mvc.perform(get("/agencyadmin/agencies/9110").with(caller)).andExpect(status().isForbidden());
-      mvc.perform(post("/agencyadmin/agencies").with(caller)
+      when(jwtDecoder.decode(org.mockito.ArgumentMatchers.anyString())).thenReturn(
+          org.springframework.security.oauth2.jwt.Jwt.withTokenValue("mixed-task").header("alg", "none")
+              .subject("wizard-subject").claim("azp", "backend-config-wizard")
+              .claim("username", "human-looking").claim("tenantId", 7L)
+              .audience(List.of("agencyservice")).expiresAt(Instant.now().plusSeconds(60))
+              .claim("realm_access", Map.of("roles", java.util.Arrays.asList(roles.split(",")))).build());
+      int expectedStatus = roles.contains("technical") ? 401 : 403;
+      mvc.perform(get("/agencyadmin/agencies/9110").header("Authorization", "Bearer mixed-task"))
+          .andExpect(status().is(expectedStatus));
+      mvc.perform(post("/agencyadmin/agencies").header("Authorization", "Bearer mixed-task")
           .cookie(new jakarta.servlet.http.Cookie("csrfCookie", "test")).header("csrfHeader", "test")
           .contentType(MediaType.APPLICATION_JSON).content("{}"))
-          .andExpect(status().isForbidden());
+          .andExpect(status().is(expectedStatus));
     }
   }
 

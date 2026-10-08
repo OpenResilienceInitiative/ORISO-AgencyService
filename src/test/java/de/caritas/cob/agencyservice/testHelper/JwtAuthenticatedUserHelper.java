@@ -2,6 +2,8 @@ package de.caritas.cob.agencyservice.testHelper;
 
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.config.AuthenticatedUserConfig;
+import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
+import org.springframework.mock.env.MockEnvironment;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -51,7 +53,9 @@ public final class JwtAuthenticatedUserHelper {
     var previous = RequestContextHolder.getRequestAttributes();
     RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     try {
-      return new AuthenticatedUserConfig().getAuthenticatedUser();
+      return new AuthenticatedUserConfig(new TechnicalServiceIdentity(new MockEnvironment()),
+          new de.caritas.cob.agencyservice.config.security.TaskServiceIdentity(new MockEnvironment()))
+          .getAuthenticatedUser();
     } finally {
       RequestContextHolder.setRequestAttributes(previous);
     }

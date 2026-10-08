@@ -5,10 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
+import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
+import de.caritas.cob.agencyservice.config.security.TaskServiceIdentity;
+import org.springframework.mock.env.MockEnvironment;
 import org.junit.After;
 import org.junit.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
+import de.caritas.cob.agencyservice.api.exception.KeycloakException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -16,7 +21,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 public class AuthenticatedUserConfigTest {
 
-  private final AuthenticatedUserConfig authenticatedUserConfig = new AuthenticatedUserConfig();
+  private final AuthenticatedUserConfig authenticatedUserConfig =
+      new AuthenticatedUserConfig(new TechnicalServiceIdentity(new MockEnvironment()),
+          new TaskServiceIdentity(new MockEnvironment()));
 
   @After
   public void resetRequestContext() {
@@ -152,4 +159,72 @@ public class AuthenticatedUserConfigTest {
     request.setUserPrincipal(new JwtAuthenticationToken(jwt));
     RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
   }
+
+  @Test
+  public void humanUsernameStillRequiresTheCustomClaim() {
+    var jwt = Jwt.withTokenValue("test-token").header("alg", "none").subject("human-subject")
+        .claim("preferred_username", "human-profile")
+        .claim("realm_access", Map.of("roles", List.of("agency-admin"))).build();
+    givenRequestWith(jwt);
+
+    assertThatExceptionOfType(KeycloakException.class)
+        .isThrownBy(authenticatedUserConfig::getAuthenticatedUser);
+  }
+
+  @Test
+  public void encodedHumanUsernameAndTenantRemainUnchanged() {
+    var jwt = Jwt.withTokenValue("test-token").header("alg", "none").subject("human-subject")
+        .claim("username", "enc.JBSWY3DP").claim("tenantId", 45L)
+        .claim("realm_access", Map.of("roles", List.of("agency-admin"))).build();
+    givenRequestWith(jwt);
+
+    var principal = authenticatedUserConfig.getAuthenticatedUser();
+    assertThat(principal.getUsername()).isEqualTo("Hello");
+    assertThat(principal.getTenantId()).isEqualTo(45L);
+  }
+
+  @Test
+  public void boundTechnicalPrincipalUsesServiceIdentityInsteadOfHumanProfileClaims() {
+    var config = new AuthenticatedUserConfig(new TechnicalServiceIdentity(new MockEnvironment()
+        .withProperty("IDENTITY_TECHNICAL_CLIENT_ID", "backend-technical")
+        .withProperty("TECHNICAL_SERVICE_SUBJECT", "technical-subject")),
+        new TaskServiceIdentity(new MockEnvironment()));
+    var jwt = Jwt.withTokenValue("test-token").header("alg", "none").subject("technical-subject")
+        .claim("azp", "backend-technical").expiresAt(Instant.now().plusSeconds(60))
+        .claim("userId", "human-domain-id").claim("tenantId", 45L)
+        .claim("resource_access", Map.of())
+        .claim("realm_access", Map.of("roles", List.of("technical"))).build();
+    givenRequestWith(jwt);
+
+    var principal = config.getAuthenticatedUser();
+    assertThat(principal.getUsername()).isEqualTo("backend-technical");
+    assertThat(principal.getUserId()).isEqualTo("technical-subject");
+    assertThat(principal.getTenantId()).isEqualTo(0L);
+    assertThat(principal.isTechnicalUser()).isTrue();
+  }
+
+  @Test
+  public void dedicatedTaskPrincipalCannotAdoptHumanProfileOrRights() {
+    var environment = new MockEnvironment().withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice")
+        .withProperty("IDENTITY_CONFIG_WIZARD_CLIENT_ID", "backend-config-wizard")
+        .withProperty("IDENTITY_CONFIG_WIZARD_SERVICE_SUBJECT", "wizard-subject");
+    var config = new AuthenticatedUserConfig(new TechnicalServiceIdentity(environment),
+        new TaskServiceIdentity(environment));
+    var token = Jwt.withTokenValue("task-token").header("alg", "none").subject("wizard-subject")
+        .claim("azp", "backend-config-wizard").audience(List.of("agencyservice"))
+        .expiresAt(Instant.now().plusSeconds(60)).claim("userId", "human-id")
+        .claim("username", "human-profile").claim("tenantId", 45L)
+        .claim("realm_access", Map.of("roles", List.of("config-wizard"))).build();
+    var request = new MockHttpServletRequest();
+    request.setUserPrincipal(new JwtAuthenticationToken(token, List.of()));
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+    var principal = config.getAuthenticatedUser();
+    assertThat(principal.getUserId()).isEqualTo("wizard-subject");
+    assertThat(principal.getUsername()).isEqualTo("service:backend-config-wizard");
+    assertThat(principal.getTenantId()).isEqualTo(0L);
+    assertThat(principal.isTechnicalUser()).isFalse();
+    assertThat(principal.isAgencyAdmin()).isFalse();
+    assertThat(principal.getRoles()).isEmpty();
+  }
+
 }

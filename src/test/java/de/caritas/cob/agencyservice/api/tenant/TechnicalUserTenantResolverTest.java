@@ -1,84 +1,62 @@
 package de.caritas.cob.agencyservice.api.tenant;
 
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
+import de.caritas.cob.agencyservice.config.security.TaskServiceIdentity;
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
+import org.springframework.mock.env.MockEnvironment;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
-@ExtendWith(MockitoExtension.class)
 class TechnicalUserTenantResolverTest {
-  public static final long TECHNICAL_CONTEXT = 0L;
-  @Mock
-  HttpServletRequest authenticatedRequest;
 
-  @Mock
-  SecurityContext mockSecurityContext;
-
-  @Mock
-  Authentication mockAuthentication;
-
-  @InjectMocks
-  TechnicalUserTenantResolver technicalUserTenantResolver;
+  private final TechnicalUserTenantResolver resolver = new TechnicalUserTenantResolver(
+      new TechnicalServiceIdentity(new MockEnvironment()
+          .withProperty("IDENTITY_TECHNICAL_CLIENT_ID", "backend-technical")
+          .withProperty("TECHNICAL_SERVICE_SUBJECT", "technical-subject")),
+      new TaskServiceIdentity(new MockEnvironment()));
 
   @AfterEach
-  public void tearDown() {
+  void tearDown() {
     SecurityContextHolder.clearContext();
   }
 
   @Test
-  void resolve_should_ResolveTechnicalTenantId_ForTechnicalUserRole() {
-    // given
-    givenUserIsAuthenticated();
-    when(mockAuthentication.getPrincipal()).thenReturn(buildJwtWithRealmRole("technical"));
-    var resolved = technicalUserTenantResolver.resolve(authenticatedRequest);
-    // then
-    assertThat(resolved).contains(TECHNICAL_CONTEXT);
+  void resolvesTechnicalTenantOnlyForBoundServiceIdentity() {
+    authenticate("technical-subject", "technical");
+    assertThat(resolver.resolve(new MockHttpServletRequest())).contains(0L);
   }
 
   @Test
-  void resolve_should_NotResolveTenantId_When_NonTechnicalUserRole() {
-    // given
-    givenUserIsAuthenticated();
-    when(mockAuthentication.getPrincipal()).thenReturn(buildJwtWithRealmRole("another-role"));
-    var resolved = technicalUserTenantResolver.resolve(authenticatedRequest);
-    // then
-    assertThat(resolved).isEmpty();
+  void deniesTechnicalTenantForForeignSubjectEvenWithTechnicalRole() {
+    authenticate("foreign", "technical");
+    assertThat(resolver.resolve(new MockHttpServletRequest())).isEmpty();
   }
 
-  private void givenUserIsAuthenticated() {
-    SecurityContextHolder.setContext(mockSecurityContext);
-    when(mockSecurityContext.getAuthentication()).thenReturn(mockAuthentication);
+  @Test
+  void deniesTechnicalTenantForHumanOrTaskRole() {
+    authenticate("technical-subject", "agency-admin");
+    assertThat(resolver.resolve(new MockHttpServletRequest())).isEmpty();
+    authenticate("technical-subject", "technical", "config-wizard");
+    assertThat(resolver.resolve(new MockHttpServletRequest())).isEmpty();
   }
 
-  private Jwt buildJwtWithRealmRole(String realmRole) {
-    Map<String, Object> headers = new HashMap<>();
-    headers.put("alg", "HS256"); // Signature algorithm
-    headers.put("typ", "JWT"); // Token type
-    return new Jwt(
-        "token", Instant.now(), Instant.now().plusSeconds(1), headers, givenClaimMapContainingRole(realmRole));
+  @Test
+  void deniesTechnicalTenantWithoutAuthentication() {
+    assertThat(resolver.resolve(new MockHttpServletRequest())).isEmpty();
   }
 
-  private HashMap<String, Object> givenClaimMapContainingRole(String realmRole) {
-    HashMap<String, Object> claimMap = Maps.newHashMap();
-    var realmAccess = Maps.newHashMap();
-    realmAccess.put("roles", Lists.newArrayList(realmRole));
-    claimMap.put("realm_access", realmAccess);
-    return claimMap;
+  private void authenticate(String subject, String... roles) {
+    var jwt = Jwt.withTokenValue("test-token").header("alg", "none").subject(subject)
+        .claim("azp", "backend-technical").expiresAt(Instant.now().plusSeconds(60))
+        .claim("realm_access", Map.of("roles", List.of(roles))).build();
+    SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
   }
 }
