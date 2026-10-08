@@ -227,11 +227,13 @@ public class AgencyAdminService {
       effectiveTenantId = TenantContext.getCurrentTenant();
     }
 
-    if (effectiveTenantId != null && effectiveTenantId.equals(0L)) {
+    if (effectiveTenantId == null) {
+      // A platform admin without a tenant claim keeps the tenant selected in the request.
+      agency.setTenantId(agencyDTO.getTenantId());
+    } else if (effectiveTenantId.equals(0L)) {
       notNull(agencyDTO.getTenantId());
       agency.setTenantId(agencyDTO.getTenantId());
     } else {
-      notNull(effectiveTenantId);
       agency.setTenantId(effectiveTenantId);
     }
   }

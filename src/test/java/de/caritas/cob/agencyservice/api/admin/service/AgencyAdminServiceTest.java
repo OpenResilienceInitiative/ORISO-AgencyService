@@ -54,6 +54,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import java.util.List;
@@ -264,6 +265,36 @@ class AgencyAdminServiceTest {
     // then: save and guard both ran through the shared creation transaction
     verify(agencyCreationTransaction).execute(any());
     verify(agencyIdAllocationService).guardAssignmentAgainstOpenReservations(agency.getId());
+  }
+
+  @Test
+  void createAgency_Should_PersistNullTenantId_When_NoTenantClaimAndNoTenantContext() {
+    verifyTenantSelectionWithoutTenantClaim(null);
+  }
+
+  @Test
+  void createAgency_Should_PreserveSelectedTenant_When_NoTenantClaimAndNoTenantContext() {
+    verifyTenantSelectionWithoutTenantClaim(7L);
+  }
+
+  private void verifyTenantSelectionWithoutTenantClaim(Long selectedTenantId) {
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    TenantContext.clear();
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    agency.setDataProtectionOfficerContactData(null);
+    clearDataProtection(agency);
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+    agencyDTO.setTenantId(selectedTenantId);
+    agencyDTO.setReservedAgencyId(null);
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    agencyAdminService.createAgency(agencyDTO);
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertThat(agencyArgumentCaptor.getValue().getTenantId(), is(selectedTenantId));
   }
 
   @Test
