@@ -77,7 +77,7 @@ class OpenApiContractGateTest(unittest.TestCase):
     def test_pull_request_uses_coordinated_provider_commits(self):
         # What has to hold is the shape, not one particular commit: on a pull
         # request each coordinated provider is checked out at an immutable
-        # 40-character SHA, and everywhere else it follows pre-dev.
+        # 40-character SHA, and everywhere else it follows dev.
         #
         # This used to repeat the two SHAs as literals here, so a coordinated
         # bump meant editing the workflow and this file in step. Branches that
@@ -108,9 +108,9 @@ class OpenApiContractGateTest(unittest.TestCase):
                     f"{provider} must pin a full 40-character commit SHA, not a branch",
                 )
                 self.assertIn(
-                    "|| 'pre-dev'",
+                    "|| 'dev'",
                     ref,
-                    f"{provider} must follow pre-dev outside pull requests",
+                    f"{provider} must follow dev outside pull requests",
                 )
 
     def test_contract_gate_tests_are_executed_by_ci(self):

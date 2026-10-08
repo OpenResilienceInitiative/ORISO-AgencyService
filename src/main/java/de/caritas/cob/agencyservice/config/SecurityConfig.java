@@ -5,6 +5,7 @@ import de.caritas.cob.agencyservice.api.authorization.Authority.AuthorityValue;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverter;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverterProperties;
+import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
 import de.caritas.cob.agencyservice.filter.HttpTenantFilter;
 import de.caritas.cob.agencyservice.filter.StatelessCsrfFilter;
 import jakarta.annotation.Nullable;
@@ -42,6 +43,9 @@ public class SecurityConfig {
   AuthorisationService authorisationService;
   @Autowired
   JwtAuthConverterProperties jwtAuthConverterProperties;
+
+  @Autowired
+  TechnicalServiceIdentity technicalServiceIdentity;
 
 
   @Value("${csrf.cookie.property}")
@@ -141,7 +145,8 @@ public class SecurityConfig {
 
   @Bean
   public JwtAuthConverter jwtAuthConverter() {
-    return new JwtAuthConverter(jwtAuthConverterProperties, authorisationService);
+    return new JwtAuthConverter(jwtAuthConverterProperties, authorisationService,
+        technicalServiceIdentity);
   }
 
 
