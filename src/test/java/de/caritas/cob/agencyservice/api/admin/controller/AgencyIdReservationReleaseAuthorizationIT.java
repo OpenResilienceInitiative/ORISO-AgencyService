@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,9 @@ import org.springframework.test.web.servlet.MockMvc;
     properties = {
       "spring.profiles.active=testing",
       "csrf.header.property=csrfHeader",
-      "csrf.cookie.property=csrfCookie"
+      "csrf.cookie.property=csrfCookie",
+      "IDENTITY_TECHNICAL_CLIENT_ID=backend-technical",
+      "TECHNICAL_SERVICE_SUBJECT=11111111-1111-4111-8111-111111111111"
     })
 class AgencyIdReservationReleaseAuthorizationIT {
 
@@ -59,7 +62,10 @@ class AgencyIdReservationReleaseAuthorizationIT {
     Jwt jwt =
         Jwt.withTokenValue("test-token")
             .header("alg", "none")
-            .claim("sub", "subject")
+            .subject(List.of(roles).contains("technical")
+                ? "11111111-1111-4111-8111-111111111111" : "human-subject")
+            .claim("azp", List.of(roles).contains("technical") ? "backend-technical" : "app")
+            .expiresAt(Instant.now().plusSeconds(60))
             .claim("realm_access", Map.of("roles", List.of(roles)))
             .build();
     when(jwtDecoder.decode(any(String.class))).thenReturn(jwt);
