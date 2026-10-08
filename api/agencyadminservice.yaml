@@ -32,10 +32,32 @@ paths:
       parameters:
         - name: q
           in: query
-          description: The query parameter to search for
+          description: >-
+            The query parameter to search for. Matches the agency name, postcode or city, or the
+            name of one of the agency's topics (Fachbereich), case-insensitively.
           schema:
             type: string
             example: "Freiburg"
+        - name: excludeDeleted
+          in: query
+          description: >-
+            When true, soft-deleted agencies are left out. Default false keeps the agency list
+            unchanged.
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: tenantId
+          in: query
+          description: >-
+            Only agencies of this tenant (Träger). Applied in the query, so paging and total count
+            only that tenant. It narrows the caller's role scope and never widens it: a tenant
+            outside that scope returns an empty result. Omitted = every tenant in scope.
+          required: false
+          schema:
+            type: integer
+            format: int64
+            example: 40
         - name: page
           in: query
           description: Number of page where to start in the query (1 = first page)
@@ -100,7 +122,7 @@ paths:
     get:
       tags:
         - admin-agency-controller
-      summary: 'Get an agency including platform agency admin controls in settings.agencyAdminControls [Authorization: Role: agency-admin]'
+      summary: 'Get an agency including platform agency admin controls in settings.agencyAdminControls [Authorization: Role: agency-admin, restricted-agency-admin, technical]'
       operationId: getAgency
       parameters:
         - name: agencyId
@@ -682,6 +704,438 @@ paths:
           description: NOT FOUND - department (agency x topic) not found
         500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-drafts/{kind}:
+    parameters:
+      - name: agencyId
+        in: path
+        description: Owning agency (Beratungsstelle)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: kind
+        in: path
+        description: DPP is the privacy-policy contract spelling; IMPRINT is the imprint
+        required: true
+        schema:
+          type: string
+          enum: [ DPP, IMPRINT ]
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Reload one unpublished agency-owned legal draft. Agency ownership and tenant scope are
+        checked before draft existence, so 404 cannot be used to probe another agency.
+      operationId: getAgencyLegalDraft
+      responses:
+        200:
+          description: OK - complete draft and its opaque compare-and-swap revision
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalDraftDTO'
+        400:
+          description: BAD REQUEST - unsupported legal kind
+        401:
+          description: UNAUTHORIZED - no or invalid authentication
+        403:
+          description: FORBIDDEN - caller may not edit the agency
+        404:
+          description: NOT FOUND - agency or draft does not exist
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Create or atomically replace an unpublished agency-owned legal draft. Omit revision only
+        for the first create; updates must echo the exact revision returned by the previous read or
+        write. Draft saves never publish, add history, or propagate to departments.
+      operationId: saveAgencyLegalDraft
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/SaveAgencyLegalDraftDTO'
+      responses:
+        200:
+          description: OK - stored draft and its new revision
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalDraftDTO'
+        400:
+          description: BAD REQUEST - malformed revision or imprint consent wording
+        401:
+          description: UNAUTHORIZED - no or invalid authentication
+        403:
+          description: FORBIDDEN - caller may not edit the agency
+        404:
+          description: NOT FOUND - agency does not exist
+        409:
+          description: CONFLICT - draft exists on create or the supplied revision is stale
+      security:
+        - Bearer: [ ]
+    delete:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Discard exactly one draft revision. The revision includes a create-lifetime row id, so a
+        token from a deleted draft cannot delete a later draft recreated for the same agency/kind.
+      operationId: deleteAgencyLegalDraft
+      parameters:
+        - name: revision
+          in: query
+          description: Opaque revision returned by GET or PUT; echo unchanged
+          required: true
+          schema:
+            type: string
+      responses:
+        204:
+          description: NO CONTENT - exact draft revision discarded
+        400:
+          description: BAD REQUEST - malformed revision
+        401:
+          description: UNAUTHORIZED - no or invalid authentication
+        403:
+          description: FORBIDDEN - caller may not edit the agency
+        404:
+          description: NOT FOUND - agency does not exist
+        409:
+          description: CONFLICT - supplied revision is stale or the draft was already discarded
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/legal-proposal-distributions:
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        A Träger forwards the exact saved revision of its imprint or privacy policy (its draft, or
+        its published wording) as a template to all or selected Beratungsstellen of its own
+        Träger (ORISO-AgencyService#303). Every recipient gets an immutable copy it must adopt
+        itself; nothing is published and no recipient draft changes. requestKey makes a retry
+        return the original distribution (200). Forwarding the same source revision to the same
+        Beratungsstelle twice yields one offer. A newer forward marks that Beratungsstelle's older
+        open offers of the same kind SUPERSEDED.
+        [Authorization: tenant-admin of the Träger (with agency-admin); a platform admin must name tenantId]
+      operationId: distributeAgencyLegalProposal
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/AgencyLegalProposalDistributionRequestDTO'
+      responses:
+        200:
+          description: OK - existing distribution for this requestKey (idempotent retry)
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalProposalDistributionDTO'
+        201:
+          description: CREATED - offers delivered
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalProposalDistributionDTO'
+        400:
+          description: BAD REQUEST - invalid kind, audience, recipients, request key, or no recipients
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - not a Träger admin, or a recipient belongs to another Träger
+        404:
+          description: NOT FOUND - the Träger has no saved draft / no published version of this kind
+        409:
+          description: CONFLICT - sourceRevision is stale, or requestKey reused with different input
+      security:
+        - Bearer: [ ]
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        The Träger's forwarded template versions, newest first, each with the snapshot sent and
+        the fixed recipient list. [Authorization: tenant-admin of the Träger (with agency-admin); a platform admin must name tenantId]
+      operationId: getAgencyLegalTemplateHistory
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ DPP, IMPRINT ]
+        - name: tenantId
+          in: query
+          required: false
+          description: Only for a platform admin acting for a Träger
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgencyLegalTemplateVersionDTO'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - not a Träger admin
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-proposals:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        The Beratungsstelle's inbox of forwarded templates, newest first. PENDING = unread
+        marker; SUPERSEDED and decided entries stay readable history. [Authorization: agency-admin or restricted-agency-admin of this Beratungsstelle, same Träger]
+      operationId: getAgencyLegalProposals
+      parameters:
+        - name: agencyId
+          in: path
+          description: Receiving Beratungsstelle
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ DPP, IMPRINT ]
+      responses:
+        200:
+          description: OK
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgencyLegalProposalDTO'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - caller may not administer this Beratungsstelle
+        404:
+          description: NOT FOUND - agency does not exist
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-proposals/{proposalId}:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: 'One forwarded template, verbatim. [Authorization: agency-admin or restricted-agency-admin of this Beratungsstelle, same Träger]'
+      operationId: getAgencyLegalProposal
+      parameters:
+        - name: agencyId
+          in: path
+          description: Receiving Beratungsstelle
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalProposalDTO'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - caller may not administer this Beratungsstelle
+        404:
+          description: NOT FOUND - no such offer at this Beratungsstelle
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-proposals/{proposalId}/dismiss:
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Marks a PENDING offer as seen (DISMISSED). Deletes nothing; a dismissed offer can still be
+        adopted later. [Authorization: agency-admin or restricted-agency-admin of this Beratungsstelle, same Träger]
+      operationId: dismissAgencyLegalProposal
+      parameters:
+        - name: agencyId
+          in: path
+          description: Receiving Beratungsstelle
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/AgencyLegalProposalDismissRequestDTO'
+      responses:
+        200:
+          description: OK - the dismissed offer
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalProposalDTO'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - caller may not administer this Beratungsstelle
+        404:
+          description: NOT FOUND - no such offer at this Beratungsstelle
+        409:
+          description: CONFLICT - stale proposal revision or offer no longer PENDING
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-proposals/{proposalId}/adopt:
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Copies the offer into the Beratungsstelle's agency-wide draft (ORISO-AgencyService#298).
+        Never publishes. CREATE_IF_EMPTY fails with 409 when a draft exists; ARCHIVE_AND_REPLACE
+        needs the current draft revision, archives the complete old draft in the same transaction
+        and replaces it. The adopted draft is a copy and does not follow later Träger edits.
+        [Authorization: agency-admin or restricted-agency-admin of this Beratungsstelle, same Träger]
+      operationId: adoptAgencyLegalProposal
+      parameters:
+        - name: agencyId
+          in: path
+          description: Receiving Beratungsstelle
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/AgencyLegalProposalAdoptRequestDTO'
+      responses:
+        200:
+          description: OK - the new draft, the adopted offer, the archived draft (if any) and the Fachbereich impact
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalProposalAdoptionDTO'
+        400:
+          description: BAD REQUEST - invalid mode or revision combination
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - caller may not administer this Beratungsstelle
+        404:
+          description: NOT FOUND - no such offer at this Beratungsstelle
+        409:
+          description: CONFLICT - existing draft needs ARCHIVE_AND_REPLACE, stale revision, or offer already ADOPTED/SUPERSEDED
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-draft-archives:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: 'Agency drafts replaced by an adoption, newest first. [Authorization: agency-admin or restricted-agency-admin of this Beratungsstelle, same Träger]'
+      operationId: getAgencyLegalDraftArchives
+      parameters:
+        - name: agencyId
+          in: path
+          description: Receiving Beratungsstelle
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ DPP, IMPRINT ]
+      responses:
+        200:
+          description: OK
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgencyLegalDraftArchiveDTO'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - caller may not administer this Beratungsstelle
+        404:
+          description: NOT FOUND - agency does not exist
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/legal-draft-archives/{archiveId}:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: 'One archived agency draft, verbatim. [Authorization: agency-admin or restricted-agency-admin of this Beratungsstelle, same Träger]'
+      operationId: getAgencyLegalDraftArchive
+      parameters:
+        - name: agencyId
+          in: path
+          description: Receiving Beratungsstelle
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: archiveId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyLegalDraftArchiveDTO'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - caller may not administer this Beratungsstelle
+        404:
+          description: NOT FOUND - no such archive at this Beratungsstelle
       security:
         - Bearer: [ ]
 
@@ -1366,6 +1820,12 @@ components:
           type: integer
           format: int64
           example: 12
+        tenantName:
+          type: string
+          description: >-
+            Name of the agency's tenant (Träger). Filled in search results only, best effort
+            (null when TenantService cannot be reached).
+          example: "Caritas Köln"
         dataProtection:
           type: object
           $ref: '#/components/schemas/DataProtectionDTO'
@@ -1466,6 +1926,17 @@ components:
 
     DataProtectionContactDTO:
         type: object
+        description: >
+          Legal (data protection) contact. The block selected by
+          `DataProtectionDTO.dataProtectionResponsibleEntity` must carry `nameAndLegalForm`,
+          `postcode`, `city` and `email` whenever the agency's tenant has
+          `featureCentralDataProtectionTemplateEnabled` (ADR-003) - on create and on update alike.
+          A violation is answered with 400 and a body naming the failing reason, e.g.
+          `DATA_PROTECTION_RESPONSIBLE_IS_EMPTY`.
+
+          The members stay optional in the schema on purpose: the requirement depends on which
+          entity is selected and on the tenant's feature flag, and the same DTO carries the two
+          unselected contact blocks, which may legitimately be empty.
         properties:
           nameAndLegalForm:
             type: string
@@ -1608,6 +2079,15 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        reservedAgencyId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: >-
+            Creates the agency with exactly this pre-reserved ID instead of the sequence-generated
+            one (TEN-INV-U2). The reservation is consumed atomically with the insert; an ID that is
+            not held by an open reservation - or already assigned - is answered with 409.
+          example: 42
 
     AgencyAdminFullResponseDTO:
       type: object
@@ -1892,6 +2372,356 @@ components:
           type: integer
           format: int64
           description: How many departments currently reference this text
+
+    SaveAgencyLegalDraftDTO:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          description: Language code to draft HTML. Values are sanitised before storage.
+          additionalProperties:
+            type: string
+        consentText:
+          type: object
+          description: >-
+            Privacy-consent wording by language. Accepted for DPP only; IMPRINT requests carrying
+            entries are rejected because an imprint is never consent-bearing.
+          additionalProperties:
+            type: string
+        revision:
+          type: string
+          nullable: true
+          description: Opaque CAS token from the previous GET/PUT; omit only for initial create
+
+    AgencyLegalProposalDistributionRequestDTO:
+      type: object
+      required:
+        - requestKey
+        - kind
+        - audience
+      properties:
+        requestKey:
+          type: string
+          maxLength: 128
+          description: Idempotency key chosen by the client (e.g. a UUID per dialog confirmation)
+        kind:
+          type: string
+          description: PRIVACY is accepted as an alias of DPP (the TenantService spelling)
+          enum: [ DPP, IMPRINT, PRIVACY ]
+        source:
+          type: string
+          description: Which Träger text is forwarded. Defaults to DRAFT.
+          enum: [ DRAFT, PUBLISHED ]
+        sourceRevision:
+          type: string
+          description: >-
+            Required. DRAFT - the TenantService draft revision (id:version) the dialog showed.
+            PUBLISHED - "version:<id>" of the in-force entry of GET /tenantadmin/{id}/legal-versions.
+        audience:
+          type: string
+          enum: [ ALL, SELECTED ]
+        agencyIds:
+          type: array
+          description: Required for SELECTED, must be empty for ALL. Only this Träger's Beratungsstellen.
+          items:
+            type: integer
+            format: int64
+        tenantId:
+          type: integer
+          format: int64
+          description: Only for a platform admin (tenant 0) acting for a Träger; otherwise omit or send the caller's own tenant
+
+    AgencyLegalProposalDistributionDTO:
+      type: object
+      required:
+        - distributionId
+        - requestKey
+        - kind
+        - source
+        - sourceRevision
+        - audience
+        - recipientAgencyIds
+        - proposals
+      properties:
+        distributionId:
+          type: string
+        requestKey:
+          type: string
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        source:
+          type: string
+          enum: [ DRAFT, PUBLISHED ]
+        sourceRevision:
+          type: string
+        audience:
+          type: string
+          enum: [ ALL, SELECTED ]
+        recipientAgencyIds:
+          type: array
+          description: The fixed recipient list; its size is "how many received it"
+          items:
+            type: integer
+            format: int64
+        createdAt:
+          type: string
+          example: "2026-09-25T14:30:00"
+        proposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgencyLegalProposalDTO'
+
+    AgencyLegalTemplateVersionDTO:
+      type: object
+      required:
+        - distributionId
+        - kind
+        - source
+        - sourceRevision
+        - audience
+        - recipientAgencyIds
+        - recipientCount
+        - content
+        - createdAt
+      properties:
+        distributionId:
+          type: string
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        source:
+          type: string
+          enum: [ DRAFT, PUBLISHED ]
+        sourceRevision:
+          type: string
+        audience:
+          type: string
+          enum: [ ALL, SELECTED ]
+        recipientAgencyIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+        recipientCount:
+          type: integer
+        content:
+          type: object
+          additionalProperties:
+            type: string
+        consentText:
+          type: object
+          additionalProperties:
+            type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+
+    AgencyLegalProposalDTO:
+      type: object
+      required:
+        - id
+        - recipientAgencyId
+        - kind
+        - content
+        - status
+        - revision
+        - source
+        - sourceRevision
+        - distributionId
+        - audience
+        - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+        recipientAgencyId:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        content:
+          description: The forwarded wording, language to HTML (sanitised, immutable)
+          type: object
+          additionalProperties:
+            type: string
+        consentText:
+          description: Consent sentence by language (DPP only; empty for IMPRINT)
+          type: object
+          additionalProperties:
+            type: string
+        status:
+          type: string
+          enum: [ PENDING, DISMISSED, ADOPTED, SUPERSEDED ]
+        revision:
+          type: string
+          description: Opaque id:version token; echo as expectedProposalRevision
+        source:
+          type: string
+          enum: [ DRAFT, PUBLISHED ]
+        sourceRevision:
+          type: string
+        distributionId:
+          type: string
+        audience:
+          type: string
+          enum: [ ALL, SELECTED ]
+        createdBy:
+          type: string
+          description: Keycloak user id of the forwarding Träger admin
+        createdAt:
+          type: string
+        decidedBy:
+          type: string
+        decidedAt:
+          type: string
+        supersededByProposalId:
+          type: integer
+          format: int64
+        supersededAt:
+          type: string
+        departmentImpact:
+          $ref: '#/components/schemas/AgencyLegalDepartmentImpactDTO'
+
+    AgencyLegalDepartmentImpactDTO:
+      type: object
+      description: >-
+        What publishing this kind at agency level would reach (ADR-014): Fachbereiche without a
+        published text of their own follow the agency text; those with one are forked and do not.
+      required:
+        - affected
+        - notAffected
+        - notAffectedTopicIds
+      properties:
+        affected:
+          type: integer
+        notAffected:
+          type: integer
+        notAffectedTopicIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+
+    AgencyLegalProposalDismissRequestDTO:
+      type: object
+      required:
+        - expectedProposalRevision
+      properties:
+        expectedProposalRevision:
+          type: string
+
+    AgencyLegalProposalAdoptRequestDTO:
+      type: object
+      required:
+        - mode
+        - expectedProposalRevision
+      properties:
+        mode:
+          type: string
+          enum: [ CREATE_IF_EMPTY, ARCHIVE_AND_REPLACE ]
+        expectedProposalRevision:
+          type: string
+        expectedDraftRevision:
+          type: string
+          description: Required for ARCHIVE_AND_REPLACE (the agency draft revision); must be absent for CREATE_IF_EMPTY
+
+    AgencyLegalProposalAdoptionDTO:
+      type: object
+      required:
+        - draft
+        - proposal
+        - departmentImpact
+      properties:
+        draft:
+          $ref: '#/components/schemas/AgencyLegalDraftDTO'
+        proposal:
+          $ref: '#/components/schemas/AgencyLegalProposalDTO'
+        archivedDraft:
+          $ref: '#/components/schemas/AgencyLegalDraftArchiveDTO'
+        departmentImpact:
+          $ref: '#/components/schemas/AgencyLegalDepartmentImpactDTO'
+
+    AgencyLegalDraftArchiveDTO:
+      type: object
+      required:
+        - id
+        - agencyId
+        - kind
+        - draftRevision
+        - content
+        - draftSavedAt
+        - replacedByProposalId
+        - archivedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+        agencyId:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        draftRevision:
+          type: string
+        content:
+          type: object
+          additionalProperties:
+            type: string
+        consentText:
+          type: object
+          additionalProperties:
+            type: string
+        draftSavedAt:
+          type: string
+        originProposalId:
+          type: integer
+          format: int64
+        replacedByProposalId:
+          type: integer
+          format: int64
+        archivedBy:
+          type: string
+        archivedAt:
+          type: string
+
+    AgencyLegalDraftDTO:
+      type: object
+      required:
+        - kind
+        - content
+        - consentText
+        - revision
+        - savedAt
+      properties:
+        kind:
+          type: string
+          enum: [ DPP, IMPRINT ]
+        content:
+          type: object
+          additionalProperties:
+            type: string
+        consentText:
+          type: object
+          description: Empty for IMPRINT
+          additionalProperties:
+            type: string
+        revision:
+          type: string
+          description: Opaque row-lifetime/version token; clients must echo it unchanged
+        savedAt:
+          type: string
+          description: Local server timestamp in fixed yyyy-MM-ddTHH:mm:ss form
+          example: "2026-09-17T14:30:00"
+        originProposalId:
+          type: integer
+          format: int64
+          description: The forwarded template this draft was adopted from, if any (a copy; it no longer follows the source)
 
     LegalTextVersionDTO:
       type: object

@@ -40,22 +40,20 @@ class RequiredCiContractTest(unittest.TestCase):
         self.assertNotIn("continue-on-error:", integration)
         self.assertIn(
             "needs: [validate, required-integration-tests, contract-tests,"
-            " legacy-quarantine-expiry]",
+            " full-integration-suite]",
             aggregate,
         )
         self.assertIn("if: always()", aggregate)
         self.assertIn("name: required PreDev CI", aggregate)
         self.assertIn("needs.required-integration-tests.result", aggregate)
         self.assertIn("needs.contract-tests.result", aggregate)
-        self.assertIn("needs.legacy-quarantine-expiry.result", aggregate)
+        self.assertIn("needs.full-integration-suite.result", aggregate)
         # Reading a result into the environment is not the same as acting on
         # it: the conclusion itself must consider every required job.
         self.assertIn('"${CONTRACT_RESULT}" != success', aggregate)
-        # The aggregate is the only check branch protection requires, so a job
-        # outside it cannot block anything. Without this, the quarantine expiry
-        # would turn the workflow run red on 2026-10-01 while the required
-        # conclusion stayed green and merges kept flowing.
-        self.assertIn('"${EXPIRY_RESULT}" != success', aggregate)
+        # A failed full-suite job must also fail the aggregate conclusion.
+        self.assertIn('"${FULL_SUITE_RESULT}" != success', aggregate)
+        self.assertIn("full-suite=${FULL_SUITE_RESULT}", aggregate)
 
     def test_ci_contract_tests_are_executed_by_ci(self):
         # These assertions are worthless unless something runs them. Without a
@@ -77,23 +75,23 @@ class RequiredCiContractTest(unittest.TestCase):
         self.assertIn("name: required integration tests", integration)
         self.assertNotIn("continue-on-error:", integration)
 
-    def test_legacy_burn_in_is_visible_owned_and_time_bounded(self):
+    def test_full_integration_suite_is_blocking_in_every_workflow(self):
         for relative_path in (
             ".github/workflows/ci-pull-request.yml",
             ".github/workflows/ci-feature-branch.yml",
             ".github/workflows/ci-main.yml",
         ):
             workflow = (ROOT / relative_path).read_text()
-            quarantine = job_block(workflow, "legacy-integration-quarantine")
-            self.assertIn("#185", quarantine)
-            self.assertIn("2026-09-30", quarantine)
-            # The tolerance is declared on the job, where a reader of the
-            # workflow can see it, rather than inside the shared action.
-            self.assertIn("continue-on-error: true", quarantine)
+            self.assertNotIn("legacy-" "quarantine-expiry", workflow)
+            self.assertNotIn("legacy-integration-quarantine", workflow)
+            self.assertNotIn("QUARANTINE_" "EXPIRES", workflow)
+            full_suite = job_block(workflow, "full-integration-suite")
+            self.assertIn("name: full integration suite", full_suite)
+            self.assertIn("uses: ./.github/actions/maven-verify-burnin", full_suite)
+            self.assertNotIn("continue-on-error:", full_suite)
 
-            expiry = job_block(workflow, "legacy-quarantine-expiry")
-            self.assertIn('QUARANTINE_EXPIRES: "2026-09-30"', expiry)
-            self.assertNotIn("continue-on-error:", expiry)
+        action = (ROOT / ".github/actions/maven-verify-burnin/action.yml").read_text()
+        self.assertIn("scripts/ci/verify-test-reports.py", action)
 
     def test_shared_action_does_not_swallow_the_maven_failure(self):
         # Moving continue-on-error from the job into the action would leave the
@@ -119,20 +117,6 @@ class RequiredCiContractTest(unittest.TestCase):
 
         self.assertIn("LiquibaseChangelogDriftIT", required_runner)
         self.assertIn("DemoBaselineChangesetIT", required_runner)
-
-    def test_legacy_quarantine_uses_the_guard_but_stays_non_blocking(self):
-        action = (ROOT / ".github/actions/maven-verify-burnin/action.yml").read_text()
-        self.assertIn("scripts/ci/verify-test-reports.py", action)
-
-        for relative_path in (
-            ".github/workflows/ci-pull-request.yml",
-            ".github/workflows/ci-feature-branch.yml",
-            ".github/workflows/ci-main.yml",
-        ):
-            workflow = (ROOT / relative_path).read_text()
-            quarantine = job_block(workflow, "legacy-integration-quarantine")
-            self.assertIn("continue-on-error: true", quarantine)
-
 
 if __name__ == "__main__":
     unittest.main()

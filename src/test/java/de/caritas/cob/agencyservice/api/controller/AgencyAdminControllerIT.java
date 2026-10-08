@@ -595,4 +595,42 @@ class AgencyAdminControllerIT {
         .andExpect(jsonPath("$[0]._embedded.name").value("With tenant id"));
   }
 
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN", "AUTHORIZATION_TENANT_ADMIN"})
+  void getAgencyByTenantId_Should_returnForbidden_When_tenantAdminRequestsAnotherTenant()
+      throws Exception {
+    // A Träger admin of tenant 2 must not list the agencies of tenant 1.
+    when(authenticatedUser.getTenantId()).thenReturn(2L);
+
+    mockMvc.perform(get(PATH_GET_AGENCY_BY_TENANT_ID)
+            .accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN", "AUTHORIZATION_TENANT_ADMIN"})
+  void getAgencyByTenantId_Should_returnForbidden_When_tenantComesOnlyFromRequestContext()
+      throws Exception {
+    // No tenant claim in the token: the resolved request tenant is the caller's tenant.
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    TenantContext.setCurrentTenant(2L);
+
+    mockMvc.perform(get(PATH_GET_AGENCY_BY_TENANT_ID)
+            .accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @WithMockUser(authorities = {"AUTHORIZATION_AGENCY_ADMIN", "AUTHORIZATION_TENANT_ADMIN"})
+  void getAgencyByTenantId_Should_returnOk_When_platformAdminRequestsAnyTenant()
+      throws Exception {
+    // Tenant 0 is the platform admin: it may list the agencies of every Träger.
+    when(authenticatedUser.getTenantId()).thenReturn(0L);
+
+    mockMvc.perform(get(PATH_GET_AGENCY_BY_TENANT_ID)
+            .accept(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0]._embedded.id").value(1735));
+  }
+
 }

@@ -109,7 +109,7 @@ public class DepartmentDetailsService {
       if (adminAgencyIds == null || !adminAgencyIds.contains(agencyId)) {
         log.warn(
             "Admin user {} may not edit the department details of agency {}",
-            authenticatedUser.requireUserId(),
+            authenticatedUser.getUserId(),
             agencyId);
         throw new AgencyAccessDeniedException();
       }
@@ -130,7 +130,7 @@ public class DepartmentDetailsService {
     if (agency == null || !effectiveTenantId.equals(agency.getTenantId())) {
       log.warn(
           "Admin user {} (tenant {}) may not edit the department details of agency {} (tenant {})",
-          authenticatedUser.requireUserId(),
+          authenticatedUser.getUserId(),
           effectiveTenantId,
           agency == null ? null : agency.getId(),
           agency == null ? null : agency.getTenantId());

@@ -100,6 +100,31 @@ public class SecurityConfig {
                 + AuthorityValue.TENANT_ADMIN + "')"))
             .requestMatchers("/agencyadmin/controls", "/agencyadmin/controls/")
             .hasAuthority(AuthorityValue.GET_ALL_AGENCIES)
+            // Counsellor onboarding (ORISO-Admin#998): UserService creates the invitee's
+            // Beratungsstelle server-to-server as the Keycloak technical user, because the
+            // invitee has no account while the wizard runs. The HTTP layer only lets that
+            // identity reach the endpoint - createAgency's own @PreAuthorize is what still
+            // demands a reservedAgencyId, so the technical user can complete a creation an
+            // agency admin authorised and start none of its own. Without this matcher the
+            // blanket /agencyadmin/** rule below answers 403 before the method-level rule is
+            // ever evaluated.
+            .requestMatchers(HttpMethod.POST, "/agencyadmin/agencies", "/agencyadmin/agencies/")
+            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
+                AuthorityValue.TECHNICAL_USER)
+            // UserService releases reservations of revoked/expired invites from a scheduler as
+            // the technical user (ORISO-Helm#367). The method then limits that identity to
+            // reservations that were never consumed.
+            .requestMatchers(HttpMethod.DELETE, "/agencyadmin/agencyids/reservations/*",
+                "/agencyadmin/agencyids/reservations/*/")
+            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
+                AuthorityValue.TECHNICAL_USER)
+            // UserService re-checks an invite's agency when the anonymous invitee accepts
+            // (ORISO-Admin#1026); only this view carries the delete date. One agency by ID, no
+            // search and no sub-resources.
+            .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies/{agencyId:\\d+}",
+                "/agencyadmin/agencies/{agencyId:\\d+}/")
+            .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN,
+                AuthorityValue.TECHNICAL_USER)
             .requestMatchers("/agencyadmin", "/agencyadmin/", "/agencyadmin/**")
             .hasAnyAuthority(AuthorityValue.AGENCY_ADMIN, AuthorityValue.RESTRICTED_AGENCY_ADMIN)
             // /agencies/topics enriches via an authenticated ConsultingTypeService call and is

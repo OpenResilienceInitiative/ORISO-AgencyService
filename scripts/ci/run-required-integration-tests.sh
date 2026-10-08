@@ -5,7 +5,9 @@ set -euo pipefail
 maven_wrapper="${ORISO_MAVEN_WRAPPER:-./mvnw}"
 required_tests=(
   ActuatorControllerIT
+  AgencyMatrixPasswordBackfillIT
   InternalMatrixServiceAccountAuthorizationIT
+  TechnicalUserAgencyReadAuthorizationIT
   AgencyControllerIT
   AgencyControllerAuthorizationIT
   TracingConfigVerificationIT

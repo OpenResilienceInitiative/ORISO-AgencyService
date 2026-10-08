@@ -21,8 +21,16 @@ import org.springframework.stereotype.Component;
 public class AgencyEffectivePermissionSettingsApplier {
 
   private record ToggleBinding(
-      Function<AgencyAdminAllowedPermissionToggles, Boolean> getter,
-      BiConsumer<Settings, Boolean> setter) {}
+      Function<AgencyAdminAllowedPermissionToggles, Boolean> allowedGetter,
+      Function<AgencyAdminAllowedPermissionToggles, Boolean> enforcedGetter,
+      BiConsumer<Settings, Boolean> setter) {
+
+    ToggleBinding(
+        Function<AgencyAdminAllowedPermissionToggles, Boolean> getter,
+        BiConsumer<Settings, Boolean> setter) {
+      this(getter, getter, setter);
+    }
+  }
 
   // One binding per conversation/media feature: the toggle getter <-> the Settings feature-flag
   // setter it governs. `appearance` has no Settings counterpart (governs theme customization
@@ -35,6 +43,17 @@ public class AgencyEffectivePermissionSettingsApplier {
           new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getGroupChat,
               Settings::setFeatureGroupChatV2Enabled),
+          // Group-chat formats (ORISO-AgencyService#293): groupChat is the master switch on the
+          // allowed side (groupChat disallowed => both formats forced off) and the fallback for a
+          // format toggle that was never set (controls stored before the format toggles existed).
+          new ToggleBinding(
+              toggles -> allowedFormat(toggles.getInternalGroupChat(), toggles),
+              toggles -> orGroupChat(toggles.getInternalGroupChat(), toggles),
+              Settings::setFeatureInternalGroupChatEnabled),
+          new ToggleBinding(
+              toggles -> allowedFormat(toggles.getSelfHelpGroups(), toggles),
+              toggles -> orGroupChat(toggles.getSelfHelpGroups(), toggles),
+              Settings::setFeatureSelfHelpGroupsEnabled),
           new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getCalls, Settings::setFeatureCallsEnabled),
           new ToggleBinding(
@@ -153,6 +172,19 @@ public class AgencyEffectivePermissionSettingsApplier {
               AgencyAdminAllowedPermissionToggles::getMediaAiScanSupervisionChats,
               Settings::setFeatureMediaAiScanSupervisionChatsEnabled));
 
+  private static Boolean allowedFormat(
+      Boolean formatToggle, AgencyAdminAllowedPermissionToggles toggles) {
+    if (Boolean.FALSE.equals(toggles.getGroupChat())) {
+      return Boolean.FALSE;
+    }
+    return orGroupChat(formatToggle, toggles);
+  }
+
+  private static Boolean orGroupChat(
+      Boolean formatToggle, AgencyAdminAllowedPermissionToggles toggles) {
+    return formatToggle != null ? formatToggle : toggles.getGroupChat();
+  }
+
   public void applyTo(Settings settings, AgencyAdminControls controls) {
     if (settings == null || controls == null) {
       return;
@@ -160,10 +192,10 @@ public class AgencyEffectivePermissionSettingsApplier {
     AgencyAdminAllowedPermissionToggles allowed = controls.getAllowedPermissionToggles();
     AgencyAdminAllowedPermissionToggles enforced = controls.getEnforcedPermissionToggles();
     for (ToggleBinding binding : BINDINGS) {
-      if (allowed != null && Boolean.FALSE.equals(binding.getter().apply(allowed))) {
+      if (allowed != null && Boolean.FALSE.equals(binding.allowedGetter().apply(allowed))) {
         binding.setter().accept(settings, false);
       }
-      if (enforced != null && Boolean.TRUE.equals(binding.getter().apply(enforced))) {
+      if (enforced != null && Boolean.TRUE.equals(binding.enforcedGetter().apply(enforced))) {
         binding.setter().accept(settings, true);
       }
     }

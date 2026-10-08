@@ -8,6 +8,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.topicservice.generated.web.model.TopicDTO;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.owasp.html.HtmlPolicyBuilder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -61,6 +62,80 @@ class PublicLegalTextRendererTest {
     // The link targets live in the frontend deployment configuration; the backend does not know
     // them, so its token survives on purpose.
     assertThat(rendered.consentText()).contains("{{legal_links}}");
+  }
+
+  @Test
+  void render_Should_fillTheAddressOfTheBeratungsstelle() {
+    var department =
+        AgencyTopic.builder()
+            .topicId(42L)
+            .agency(
+                Agency.builder()
+                    .id(7L)
+                    .name("Caritas Freiburg")
+                    .street("Musterstraße 1")
+                    .postCode("79098")
+                    .city("Freiburg")
+                    .consultingTypeId(1)
+                    .build())
+            .build();
+    var text =
+        new ResolvedLegalText(
+            "{\"de\":\"<p>{{Beratungsstelle}}, {{Adresse}}</p>\"}",
+            null,
+            LegalTextSourceLevel.TENANT,
+            1L);
+
+    var rendered = renderer(false).render(text, department);
+
+    assertThat(rendered.content()).contains("Caritas Freiburg, Musterstraße 1, 79098 Freiburg");
+  }
+
+  @Test
+  void render_Should_leaveTheAddressToken_When_theAgencyHasNoAddress() {
+    var text =
+        new ResolvedLegalText(
+            "{\"de\":\"<p>{{Adresse}}</p>\"}", null, LegalTextSourceLevel.TENANT, 1L);
+
+    var rendered = renderer(false).render(text, department());
+
+    assertThat(rendered.content()).contains("{{Adresse}}");
+  }
+
+  @Test
+  void render_Should_substituteTokensThatTheTenantSanitizerSplit() {
+    // Träger texts are stored by TenantService, whose OWASP sanitiser turns {{ into {<!-- -->{.
+    var split =
+        new HtmlPolicyBuilder()
+            .allowElements("p")
+            .toFactory()
+            .sanitize("<p>{{Beratungsstelle}} in {{Adresse}}</p>");
+    assertThat(split).contains("{<!-- -->{");
+    var department =
+        AgencyTopic.builder()
+            .topicId(42L)
+            .agency(
+                Agency.builder()
+                    .id(7L)
+                    .name("Caritas Freiburg")
+                    .street("Musterstraße 1")
+                    .postCode("79098")
+                    .city("Freiburg")
+                    .consultingTypeId(1)
+                    .build())
+            .build();
+    var text =
+        new ResolvedLegalText(
+            "{\"de\":\"" + split.replace("\"", "\\\"") + "\"}",
+            null,
+            LegalTextSourceLevel.TENANT,
+            1L);
+
+    var rendered = renderer(false).render(text, department);
+
+    assertThat(rendered.content())
+        .contains("Caritas Freiburg in Musterstraße 1, 79098 Freiburg")
+        .doesNotContain("<!-- -->");
   }
 
   @Test
@@ -187,5 +262,132 @@ class PublicLegalTextRendererTest {
 
     assertThat(renderer(false).render(resolved, null)).isSameAs(resolved);
     assertThat(renderer(false).render(null, department())).isNull();
+  }
+
+  // --- {{Datenschutzbeauftragte}} (ORISO-Admin#1067): Beratungsstelle → Träger → empty. The
+  // platform DPO is never inherited down; it has its own token that TenantService fills.
+
+  @Mock private de.caritas.cob.agencyservice.api.service.TenantService tenantService;
+
+  private PublicLegalTextRenderer rendererWithTenants() {
+    var instance = renderer(false);
+    ReflectionTestUtils.setField(instance, "tenantService", tenantService);
+    return instance;
+  }
+
+  private static final String OWN_DPO_JSON =
+      "{\"nameAndLegalForm\":\"Anna Agentur\",\"email\":\"dsb@beratungsstelle.de\"}";
+
+  private AgencyTopic departmentOfTenant(
+      de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity entity,
+      String dpoJson) {
+    return AgencyTopic.builder()
+        .topicId(42L)
+        .agency(
+            Agency.builder()
+                .id(7L)
+                .tenantId(3L)
+                .name("Caritas Freiburg")
+                .consultingTypeId(1)
+                .dataProtectionResponsibleEntity(entity)
+                .dataProtectionOfficerContactData(dpoJson)
+                .build())
+        .build();
+  }
+
+  private static ResolvedLegalText dppWithDpoToken(boolean splitBySanitizer) {
+    var token =
+        splitBySanitizer ? "{<!-- -->{Datenschutzbeauftragte}}" : "{{Datenschutzbeauftragte}}";
+    return new ResolvedLegalText(
+        "{\"de\":\"<p>DSB: " + token + "</p>\"}", null, LegalTextSourceLevel.TENANT, 1L);
+  }
+
+  private void traegerDpo(String name) {
+    when(tenantService.getRestrictedTenantDataByTenantId(3L))
+        .thenReturn(
+            new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO()
+                .id(3L)
+                .dataProtectionOfficer(
+                    name == null
+                        ? null
+                        : new de.caritas.cob.agencyservice.tenantservice.generated.web.model
+                                .TenantDataProtectionOfficerDTO()
+                            .nameAndLegalForm(name)
+                            .postcode("79106")
+                            .city("Freiburg")
+                            .email("datenschutz@traeger.de")));
+  }
+
+  @Test
+  void render_Should_fillTheAgencysOwnDpo_When_theBeratungsstelleHasOne() {
+    var department =
+        departmentOfTenant(
+            de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity
+                .DATA_PROTECTION_OFFICER,
+            OWN_DPO_JSON);
+
+    var rendered = rendererWithTenants().render(dppWithDpoToken(false), department);
+
+    assertThat(rendered.content())
+        .contains("DSB: Anna Agentur, dsb@beratungsstelle.de")
+        .doesNotContain("Datenschutzbeauftragte}}");
+    // Its own DPO overrides the Träger's, so the Träger is not even asked.
+    org.mockito.Mockito.verifyNoInteractions(tenantService);
+  }
+
+  @Test
+  void render_Should_inheritTheTraegerDpo_When_theBeratungsstelleHasNone() {
+    traegerDpo("Dr. Maria Muster");
+    // Chose the alternative representative: that is not a DPO, so the Träger's applies.
+    var department =
+        departmentOfTenant(
+            de.caritas.cob.agencyservice.api.repository.agency.DataProtectionResponsibleEntity
+                .ALTERNATIVE_REPRESENTATIVE,
+            OWN_DPO_JSON);
+
+    var rendered = rendererWithTenants().render(dppWithDpoToken(true), department);
+
+    assertThat(rendered.content())
+        .contains("DSB: Dr. Maria Muster, 79106 Freiburg, datenschutz@traeger.de")
+        .doesNotContain("<!-- -->");
+  }
+
+  @Test
+  void render_Should_leaveTheDpoEmpty_When_neitherBeratungsstelleNorTraegerHasOne() {
+    traegerDpo(null);
+    var department = departmentOfTenant(null, null);
+
+    var rendered = rendererWithTenants().render(dppWithDpoToken(false), department);
+
+    // Not a required field anywhere: nothing entered renders nothing, not a raw token.
+    assertThat(rendered.content()).contains("<p>DSB: </p>").doesNotContain("{{");
+  }
+
+  @Test
+  void render_Should_leaveTheDpoEmpty_When_theTraegerCannotBeRead() {
+    when(tenantService.getRestrictedTenantDataByTenantId(3L))
+        .thenThrow(new IllegalStateException("TenantService down"));
+
+    var rendered =
+        rendererWithTenants().render(dppWithDpoToken(false), departmentOfTenant(null, null));
+
+    assertThat(rendered.content()).contains("<p>DSB: </p>");
+  }
+
+  @Test
+  void render_Should_escapeMarkupInTheDpo() {
+    traegerDpo("<img src=x onerror=alert(1)>");
+
+    var rendered =
+        rendererWithTenants().render(dppWithDpoToken(false), departmentOfTenant(null, null));
+
+    assertThat(rendered.content()).doesNotContain("<img").contains("&lt;img");
+  }
+
+  @Test
+  void render_Should_notAskTheTraeger_When_theTextHasNoDpoToken() {
+    rendererWithTenants().render(resolved(), departmentOfTenant(null, null));
+
+    org.mockito.Mockito.verifyNoInteractions(tenantService);
   }
 }
