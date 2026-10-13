@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.api.admin.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Lists;
@@ -25,6 +26,10 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import de.caritas.cob.agencyservice.api.service.ApplicationSettingsService;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
+import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.FeatureToggleDTO;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
@@ -54,9 +59,16 @@ public class AgencyAdminServiceTenantAwareIT extends AgencyAdminServiceITBase {
   @MockitoBean
   private TopicService topicService;
 
+  // Multi-topic writes read the one-topic switch (#1264); pin it off instead of calling CTS.
+  @MockitoSpyBean
+  private ApplicationSettingsService applicationSettingsService;
+
   @Before
   public void beforeEach() throws NoSuchFieldException, IllegalAccessException {
     givenTopicServiceReturnsListOfTopics();
+    doReturn(new ApplicationSettingsDTO()
+            .oneTopicPerAgencyEnabled(new FeatureToggleDTO().value(false).readOnly(false)))
+        .when(applicationSettingsService).fetchApplicationSettings();
     TenantContext.setCurrentTenant(1L);
     Field field = TenantHibernateInterceptor.class.getDeclaredField("multiTenancyEnabled");
     field.setAccessible(true);

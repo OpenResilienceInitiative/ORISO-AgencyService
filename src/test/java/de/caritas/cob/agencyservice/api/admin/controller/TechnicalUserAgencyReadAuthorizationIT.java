@@ -9,9 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.caritas.cob.agencyservice.api.service.TopicService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
@@ -37,7 +40,9 @@ import org.springframework.test.web.servlet.MockMvc;
     properties = {
       "spring.profiles.active=testing",
       "csrf.header.property=csrfHeader",
-      "csrf.cookie.property=csrfCookie"
+      "csrf.cookie.property=csrfCookie",
+      "IDENTITY_TECHNICAL_CLIENT_ID=backend-technical",
+      "TECHNICAL_SERVICE_SUBJECT=11111111-1111-4111-8111-111111111111"
     })
 @Sql(
     statements =
@@ -60,14 +65,19 @@ class TechnicalUserAgencyReadAuthorizationIT {
   @MockitoBean private TopicService topicService;
 
   private void tokenWithRealmRoles(String... roles) {
-    Jwt jwt =
-        Jwt.withTokenValue("test-token")
-            .header("alg", "none")
-            .claim("sub", "subject")
-            .claim("username", "technical")
-            .claim("realm_access", Map.of("roles", List.of(roles)))
-            .build();
-    when(jwtDecoder.decode(any(String.class))).thenReturn(jwt);
+    var token = serviceToken().claim("realm_access", Map.of("roles", List.of(roles)));
+    if (!List.of(roles).contains("technical")) {
+      token.subject("human-subject").claim("azp", "app").claim("username", "human-profile");
+    }
+    when(jwtDecoder.decode(any(String.class))).thenReturn(token.build());
+  }
+
+  private Jwt.Builder serviceToken() {
+    return Jwt.withTokenValue("test-token").header("alg", "none")
+        .subject("11111111-1111-4111-8111-111111111111")
+        .claim("azp", "backend-technical")
+        .expiresAt(Instant.now().plusSeconds(60))
+        .claim("realm_access", Map.of("roles", List.of("technical")));
   }
 
   @Test
@@ -87,6 +97,36 @@ class TechnicalUserAgencyReadAuthorizationIT {
 
     mvc.perform(get("/agencyadmin/agencies/9999999").header("Authorization", "Bearer test-token"))
         .andExpect(status().isNotFound());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"wrong-subject", "wrong-client", "missing-subject", "missing-client",
+      "missing-roles", "empty-roles", "malformed-realm", "malformed-roles", "extra-role",
+      "task-role", "admin-role", "resource-roles", "malformed-resources", "expired", "missing-expiry"})
+  void getAgency_Should_rejectUnboundServicePrincipal(String invalidClaim) throws Exception {
+    var token = serviceToken().claim("username", "human-looking-profile");
+    switch (invalidClaim) {
+      case "wrong-subject" -> token.subject("foreign");
+      case "wrong-client" -> token.claim("azp", "foreign");
+      case "missing-subject" -> token.claims(claims -> claims.remove("sub"));
+      case "missing-client" -> token.claims(claims -> claims.remove("azp"));
+      case "missing-roles" -> token.claims(claims -> claims.remove("realm_access"));
+      case "empty-roles" -> token.claim("realm_access", Map.of("roles", List.of()));
+      case "malformed-realm" -> token.claim("realm_access", "technical");
+      case "malformed-roles" -> token.claim("realm_access", Map.of("roles", "technical"));
+      case "extra-role" -> token.claim("realm_access", Map.of("roles", List.of("technical", "agency-admin")));
+      case "task-role" -> token.claim("realm_access", Map.of("roles", List.of("technical", "config-wizard")));
+      case "admin-role" -> token.claim("realm_access", Map.of("roles", List.of("otp-config-admin")));
+      case "resource-roles" -> token.claim("resource_access", Map.of("realm-management", Map.of("roles", List.of("manage-users"))));
+      case "malformed-resources" -> token.claim("resource_access", "realm-management");
+      case "expired" -> token.expiresAt(Instant.now().minusSeconds(60));
+      case "missing-expiry" -> token.claims(claims -> claims.remove("exp"));
+      default -> throw new IllegalArgumentException(invalidClaim);
+    }
+    when(jwtDecoder.decode(any(String.class))).thenReturn(token.build());
+
+    mvc.perform(get(SOFT_DELETED_AGENCY).header("Authorization", "Bearer test-token"))
+        .andExpect(status().isUnauthorized());
   }
 
   @Test

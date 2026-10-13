@@ -1,5 +1,7 @@
 package de.caritas.cob.agencyservice.api.repository.agency;
 
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -108,6 +110,11 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
   Optional<Agency> findById(Long agencyIds);
+
+  /** Serialize topic-replacing saves before reading their current department membership. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select a from Agency a where a.id = :agencyId")
+  Optional<Agency> findLockedById(@Param("agencyId") Long agencyId);
 
   List<Agency> findAllByDeleteDateNotNull();
 

@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.api.controller;
 import static java.util.Optional.ofNullable;
 
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyContactDetailsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTopicsDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentLegalContentDTO;
@@ -45,6 +46,15 @@ public class AgencyController implements AgenciesApi {
     return agencyService
         .getMatrixCredentials(agencyId)
         .map(credentials -> new ResponseEntity<>(credentials, HttpStatus.OK))
+        .orElseGet(() -> new ResponseEntity<>(HttpStatus.NOT_FOUND));
+  }
+
+  @GetMapping("/internal/agencies/{agencyId}/contact-details")
+  public ResponseEntity<AgencyContactDetailsDTO> getAgencyContactDetails(
+      @PathVariable Long agencyId, @RequestParam Long tenantId) {
+    return agencyService
+        .getContactDetails(agencyId, tenantId)
+        .map(details -> new ResponseEntity<>(details, HttpStatus.OK))
         .orElseGet(() -> new ResponseEntity<>(HttpStatus.NOT_FOUND));
   }
 

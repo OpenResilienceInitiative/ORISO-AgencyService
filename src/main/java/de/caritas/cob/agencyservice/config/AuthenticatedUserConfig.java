@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.config;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.exception.KeycloakException;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
+import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
 import org.apache.commons.codec.binary.Base32;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -27,6 +28,12 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Configuration
 public class AuthenticatedUserConfig {
 
+  private final TechnicalServiceIdentity technicalServiceIdentity;
+
+  public AuthenticatedUserConfig(TechnicalServiceIdentity technicalServiceIdentity) {
+    this.technicalServiceIdentity = technicalServiceIdentity;
+  }
+
   private static final String CLAIM_NAME_USER_ID = "userId";
   private static final String CLAIM_NAME_SUBJECT = "sub";
   private static final String CLAIM_NAME_USERNAME = "username";
@@ -42,13 +49,21 @@ public class AuthenticatedUserConfig {
   public AuthenticatedUser getAuthenticatedUser() {
 
     JwtAuthenticationToken authenticationToken = (JwtAuthenticationToken) getRequest().getUserPrincipal();
+    technicalServiceIdentity.requireValidIfTechnical(authenticationToken.getToken());
 
     Map<String, Object> claimMap = authenticationToken.getToken().getClaims();
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
-    authenticatedUser.setUserId(resolveUserId(claimMap));
-    authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
-    authenticatedUser.setTenantId(getTenantId(claimMap));
+    if (technicalServiceIdentity.allows(authenticationToken.getToken())) {
+      authenticatedUser.setUserId(authenticationToken.getToken().getSubject());
+      // This is a service identifier, not a fallback for a missing human username.
+      authenticatedUser.setUsername(authenticationToken.getToken().getClaimAsString("azp"));
+      authenticatedUser.setTenantId(0L);
+    } else {
+      authenticatedUser.setUserId(resolveUserId(claimMap));
+      authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
+      authenticatedUser.setTenantId(getTenantId(claimMap));
+    }
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
         Collectors.toSet()));
     return authenticatedUser;

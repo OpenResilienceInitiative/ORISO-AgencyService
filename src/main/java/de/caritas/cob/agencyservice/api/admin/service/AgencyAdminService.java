@@ -81,6 +81,7 @@ public class AgencyAdminService {
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull LegalTextVersionService legalTextVersionService;
   private final @NonNull ConsentTextService consentTextService;
+  private final @NonNull OneTopicPerAgencyPolicy oneTopicPerAgencyPolicy;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -292,11 +293,17 @@ public class AgencyAdminService {
     if (featureTopicsEnabled) {
       List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopics(agencyToCreate,
           agencyDTO.getTopicIds());
+      oneTopicPerAgencyPolicy.check(List.of(), topicIdsOf(agencyTopics));
       agencyToCreate.setAgencyTopics(agencyTopics);
     }
 
     convertCounsellingRelations(agencyDTO, agencyToCreate);
     return agencyToCreate;
+  }
+
+  private static List<Long> topicIdsOf(List<AgencyTopic> agencyTopics) {
+    return agencyTopics == null ? List.of()
+        : agencyTopics.stream().map(AgencyTopic::getTopicId).toList();
   }
 
   private void convertCounsellingRelations(AgencyDTO agencyDTO, Agency agencyToCreate) {
@@ -333,7 +340,7 @@ public class AgencyAdminService {
    */
   @Transactional
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
-    var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
+    var agency = agencyRepository.findLockedById(agencyId).orElseThrow(NotFoundException::new);
     applySettingsUpdate(updateAgencyDTO);
     // Read the stored wording before the merge overwrites it: what makes an agency-level save a
     // publish is that the wording CHANGED, and afterwards there is nothing left to compare against.
@@ -560,6 +567,7 @@ public class AgencyAdminService {
       var existingAgencyTopics = agencyTopicRepository.findAllByAgencyId(agency.getId());
       List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopicsForUpdate(
           agencyToUpdate, existingAgencyTopics, updateAgencyDTO.getTopicIds());
+      oneTopicPerAgencyPolicy.check(topicIdsOf(existingAgencyTopics), topicIdsOf(agencyTopics));
       agencyToUpdate.setAgencyTopics(agencyTopics);
     } else {
       // If the Topic feature is not enabled, Hibernate use an empty PersistentBag,

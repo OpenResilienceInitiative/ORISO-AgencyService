@@ -11,6 +11,7 @@ import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidDemograph
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidOfflineStatusException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidPostcodeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ValidationErrorResponse;
 import de.caritas.cob.agencyservice.api.service.LogService;
 import java.net.UnknownHostException;
@@ -176,6 +177,26 @@ public class ApiResponseEntityExceptionHandler extends ResponseEntityExceptionHa
         null,
         new CustomHttpHeader(ex.getHttpStatusExceptionReason()).buildHeader(),
         HttpStatus.CONFLICT,
+        request);
+  }
+
+  /**
+   * 503 - Service Unavailable.
+   *
+   * @param ex      {@link ServiceUnavailableException}
+   * @param request WebRequest
+   * @return a ResponseEntity instance
+   */
+  @ExceptionHandler({ServiceUnavailableException.class})
+  public ResponseEntity<Object> handleInternal(
+      final ServiceUnavailableException ex, final WebRequest request) {
+    ex.executeLogging();
+
+    return handleExceptionInternal(
+        ex,
+        null,
+        new CustomHttpHeader(ex.getHttpStatusExceptionReason()).buildHeader(),
+        HttpStatus.SERVICE_UNAVAILABLE,
         request);
   }
 
