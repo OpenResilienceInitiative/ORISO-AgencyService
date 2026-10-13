@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +42,28 @@ public class TenantService {
   public RestrictedTenantDTO getRestrictedTenantDataForSingleTenant() {
     TenantControllerApi controllerApi = tenantServiceApiControllerFactory.createControllerApi();
     return controllerApi.getRestrictedSingleTenancyTenantData();
+  }
+
+  /** Operational status is read fresh so a pause or reactivation is not delayed by settings caches. */
+  public boolean isTenantInactive(Long tenantId) {
+    if (tenantId == null) {
+      return false;
+    }
+    var tenant = tenantServiceApiControllerFactory.createControllerApi()
+        .getRestrictedTenantDataByTenantId(tenantId);
+    if (tenant == null) {
+      throw new MissingOperationalTenantException();
+    }
+    return Boolean.FALSE.equals(tenant.getActive());
+  }
+
+  /** A completed remote read without metadata is unavailable authority, not a programming fault. */
+  public static class MissingOperationalTenantException extends RestClientException {
+    private static final long serialVersionUID = 1L;
+
+    public MissingOperationalTenantException() {
+      super("Tenant operational status is unavailable");
+    }
   }
 
   public RestrictedTenantDTO getMainTenant() {

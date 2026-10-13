@@ -37,6 +37,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import lombok.NonNull;
@@ -105,9 +107,7 @@ public class AgencyService {
    * @return a list containing regarding agencies
    */
   public List<AgencyResponseDTO> getAgencies(List<Long> agencyIds) {
-    return getAgencyRepositoryForSearch().findByIdIn(agencyIds).stream()
-        .map(this::convertToAgencyResponseDTO)
-        .toList();
+    return convertToAgencyResponses(getAgencyRepositoryForSearch().findByIdIn(agencyIds));
   }
 
   /**
@@ -121,9 +121,7 @@ public class AgencyService {
     try {
       verifyConsultingTypeExists(consultingTypeId);
 
-      return agencyRepository.findByConsultingTypeId(consultingTypeId).stream()
-          .map(this::convertToAgencyResponseDTO)
-          .toList();
+      return convertToAgencyResponses(agencyRepository.findByConsultingTypeId(consultingTypeId));
 
     } catch (MissingConsultingTypeException ex) {
       throw new BadRequestException(
@@ -161,14 +159,15 @@ public class AgencyService {
     var agencies = findAgencies(postCode, getConsultingTypeIdForSearch(consultingTypeId), topicId,
         age, gender, counsellingRelation);
     Collections.shuffle(agencies);
-    var agencyResponseDTOs = agencies.stream()
+    Map<Long, Boolean> tenantInactive = new HashMap<>();
+    var agencyResponseDTOs = operationalAgencies(agencies, tenantInactive).stream()
         .map(this::convertToFullAgencyResponseDTO)
         .toList();
 
     var mutableResponseDTO = Lists.newArrayList(agencyResponseDTOs);
 
     if (agencyResponseDTOs.isEmpty()) {
-      addWhiteSpotAgency(consultingTypeSettings, mutableResponseDTO);
+      addWhiteSpotAgency(consultingTypeSettings, mutableResponseDTO, tenantInactive);
     }
 
     return mutableResponseDTO;
@@ -177,13 +176,20 @@ public class AgencyService {
   public List<FullAgencyResponseDTO> getAgencies(String postCode, Integer topicId) {
 
     var agencies = findAgenciesForCurrentTenant(postCode, topicId);
-    return agencies.stream()
+    return operationalAgencies(agencies).stream()
         .map(this::convertToFullAgencyResponseDTO)
         .toList();
   }
 
   public List<Integer> getAgenciesTopics() {
-    return agencyRepository.findAllAgenciesTopics(TenantContext.getCurrentTenant());
+    Map<Long, Boolean> tenantInactive = new HashMap<>();
+    return agencyRepository.findAvailableAgencyTopics().stream()
+        .filter(topic -> !tenantInactive.computeIfAbsent(
+            topic.getTenantId(), tenantService::isTenantInactive))
+        .map(topic -> Math.toIntExact(topic.getTopicId()))
+        .distinct()
+        .sorted()
+        .toList();
   }
 
   @Transactional
@@ -428,7 +434,7 @@ public class AgencyService {
   }
 
   private void addWhiteSpotAgency(ExtendedConsultingTypeResponseDTO consultingTypeSettings,
-      List<FullAgencyResponseDTO> agencyResponseDTOs) {
+      List<FullAgencyResponseDTO> agencyResponseDTOs, Map<Long, Boolean> tenantInactive) {
 
     var whiteSpot = consultingTypeSettings.getWhiteSpot();
     if (nonNull(whiteSpot) && nonNull(whiteSpot.getWhiteSpotAgencyId()) && isTrue(
@@ -436,12 +442,28 @@ public class AgencyService {
       try {
         getAgencyRepositoryForSearch().findByIdAndDeleteDateNull(
             Long.valueOf(whiteSpot.getWhiteSpotAgencyId()))
+            .filter(agency -> !agency.isOffline()
+                && !tenantInactive.computeIfAbsent(
+                    agency.getTenantId(), tenantService::isTenantInactive))
             .ifPresent(agency -> agencyResponseDTOs.add(convertToFullAgencyResponseDTO(agency)));
       } catch (NumberFormatException nfEx) {
         throw new InternalServerErrorException(LogService::logNumberFormatException,
             "Invalid white spot agency id");
       }
     }
+  }
+
+  private List<Agency> operationalAgencies(List<Agency> agencies) {
+    return operationalAgencies(agencies, new HashMap<>());
+  }
+
+  private List<Agency> operationalAgencies(
+      List<Agency> agencies, Map<Long, Boolean> tenantInactive) {
+    return agencies.stream()
+        .filter(agency -> !agency.isOffline())
+        .filter(agency -> !tenantInactive.computeIfAbsent(
+            agency.getTenantId(), tenantService::isTenantInactive))
+        .toList();
   }
 
   private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
@@ -478,7 +500,15 @@ public class AgencyService {
     }
   }
 
-  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency) {
+  private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
+    Map<Long, Boolean> tenantInactive = new HashMap<>();
+    return agencies.stream()
+        .map(agency -> convertToAgencyResponseDTO(agency, agency.isOffline()
+            || tenantInactive.computeIfAbsent(agency.getTenantId(), tenantService::isTenantInactive)))
+        .toList();
+  }
+
+  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, boolean offline) {
     RestrictedTenantDTO tenantData = findTenantDataRelevantForFeatureToggles(agency);
     String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency, tenantData);
     return new AgencyResponseDTO()
@@ -488,7 +518,7 @@ public class AgencyService {
         .city(agency.getCity())
         .description(agency.getDescription())
         .teamAgency(agency.isTeamAgency())
-        .offline(agency.isOffline())
+        .offline(offline)
         .tenantId(agency.getTenantId())
         .consultingType(agency.getConsultingTypeId())
         .agencySpecificPrivacy(renderedAgencySpecificPrivacy)
