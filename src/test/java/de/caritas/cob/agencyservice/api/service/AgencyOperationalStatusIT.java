@@ -117,7 +117,8 @@ public class AgencyOperationalStatusIT {
   public void missingTenantResponseCannotAppearAsConfirmedAvailable() {
     when(tenantClient.getRestrictedTenantDataByTenantId(1L)).thenReturn(null);
     assertThatThrownBy(() -> agencyService.getAgencies(List.of(883L)))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(TenantService.MissingOperationalTenantException.class)
+        .hasMessage("Tenant operational status is unavailable");
   }
 
   @Test

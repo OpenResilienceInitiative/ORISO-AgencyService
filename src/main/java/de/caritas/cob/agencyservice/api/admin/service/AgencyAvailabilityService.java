@@ -11,10 +11,14 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 
 /** One availability composition for status commands and management lists/details. */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AgencyAvailabilityService {
 
@@ -39,7 +43,11 @@ public class AgencyAvailabilityService {
   private Boolean tenantActive(Long tenantId) {
     try {
       return !tenantService.isTenantInactive(tenantId);
-    } catch (RuntimeException unavailableAuthority) {
+    } catch (RestClientException | ResponseStatusException unavailableAuthority) {
+      String status = unavailableAuthority instanceof ResponseStatusException remote
+          ? Integer.toString(remote.getStatusCode().value()) : "unknown";
+      log.warn("Tenant operational authority unavailable: class={}, status={}",
+          unavailableAuthority.getClass().getSimpleName(), status);
       return null;
     }
   }

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 
 @Service
 @RequiredArgsConstructor
@@ -51,9 +52,18 @@ public class TenantService {
     var tenant = tenantServiceApiControllerFactory.createControllerApi()
         .getRestrictedTenantDataByTenantId(tenantId);
     if (tenant == null) {
-      throw new IllegalStateException("Tenant operational status is unavailable");
+      throw new MissingOperationalTenantException();
     }
     return Boolean.FALSE.equals(tenant.getActive());
+  }
+
+  /** A completed remote read without metadata is unavailable authority, not a programming fault. */
+  public static class MissingOperationalTenantException extends RestClientException {
+    private static final long serialVersionUID = 1L;
+
+    public MissingOperationalTenantException() {
+      super("Tenant operational status is unavailable");
+    }
   }
 
   public RestrictedTenantDTO getMainTenant() {

@@ -280,6 +280,59 @@ public class AgencyStatusHttpIT {
   }
 
   @Test
+  public void actualRemoteStatusExceptionsRemainUnknownAndDiagnosticsExposeOnlyClassAndStatus() throws Exception {
+    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(
+        de.caritas.cob.agencyservice.api.admin.service.AgencyAvailabilityService.class);
+    var events = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    events.start();
+    logger.addAppender(events);
+    try {
+      for (var code : List.of(org.springframework.http.HttpStatus.BAD_GATEWAY,
+          org.springframework.http.HttpStatus.NOT_FOUND)) {
+        org.mockito.Mockito.doThrow(
+            new org.springframework.web.server.ResponseStatusException(code, "private provider body and URL"))
+            .when(tenantClient).getRestrictedTenantDataByTenantId(1L);
+        mvc.perform(get("/agencyadmin/agencies/883/status")
+            .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.active").isEmpty())
+            .andExpect(jsonPath("$.tenantActive").isEmpty())
+            .andExpect(jsonPath("$.restrictions[0]").value("tenant_status_unknown"));
+      }
+      org.assertj.core.api.Assertions.assertThat(events.list).hasSize(2);
+      org.assertj.core.api.Assertions.assertThat(events.list.get(0).getFormattedMessage())
+          .contains("ResponseStatusException", "502").doesNotContain("private", "URL");
+      org.assertj.core.api.Assertions.assertThat(events.list.get(1).getFormattedMessage())
+          .contains("404").doesNotContain("private", "URL");
+      org.assertj.core.api.Assertions.assertThat(events.list)
+          .allSatisfy(event -> org.assertj.core.api.Assertions.assertThat(event.getThrowableProxy()).isNull());
+    } finally {
+      logger.detachAppender(events);
+      events.stop();
+    }
+  }
+
+  @Test
+  public void missingParentMetadataRemainsExplicitlyUnknown() throws Exception {
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L)).thenReturn(null);
+    mvc.perform(get("/agencyadmin/agencies/883/status")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.active").isEmpty())
+        .andExpect(jsonPath("$.tenantActive").isEmpty())
+        .andExpect(jsonPath("$.restrictions[0]").value("tenant_status_unknown"));
+  }
+
+  @Test
+  public void unexpectedProgrammingFailureCannotBecomeASuccessfulUnknownStatus() throws Exception {
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L))
+        .thenThrow(new NullPointerException("unexpected mapping defect"));
+    mvc.perform(get("/agencyadmin/agencies/883/status")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
   public void pausedTenantRefusesActivationBeforeOtherDependenciesAndKeepsOwnStatus() throws Exception {
     mvc.perform(update(883L, true)).andExpect(status().isOk());
     when(tenantClient.getRestrictedTenantDataByTenantId(1L)).thenReturn(
