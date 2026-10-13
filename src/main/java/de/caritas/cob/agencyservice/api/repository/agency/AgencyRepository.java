@@ -101,6 +101,16 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
       nativeQuery = true)
   List<Integer> findAllAgenciesTopics(Long tenantId);
 
+  interface AvailableTopic {
+    Long getTenantId();
+
+    Long getTopicId();
+  }
+
+  @Query("select distinct a.tenantId as tenantId, t.topicId as topicId from Agency a "
+      + "join a.agencyTopics t where a.offline = false and a.deleteDate is null")
+  List<AvailableTopic> findAvailableAgencyTopics();
+
   Optional<Agency> findByIdAndDeleteDateNull(Long agencyId);
 
   @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})

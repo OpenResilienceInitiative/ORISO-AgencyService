@@ -1192,6 +1192,9 @@ components:
           type: string
           example: Company name AG
           maxLength: 40
+        active:
+          type: boolean
+          description: Operational tenant availability; omitted on legacy responses means active.
         subdomain:
           type: string
           example: subdomain

@@ -43,6 +43,19 @@ public class TenantService {
     return controllerApi.getRestrictedSingleTenancyTenantData();
   }
 
+  /** Operational status is read fresh so a pause or reactivation is not delayed by settings caches. */
+  public boolean isTenantInactive(Long tenantId) {
+    if (tenantId == null) {
+      return false;
+    }
+    var tenant = tenantServiceApiControllerFactory.createControllerApi()
+        .getRestrictedTenantDataByTenantId(tenantId);
+    if (tenant == null) {
+      throw new IllegalStateException("Tenant operational status is unavailable");
+    }
+    return Boolean.FALSE.equals(tenant.getActive());
+  }
+
   public RestrictedTenantDTO getMainTenant() {
     if (multitenancyWithSingleDomain) {
       return getRestrictedTenantDataBySubdomain(getMainTenantSubdomain());
