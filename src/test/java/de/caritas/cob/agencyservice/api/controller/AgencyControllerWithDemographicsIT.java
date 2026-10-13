@@ -54,6 +54,9 @@ class AgencyControllerWithDemographicsIT {
   }
 
   @MockitoBean
+  private de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory tenantClientFactory;
+
+  @MockitoBean
   private ConsultingTypeManager consultingTypeManager;
 
   @MockitoBean
@@ -64,6 +67,12 @@ class AgencyControllerWithDemographicsIT {
 
   @BeforeEach
   public void setUp() throws MissingConsultingTypeException {
+    var tenantClient = org.mockito.Mockito.mock(
+        de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi.class);
+    when(tenantClientFactory.createControllerApi()).thenReturn(tenantClient);
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L)).thenReturn(
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO()
+            .id(1L).active(true));
     when(consultingTypeManager.getConsultingTypeSettings(anyInt()))
         .thenReturn(new de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO());
   }

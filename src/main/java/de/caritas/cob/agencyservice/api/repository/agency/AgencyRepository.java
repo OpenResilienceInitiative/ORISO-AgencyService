@@ -134,6 +134,14 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
   Agency save(Agency agency);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query("UPDATE Agency a SET a.offline = :offline, a.updateDate = :updateDate "
+      + "WHERE a.id = :agencyId")
+  int updateOfflineStatus(
+      @Param("agencyId") Long agencyId,
+      @Param("offline") boolean offline,
+      @Param("updateDate") java.time.LocalDateTime updateDate);
+
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("UPDATE Agency a SET a.matrixUserId = :matrixUserId, a.matrixPassword = :matrixPassword WHERE a.id = :agencyId")
   void updateMatrixCredentials(
       @Param("agencyId") Long agencyId,

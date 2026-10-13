@@ -47,7 +47,9 @@ import org.springframework.web.client.RestClientException;
     "spring.profiles.active=testing", "multitenancy.enabled=true",
     "feature.topics.enabled=true", "feature.appointment.enabled=false"
 })
-@Sql({"/database/AgencyDatabase.sql", "/setTenants.sql"})
+@Sql(value = {"/database/AgencyDatabase.sql", "/setTenants.sql"}, config =
+    @org.springframework.test.context.jdbc.SqlConfig(transactionMode =
+        org.springframework.test.context.jdbc.SqlConfig.TransactionMode.ISOLATED))
 @Transactional
 public class AgencyStatusHttpIT {
 
@@ -56,12 +58,21 @@ public class AgencyStatusHttpIT {
   @MockitoBean private UserAdminServiceApiControllerFactory userClientFactory;
   @MockitoBean private ConsultingTypeServiceApiControllerFactory consultingClientFactory;
   @MockitoBean private TopicServiceApiControllerFactory topicClientFactory;
+  @MockitoBean private de.caritas.cob.agencyservice.config.apiclient
+      .TenantServiceApiControllerFactory tenantClientFactory;
+  private de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi tenantClient;
   private AdminUserControllerApi userClient;
   private Long selectedTenant;
 
   @Before
   public void setUp() {
     authenticate("restricted-agency-admin", 1L);
+    tenantClient = mock(
+        de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi.class);
+    when(tenantClientFactory.createControllerApi()).thenReturn(tenantClient);
+    when(tenantClient.getRestrictedTenantDataByTenantId(org.mockito.ArgumentMatchers.anyLong()))
+        .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model
+            .RestrictedTenantDTO().active(true));
     userClient = mock(AdminUserControllerApi.class);
     when(userClientFactory.createControllerApi()).thenReturn(userClient);
     when(userClient.getApiClient()).thenReturn(new ApiClient());
@@ -98,11 +109,11 @@ public class AgencyStatusHttpIT {
   @Test
   public void assignedCentreAdminCanPauseAndReactivateItsCentreAcrossReads() throws Exception {
     mvc.perform(update(883L, true)).andExpect(status().isOk())
-        .andExpect(jsonPath("$._embedded.offline").value(true));
+        .andExpect(jsonPath("$.active").value(false));
     mvc.perform(read(883L)).andExpect(status().isOk())
         .andExpect(jsonPath("$._embedded.offline").value(true));
     mvc.perform(update(883L, false)).andExpect(status().isOk())
-        .andExpect(jsonPath("$._embedded.offline").value(false));
+        .andExpect(jsonPath("$.active").value(true));
     mvc.perform(read(883L)).andExpect(status().isOk())
         .andExpect(jsonPath("$._embedded.offline").value(false));
   }
@@ -164,6 +175,155 @@ public class AgencyStatusHttpIT {
         .andExpect(jsonPath("$._embedded.offline").value(false));
   }
 
+  @Test
+  public void statusOnlyPauseAndReactivationPreserveAllUnrelatedAgencyData() throws Exception {
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    var before = mapper.readTree(mvc.perform(read(883L)).andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString()).get("_embedded");
+    var unchanged = before.deepCopy();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) unchanged).remove(
+        List.of("offline", "updateDate", "active", "ownActive", "tenantActive", "restrictions"));
+    for (boolean active : List.of(false, true)) {
+      mvc.perform(put("/agencyadmin/agencies/883/status")
+          .header("Authorization", "Bearer test-token").header("tenantId", "1")
+          .contentType(MediaType.APPLICATION_JSON).content("{\"active\":" + active + "}"))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.agencyId").value(883))
+          .andExpect(jsonPath("$.active").value(active));
+      var after = mapper.readTree(mvc.perform(read(883L)).andExpect(status().isOk())
+          .andExpect(jsonPath("$._embedded.offline").value(!active))
+          .andReturn().getResponse().getContentAsString()).get("_embedded");
+      ((com.fasterxml.jackson.databind.node.ObjectNode) after).remove(
+          List.of("offline", "updateDate", "active", "ownActive", "tenantActive", "restrictions"));
+      org.assertj.core.api.Assertions.assertThat(after).isEqualTo(unchanged);
+    }
+  }
+
+  @Test
+  public void missingActiveIsRejectedWithoutChangingAnySavedState() throws Exception {
+    mvc.perform(put("/agencyadmin/agencies/883/status")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1")
+        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(read(883L)).andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.offline").value(false));
+  }
+
+  @Test
+  public void centreStatusReadCannotClaimActiveWhenItsTenantIsPaused() throws Exception {
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L)).thenReturn(
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model
+            .RestrictedTenantDTO().active(false));
+    mvc.perform(get("/agencyadmin/agencies/883/status")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.active").value(false))
+        .andExpect(jsonPath("$.ownActive").value(true))
+        .andExpect(jsonPath("$.tenantActive").value(false))
+        .andExpect(jsonPath("$.restrictions[0]").value("tenant_inactive"));
+    mvc.perform(read(883L)).andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.offline").value(false));
+  }
+
+  @Test
+  public void unavailableTenantAuthorityReadsUnknownWithoutClaimingAnActiveCentre() throws Exception {
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L))
+        .thenThrow(new RestClientException("TenantService is unavailable"));
+    mvc.perform(get("/agencyadmin/agencies/883/status")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.active").isEmpty())
+        .andExpect(jsonPath("$.ownActive").value(true))
+        .andExpect(jsonPath("$.tenantActive").isEmpty())
+        .andExpect(jsonPath("$.restrictions[0]").value("tenant_status_unknown"));
+  }
+
+  @Test
+  public void pausedTenantRefusesActivationBeforeOtherDependenciesAndKeepsOwnStatus() throws Exception {
+    mvc.perform(update(883L, true)).andExpect(status().isOk());
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L)).thenReturn(
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model
+            .RestrictedTenantDTO().active(false));
+    when(userClient.getAgencyConsultants("883"))
+        .thenThrow(new RestClientException("UserService is unavailable"));
+    mvc.perform(update(883L, false)).andExpect(status().isConflict())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+            .header().string("X-Reason", "TENANT_INACTIVE"));
+    mvc.perform(read(883L)).andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.offline").value(true));
+  }
+
+  @Test
+  public void listAndDetailShowSameEffectiveStatusWithoutChangingCentreOwnedOffline() throws Exception {
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L)).thenReturn(
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model
+            .RestrictedTenantDTO().active(false));
+    mvc.perform(get("/agencyadmin/agencies").param("page", "1").param("perPage", "10")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded[0]._embedded.id").value(883))
+        .andExpect(jsonPath("$._embedded[0]._embedded.offline").value(false))
+        .andExpect(jsonPath("$._embedded[0]._embedded.active").value(false))
+        .andExpect(jsonPath("$._embedded[0]._embedded.ownActive").value(true))
+        .andExpect(jsonPath("$._embedded[0]._embedded.tenantActive").value(false));
+    mvc.perform(read(883L)).andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.active").value(false))
+        .andExpect(jsonPath("$._embedded.offline").value(false));
+  }
+
+  @Test
+  @Sql(value = {"/database/AgencyDatabase.sql", "/setTenants.sql"}, statements =
+      "UPDATE agency SET is_offline=1, delete_date='2026-10-01 10:00:00' WHERE id=883", config =
+      @org.springframework.test.context.jdbc.SqlConfig(transactionMode =
+          org.springframework.test.context.jdbc.SqlConfig.TransactionMode.ISOLATED))
+  public void deletedCentreCannotBeReactivatedOrHaveDeletionMetadataCleared() throws Exception {
+    when(userClient.getAgencyConsultants("883"))
+        .thenThrow(new RestClientException("UserService is unavailable"));
+    mvc.perform(update(883L, false)).andExpect(status().isConflict())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+            .header().string("X-Reason", "AGENCY_DELETED"));
+    mvc.perform(get("/agencyadmin/agencies/883/status")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.active").value(false))
+        .andExpect(jsonPath("$.ownActive").value(false))
+        .andExpect(jsonPath("$.restrictions[0]").value("deleted"));
+    mvc.perform(read(883L)).andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.offline").value(true))
+        .andExpect(jsonPath("$._embedded.deleteDate").isNotEmpty());
+  }
+
+  @Test
+  public void unknownParentCannotReactivateAndKnownOwnPauseRemainsInactive() throws Exception {
+    mvc.perform(update(883L, true)).andExpect(status().isOk());
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L))
+        .thenThrow(new RestClientException("TenantService is unavailable"));
+    mvc.perform(get("/agencyadmin/agencies/883/status")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.active").value(false))
+        .andExpect(jsonPath("$.ownActive").value(false))
+        .andExpect(jsonPath("$.tenantActive").isEmpty());
+    mvc.perform(update(883L, false)).andExpect(status().is5xxServerError());
+    mvc.perform(read(883L)).andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.offline").value(true));
+  }
+
+  @Test
+  public void unavailableParentIsUnknownInListsWithBoundedAuthorityCalls() throws Exception {
+    authenticate("agency-admin", 1L);
+    when(tenantClient.getRestrictedTenantDataByTenantId(1L))
+        .thenThrow(new RestClientException("TenantService is unavailable"));
+    mvc.perform(get("/agencyadmin/agencies").param("page", "1").param("perPage", "2")
+        .header("Authorization", "Bearer test-token").header("tenantId", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.length()").value(2))
+        .andExpect(jsonPath("$._embedded[0]._embedded.active").isEmpty())
+        .andExpect(jsonPath("$._embedded[1]._embedded.active").isEmpty())
+        .andExpect(jsonPath("$._embedded[0]._embedded.tenantActive").isEmpty())
+        .andExpect(jsonPath("$._embedded[1]._embedded.tenantActive").isEmpty());
+    // Two maximum: one fresh operational read and one optional display-name read per parent.
+    org.mockito.Mockito.verify(tenantClient, org.mockito.Mockito.atMost(2))
+        .getRestrictedTenantDataByTenantId(1L);
+  }
+
   private void authenticate(String role, Long tenantId) {
     authenticate(List.of(role), tenantId);
   }
@@ -178,12 +338,11 @@ public class AgencyStatusHttpIT {
   }
 
   private MockHttpServletRequestBuilder update(Long agencyId, boolean offline) {
-    return put("/agencyadmin/agencies/" + agencyId)
+    return put("/agencyadmin/agencies/" + agencyId + "/status")
         .header("Authorization", "Bearer test-token")
         .header("tenantId", selectedTenant.toString())
         .contentType(MediaType.APPLICATION_JSON)
-        .content("{\"name\":\"Test centre\",\"postcode\":\"88662\",\"city\":\"Test city\","
-            + "\"external\":false,\"offline\":" + offline + "}");
+        .content("{\"active\":" + !offline + "}");
   }
 
   private MockHttpServletRequestBuilder read(Long agencyId) {

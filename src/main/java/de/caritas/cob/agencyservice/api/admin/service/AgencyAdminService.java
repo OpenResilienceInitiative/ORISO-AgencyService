@@ -65,6 +65,9 @@ public class AgencyAdminService {
   private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskIdentity;
 
 
+  @Autowired(required = false)
+  private AgencyAvailabilityService availabilityService;
+
   private final @NonNull AgencyRepository agencyRepository;
 
   private final @NonNull AgencyTenantUnawareRepository agencyTenantUnawareRepository;
@@ -114,6 +117,13 @@ public class AgencyAdminService {
   private AgencyAdminFullResponseDTO buildAgencyAdminFullResponse(Agency agency) {
     var response = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency();
     enrichWithSettings(response, agency);
+    if (response.getEmbedded() != null) {
+      // Standalone callers without authority have an explicit unknown status, never a fake active.
+      var availability = availabilityService != null
+          ? availabilityService.getAvailability(agency)
+          : AgencyAvailabilityService.snapshot(agency, null);
+      AgencyAvailabilityService.enrich(response.getEmbedded(), availability);
+    }
     return response;
   }
 
