@@ -54,6 +54,8 @@ import org.springframework.web.client.RestClientException;
 public class AgencyStatusHttpIT {
 
   @Autowired private MockMvc mvc;
+  @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
+  @Autowired private de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository agencyRepository;
   @MockitoBean private JwtDecoder jwtDecoder;
   @MockitoBean private UserAdminServiceApiControllerFactory userClientFactory;
   @MockitoBean private ConsultingTypeServiceApiControllerFactory consultingClientFactory;
@@ -94,6 +96,46 @@ public class AgencyStatusHttpIT {
     when(topicClient.getApiClient()).thenReturn(
         new de.caritas.cob.agencyservice.topicservice.generated.ApiClient());
     when(topicClient.getAllTopics()).thenReturn(List.of());
+  }
+
+  @Test
+  @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+  public void staleMetadataRequestPreservesASeparatelyCommittedPauseWhenOfflineIsOmitted()
+      throws Exception {
+    authenticate("agency-admin", 1L);
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    var json = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(
+        mvc.perform(read(883L)).andExpect(status().isOk()).andReturn()
+            .getResponse().getContentAsString()).path("_embedded");
+    json.remove(List.of("offline", "active", "ownActive", "tenantActive", "restrictions"));
+    json.put("name", "Metadata after pause");
+    var payload = mapper.writeValueAsString(json);
+    var metadata = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+    var narrowStatus = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+    narrowStatus.setPropagationBehavior(
+        org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    metadata.executeWithoutResult(transaction -> {
+      de.caritas.cob.agencyservice.api.tenant.TenantContext.setCurrentTenant(1L);
+      org.junit.Assert.assertFalse(agencyRepository.findById(883L).orElseThrow().isOffline());
+      narrowStatus.executeWithoutResult(other -> {
+        try {
+          mvc.perform(update(883L, true)).andExpect(status().isOk());
+        } catch (Exception e) {
+          throw new IllegalStateException(e);
+        }
+      });
+      try {
+        mvc.perform(put("/agencyadmin/agencies/883")
+                .header("Authorization", "Bearer test-token").header("tenantId", "1")
+                .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andExpect(status().isOk());
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
+    });
+    mvc.perform(read(883L)).andExpect(status().isOk())
+        .andExpect(jsonPath("$._embedded.offline").value(true))
+        .andExpect(jsonPath("$._embedded.name").value("Metadata after pause"));
   }
 
   @Test

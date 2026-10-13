@@ -68,6 +68,9 @@ public class AgencyAdminService {
   @Autowired(required = false)
   private AgencyAvailabilityService availabilityService;
 
+  @jakarta.persistence.PersistenceContext
+  private jakarta.persistence.EntityManager entityManager;
+
   private final @NonNull AgencyRepository agencyRepository;
 
   private final @NonNull AgencyTenantUnawareRepository agencyTenantUnawareRepository;
@@ -357,6 +360,9 @@ public class AgencyAdminService {
   @Transactional
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
     var agency = agencyRepository.findLockedById(agencyId).orElseThrow(NotFoundException::new);
+    // Validation/OSIV may have loaded this entity before another request changed its status.
+    // Acquire a fresh snapshot before merging metadata; a lock alone leaves managed fields stale.
+    entityManager.refresh(agency, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
     applySettingsUpdate(updateAgencyDTO);
     // Read the stored wording before the merge overwrites it: what makes an agency-level save a
     // publish is that the wording CHANGED, and afterwards there is nothing left to compare against.
@@ -604,8 +610,10 @@ public class AgencyAdminService {
    * @param agencyId      the agency id
    * @param agencyTypeDTO the request dto containing the agency type
    */
+  @Transactional
   public void changeAgencyType(Long agencyId, AgencyTypeRequestDTO agencyTypeDTO) {
     var agency = findAgencyById(agencyId);
+    entityManager.refresh(agency, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
     boolean isTeamAgency = TEAM_AGENCY.equals(agencyTypeDTO.getAgencyType());
     if (isTeamAgency == agency.isTeamAgency()) {
       throw new ConflictException(
@@ -622,8 +630,10 @@ public class AgencyAdminService {
    *
    * @param agencyId agency ID
    */
+  @Transactional
   public void deleteAgency(Long agencyId) {
     var agency = this.findAgencyById(agencyId);
+    entityManager.refresh(agency, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
     this.deleteAgencyValidator.validate(agency);
     agency.setDeleteDate(LocalDateTime.now(ZoneOffset.UTC));
     this.agencyRepository.save(agency);

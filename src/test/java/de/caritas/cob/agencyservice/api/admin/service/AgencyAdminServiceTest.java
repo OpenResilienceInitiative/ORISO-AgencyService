@@ -81,6 +81,9 @@ class AgencyAdminServiceTest {
   AgencyAdminService agencyAdminService;
 
   @Mock
+  jakarta.persistence.EntityManager entityManager;
+
+  @Mock
   AgencyRepository agencyRepository;
 
   @Mock
@@ -150,6 +153,7 @@ class AgencyAdminServiceTest {
 
   @BeforeEach
   public void setup() {
+    ReflectionTestUtils.setField(agencyAdminService, "entityManager", entityManager);
     // Mockito's @InjectMocks cannot decide between the two mocks for the
     // AgencyRepository-typed constructor parameter (AgencyTenantUnawareRepository is a subtype),
     // so it can silently wire the tenant-unaware mock into the tenant-aware field and the stubs
