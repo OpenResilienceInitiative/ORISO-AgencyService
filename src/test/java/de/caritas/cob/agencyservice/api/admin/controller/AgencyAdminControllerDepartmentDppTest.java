@@ -100,4 +100,26 @@ class AgencyAdminControllerDepartmentDppTest {
     assertThat(response.getBody().getPublicationStatus())
         .isEqualTo(DepartmentDataProtectionResponseDTO.PublicationStatusEnum.DRAFT);
   }
+
+  @Test
+  void revertDepartmentDataProtection_Should_delegate_andReportWhetherAnythingChanged() {
+    when(departmentDataProtectionService.revertDepartmentDataPrivacyToInherited(7L, 42L))
+        .thenReturn(true);
+
+    var response = controller.revertDepartmentDataProtectionToInherited(7L, 42L);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().getReverted()).isTrue();
+  }
+
+  @Test
+  void revertDepartmentDataProtection_Should_reportNoChange_When_departmentAlreadyInherits() {
+    when(departmentDataProtectionService.revertDepartmentDataPrivacyToInherited(7L, 42L))
+        .thenReturn(false);
+
+    var response = controller.revertDepartmentDataProtectionToInherited(7L, 42L);
+
+    assertThat(response.getBody().getReverted()).isFalse();
+  }
 }

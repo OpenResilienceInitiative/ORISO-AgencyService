@@ -53,6 +53,7 @@ import de.caritas.cob.agencyservice.api.model.DepartmentDataProtectionResponseDT
 import de.caritas.cob.agencyservice.api.model.DepartmentImprintContentDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentImprintDTO;
 import de.caritas.cob.agencyservice.api.model.DepartmentImprintResponseDTO;
+import de.caritas.cob.agencyservice.api.model.DepartmentLegalRevertResponseDTO;
 import de.caritas.cob.agencyservice.api.model.PostcodeRangeDTO;
 import de.caritas.cob.agencyservice.api.model.RootDTO;
 import de.caritas.cob.agencyservice.api.model.Sort;
@@ -476,6 +477,35 @@ public class AgencyAdminController implements AgencyadminApi {
             .publicationStatus(
                 DepartmentImprintResponseDTO.PublicationStatusEnum.fromValue(status.name()));
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Entry point to end a department's own privacy policy so it inherits the agency text again.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId Topic Id (Fachbereich)
+   * @return {@code reverted=false} when the department already inherited and nothing changed
+   */
+  @Override
+  public ResponseEntity<DepartmentLegalRevertResponseDTO> revertDepartmentDataProtectionToInherited(
+      Long agencyId, Long topicId) {
+    var reverted =
+        departmentDataProtectionService.revertDepartmentDataPrivacyToInherited(agencyId, topicId);
+    return ResponseEntity.ok(new DepartmentLegalRevertResponseDTO().reverted(reverted));
+  }
+
+  /**
+   * Entry point to end a department's own imprint so it inherits the agency text again.
+   *
+   * @param agencyId Agency Id (Beratungszentrum)
+   * @param topicId Topic Id (Fachbereich)
+   * @return {@code reverted=false} when the department already inherited and nothing changed
+   */
+  @Override
+  public ResponseEntity<DepartmentLegalRevertResponseDTO> revertDepartmentImprintToInherited(
+      Long agencyId, Long topicId) {
+    var reverted = departmentImprintService.revertDepartmentImprintToInherited(agencyId, topicId);
+    return ResponseEntity.ok(new DepartmentLegalRevertResponseDTO().reverted(reverted));
   }
 
   /**

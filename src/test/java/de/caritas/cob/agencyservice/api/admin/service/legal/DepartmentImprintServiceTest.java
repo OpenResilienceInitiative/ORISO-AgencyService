@@ -448,4 +448,60 @@ class DepartmentImprintServiceTest {
 
     assertThat(department.getContentImprint()).isEqualTo("{\"de\":\"\"}");
   }
+
+  @Test
+  void revert_Should_clearOwnText_And_closeTheVersion_When_departmentHasOwnPublishedImprint() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setId(4711L);
+    department.setContentImprint("{\"de\":\"<p>eigenes Impressum</p>\"}");
+    department.setPublicationStatusImprint(PublicationStatus.PUBLISHED);
+
+    var changed = service.revertDepartmentImprintToInherited(7L, 42L);
+
+    assertThat(changed).isTrue();
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getContentImprint()).isNull();
+    assertThat(saved.getValue().getPublicationStatusImprint()).isEqualTo(PublicationStatus.DRAFT);
+    verify(legalTextVersionService)
+        .supersedeCurrent(LegalTextLevel.DEPARTMENT, 4711L, LegalTextKind.IMPRINT);
+  }
+
+  @Test
+  void revert_Should_changeNothing_When_departmentStillReferencesTheSharedImprint() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setImprint(sharedImprint());
+
+    var changed = service.revertDepartmentImprintToInherited(7L, 42L);
+
+    assertThat(changed).isFalse();
+    verify(agencyTopicRepository, never()).save(any());
+    verifyNoInteractions(legalTextVersionService);
+  }
+
+  @Test
+  void revert_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
+    when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(9L));
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.revertDepartmentImprintToInherited(7L, 42L));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void revert_Should_throwAccessDenied_When_fullAdminRevertsAnotherTenantsAgency() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(authenticatedUser.getTenantId()).thenReturn(1L);
+    var department = existingDepartmentInTenant(2L);
+    department.setContentImprint("{\"de\":\"<p>x</p>\"}");
+    department.setPublicationStatusImprint(PublicationStatus.PUBLISHED);
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.revertDepartmentImprintToInherited(7L, 42L));
+    verify(agencyTopicRepository, never()).save(any());
+  }
 }

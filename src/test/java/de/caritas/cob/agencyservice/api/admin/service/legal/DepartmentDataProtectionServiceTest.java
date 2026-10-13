@@ -305,6 +305,88 @@ class DepartmentDataProtectionServiceTest {
   }
 
   @Test
+  void revert_Should_clearOwnText_And_closeTheVersion_When_departmentHasOwnPublishedText() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setId(4711L);
+    department.setContentDpp("{\"de\":\"<p>eigene DSE</p>\"}");
+    department.setConsentText("{\"de\":\"Ich habe die {{legal_links}} gelesen.\"}");
+    department.setPublicationStatus(PublicationStatus.PUBLISHED);
+
+    var changed = service.revertDepartmentDataPrivacyToInherited(7L, 42L);
+
+    assertThat(changed).isTrue();
+    var saved = ArgumentCaptor.forClass(AgencyTopic.class);
+    verify(agencyTopicRepository).save(saved.capture());
+    assertThat(saved.getValue().getContentDpp()).isNull();
+    assertThat(saved.getValue().getConsentText()).isNull();
+    assertThat(saved.getValue().getPublicationStatus()).isEqualTo(PublicationStatus.DRAFT);
+    // the history keeps the row, it only stops claiming to be in force
+    verify(legalTextVersionService)
+        .supersedeCurrent(LegalTextLevel.DEPARTMENT, 4711L, LegalTextKind.DPP);
+  }
+
+  @Test
+  void revert_Should_changeNothing_When_departmentStillReferencesTheSharedText() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setDpp(sharedDpp());
+
+    var changed = service.revertDepartmentDataPrivacyToInherited(7L, 42L);
+
+    assertThat(changed).isFalse();
+    verify(agencyTopicRepository, never()).save(any());
+    verifyNoInteractions(legalTextVersionService);
+  }
+
+  @Test
+  void revert_Should_changeNothing_When_departmentHasOnlyADraft() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    final var department = existingDepartment();
+    department.setContentDpp("{\"de\":\"<p>Entwurf</p>\"}");
+    department.setPublicationStatus(PublicationStatus.DRAFT);
+
+    var changed = service.revertDepartmentDataPrivacyToInherited(7L, 42L);
+
+    assertThat(changed).isFalse();
+    verify(agencyTopicRepository, never()).save(any());
+    verifyNoInteractions(legalTextVersionService);
+  }
+
+  @Test
+  void revert_Should_throwAccessDenied_When_restrictedAdminDoesNotOwnTheAgency() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(true);
+    when(authenticatedUser.requireUserId()).thenReturn("admin-1");
+    when(userAdminService.getAdminUserAgencyIds("admin-1")).thenReturn(List.of(9L));
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.revertDepartmentDataPrivacyToInherited(7L, 42L));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void revert_Should_throwAccessDenied_When_fullAdminRevertsAnotherTenantsAgency() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(authenticatedUser.getTenantId()).thenReturn(1L);
+    var department = existingDepartmentInTenant(2L);
+    department.setContentDpp("{\"de\":\"<p>x</p>\"}");
+    department.setPublicationStatus(PublicationStatus.PUBLISHED);
+
+    assertThatExceptionOfType(AgencyAccessDeniedException.class)
+        .isThrownBy(() -> service.revertDepartmentDataPrivacyToInherited(7L, 42L));
+    verify(agencyTopicRepository, never()).save(any());
+  }
+
+  @Test
+  void revert_Should_throwNotFound_When_departmentMissing() {
+    when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
+    when(agencyTopicRepository.findByAgency_IdAndTopicId(7L, 42L)).thenReturn(Optional.empty());
+
+    assertThatExceptionOfType(NotFoundException.class)
+        .isThrownBy(() -> service.revertDepartmentDataPrivacyToInherited(7L, 42L));
+  }
+
+  @Test
   void draftSave_Should_notCloseAnything_When_nothingWasPublishedBefore() {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
     existingDepartment();

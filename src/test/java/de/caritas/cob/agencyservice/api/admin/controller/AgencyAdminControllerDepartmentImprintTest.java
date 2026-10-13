@@ -93,4 +93,24 @@ class AgencyAdminControllerDepartmentImprintTest {
     assertThat(response.getBody().getPublicationStatus())
         .isEqualTo(DepartmentImprintResponseDTO.PublicationStatusEnum.DRAFT);
   }
+
+  @Test
+  void revertDepartmentImprint_Should_delegate_andReportWhetherAnythingChanged() {
+    when(departmentImprintService.revertDepartmentImprintToInherited(7L, 42L)).thenReturn(true);
+
+    var response = controller.revertDepartmentImprintToInherited(7L, 42L);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().getReverted()).isTrue();
+  }
+
+  @Test
+  void revertDepartmentImprint_Should_reportNoChange_When_departmentAlreadyInherits() {
+    when(departmentImprintService.revertDepartmentImprintToInherited(7L, 42L)).thenReturn(false);
+
+    var response = controller.revertDepartmentImprintToInherited(7L, 42L);
+
+    assertThat(response.getBody().getReverted()).isFalse();
+  }
 }

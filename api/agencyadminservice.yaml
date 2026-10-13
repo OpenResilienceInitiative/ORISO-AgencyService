@@ -1315,6 +1315,92 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/dpp/revert:
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Revert a department's (Fachbereich = agency x topic) own privacy statement (DSE) to the inherited text.
+        The own live text is cleared and the department is set back to DRAFT; the version history
+        keeps the old row, marked as no longer in force. [Authorization: Role: agency-admin or
+        restricted-agency-admin scoped to its own agencies]
+      operationId: revertDepartmentDataProtectionToInherited
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - reverted is false when the department had no own text and nothing changed
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentLegalRevertResponseDTO'
+        400:
+          description: BAD REQUEST - caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
+  /agencyadmin/agencies/{agencyId}/topics/{topicId}/imprint/revert:
+    post:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Revert a department's (Fachbereich = agency x topic) own imprint (Impressum) to the inherited text.
+        The own live text is cleared and the department is set back to DRAFT; the version history
+        keeps the old row, marked as no longer in force. [Authorization: Role: agency-admin or
+        restricted-agency-admin scoped to its own agencies]
+      operationId: revertDepartmentImprintToInherited
+      parameters:
+        - name: agencyId
+          in: path
+          description: Agency Id (Beratungszentrum)
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: topicId
+          in: path
+          description: Topic Id (Fachbereich)
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: OK - reverted is false when the department had no own text and nothing changed
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/DepartmentLegalRevertResponseDTO'
+        400:
+          description: BAD REQUEST - caller may not edit this agency
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        404:
+          description: NOT FOUND - department (agency x topic) not found
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/agencies/{agencyId}/topics/{topicId}/details:
     get:
       tags:
@@ -3018,6 +3104,15 @@ components:
           enum:
             - DRAFT
             - PUBLISHED
+
+    DepartmentLegalRevertResponseDTO:
+      type: object
+      required:
+        - reverted
+      properties:
+        reverted:
+          type: boolean
+          description: True when the department's own text was cleared, false when it already inherited and nothing changed
 
     DepartmentImprintContentDTO:
       type: object

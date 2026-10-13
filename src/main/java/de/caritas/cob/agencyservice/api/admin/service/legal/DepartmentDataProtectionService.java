@@ -17,6 +17,7 @@ import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalText;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextKind;
 import de.caritas.cob.agencyservice.api.repository.legaltext.LegalTextLevel;
+import de.caritas.cob.agencyservice.api.service.legal.DepartmentLegalPublicationState;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.validation.InputSanitizer;
@@ -124,6 +125,39 @@ public class DepartmentDataProtectionService {
     }
 
     return status;
+  }
+
+  /**
+   * Ends the department's own policy so the public read falls through to the inherited text. The
+   * live own text and its consent sentence are cleared and the department is set back to DRAFT;
+   * the version row stays in the history, closed by {@code supersedeCurrent}.
+   *
+   * @return true when something was cleared, false when the department already inherits
+   */
+  @Transactional
+  public boolean revertDepartmentDataPrivacyToInherited(Long agencyId, Long topicId) {
+    assertRestrictedAdminOwnsAgency(agencyId);
+
+    AgencyTopic department =
+        agencyTopicRepository
+            .findByAgency_IdAndTopicId(agencyId, topicId)
+            .orElseThrow(NotFoundException::new);
+
+    assertCallerTenantMatches(department.getAgency());
+
+    if (!DepartmentLegalPublicationState.hasPublishedDpp(department)
+        || department.getDpp() != null) {
+      return false;
+    }
+
+    department.setContentDpp(null);
+    department.setConsentText(null);
+    department.setPublicationStatus(PublicationStatus.DRAFT);
+    department.setUpdateDate(LocalDateTime.now());
+    agencyTopicRepository.save(department);
+    legalTextVersionService.supersedeCurrent(
+        LegalTextLevel.DEPARTMENT, department.getId(), LegalTextKind.DPP);
+    return true;
   }
 
   /**
