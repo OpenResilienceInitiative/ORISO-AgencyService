@@ -4,6 +4,7 @@ import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.exception.KeycloakException;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
+import de.caritas.cob.agencyservice.config.security.TaskServiceIdentity;
 import org.apache.commons.codec.binary.Base32;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -27,11 +28,13 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  */
 @Configuration
 public class AuthenticatedUserConfig {
+  private final TaskServiceIdentity taskIdentity;
 
   private final TechnicalServiceIdentity technicalServiceIdentity;
 
-  public AuthenticatedUserConfig(TechnicalServiceIdentity technicalServiceIdentity) {
+  public AuthenticatedUserConfig(TechnicalServiceIdentity technicalServiceIdentity, TaskServiceIdentity taskIdentity) {
     this.technicalServiceIdentity = technicalServiceIdentity;
+    this.taskIdentity = taskIdentity;
   }
 
   private static final String CLAIM_NAME_USER_ID = "userId";
@@ -54,7 +57,14 @@ public class AuthenticatedUserConfig {
     Map<String, Object> claimMap = authenticationToken.getToken().getClaims();
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
-    if (technicalServiceIdentity.allows(authenticationToken.getToken())) {
+    if (taskIdentity.isTaskToken(authenticationToken.getToken())) {
+      if (!taskIdentity.allowsAnyTask(authenticationToken)) {
+        throw new KeycloakException("Task service identity does not match its binding");
+      }
+      authenticatedUser.setUserId(authenticationToken.getToken().getSubject());
+      authenticatedUser.setUsername("service:" + authenticationToken.getToken().getClaimAsString("azp"));
+      authenticatedUser.setTenantId(0L);
+    } else if (technicalServiceIdentity.allows(authenticationToken.getToken())) {
       authenticatedUser.setUserId(authenticationToken.getToken().getSubject());
       // This is a service identifier, not a fallback for a missing human username.
       authenticatedUser.setUsername(authenticationToken.getToken().getClaimAsString("azp"));
@@ -71,6 +81,9 @@ public class AuthenticatedUserConfig {
   }
 
   public Collection<String> extractRealmRoles(Jwt jwt) {
+    if (taskIdentity.isTaskToken(jwt)) {
+      return java.util.List.of();
+    }
     Map<String, Object> realmAccess = (Map<String, Object>) jwt.getClaims().get("realm_access");
     if (realmAccess != null) {
       var roles = (List<String>) realmAccess.get("roles");

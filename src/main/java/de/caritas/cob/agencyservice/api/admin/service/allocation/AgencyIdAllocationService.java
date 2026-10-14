@@ -153,6 +153,21 @@ public class AgencyIdAllocationService {
     reservationRepository.delete(reservation);
   }
 
+  @Transactional
+  public void releaseUnconsumedWithProof(long agencyId, String proof) {
+    if (proof == null || proof.isBlank()) {
+      throw new org.springframework.security.access.AccessDeniedException("Reservation proof required");
+    }
+    int deleted = jdbcTemplate.update("DELETE FROM agency_id_reservation WHERE agency_id = ? AND reservation_token = ? AND NOT EXISTS (SELECT 1 FROM agency WHERE id = ?)", agencyId, proof, agencyId);
+    if (deleted != 1) {
+      throw new org.springframework.security.access.AccessDeniedException("Reservation proof required");
+    }
+  }
+
+  public String newlyReservedProof(long agencyId) {
+    return reservationRepository.findById(agencyId).map(AgencyIdReservation::getReservationToken).orElseThrow(NotFoundException::new);
+  }
+
   /**
    * Consumes a reservation because the real agency is being created with that ID. Participates
    * in the caller's transaction so entity creation and reservation consumption are atomic. The
@@ -198,7 +213,15 @@ public class AgencyIdAllocationService {
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public void claimReservedId(long agencyId, Long tenantId, String name) {
-    if (!consumeReservationOfTenant(agencyId, tenantId)) {
+    claimReservedId(agencyId, tenantId, name, null, false);
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void claimReservedId(long agencyId, Long tenantId, String name, String proof, boolean requireProof) {
+    boolean consumed = requireProof ? tenantId != null && proof != null && !proof.isBlank()
+        && jdbcTemplate.update("DELETE FROM agency_id_reservation WHERE agency_id = ? AND tenant_id = ? AND reservation_token = ?", agencyId, tenantId, proof) == 1
+        : consumeReservationOfTenant(agencyId, tenantId);
+    if (!consumed) {
       log.warn(
           "Agency ID {} is not held by an open reservation of tenant {} and cannot be claimed",
           agencyId,
@@ -207,8 +230,8 @@ public class AgencyIdAllocationService {
     }
     try {
       jdbcTemplate.update(
-          "INSERT INTO agency (id, tenant_id, name, create_date, update_date)"
-              + " VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+          "INSERT INTO agency (id, tenant_id, name, is_team_agency, consulting_type, is_offline, is_external, create_date, update_date)"
+              + " VALUES (?, ?, ?, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
           agencyId, tenantId, name);
     } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
       log.warn("Agency ID {} was assigned concurrently while claiming its reservation", agencyId);
