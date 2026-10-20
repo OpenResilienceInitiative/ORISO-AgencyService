@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.api.tenant;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
+import de.caritas.cob.agencyservice.config.security.TaskServiceIdentity;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,8 @@ class TechnicalUserTenantResolverTest {
   private final TechnicalUserTenantResolver resolver = new TechnicalUserTenantResolver(
       new TechnicalServiceIdentity(new MockEnvironment()
           .withProperty("IDENTITY_TECHNICAL_CLIENT_ID", "backend-technical")
-          .withProperty("TECHNICAL_SERVICE_SUBJECT", "technical-subject")));
+          .withProperty("TECHNICAL_SERVICE_SUBJECT", "technical-subject")),
+      new TaskServiceIdentity(new MockEnvironment()));
 
   @AfterEach
   void tearDown() {

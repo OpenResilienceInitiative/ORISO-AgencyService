@@ -371,6 +371,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: reservationToken
+          in: query
+          required: false
+          description: Original opaque proof required for invitation-reservations task callers.
+          schema:
+            type: string
       responses:
         204:
           description: NO CONTENT - reservation was released
@@ -1657,6 +1663,11 @@ components:
           format: int64
           example: 21
 
+        token:
+          type: string
+          description: Opaque proof returned only for a newly created reservation. Store with the invite.
+          writeOnly: false
+
     AgencyIdReservationRequestDTO:
       type: object
       properties:
@@ -2079,6 +2090,10 @@ components:
         agencyLogo:
           type: string
           example: "base64 encoded image"
+        reservationToken:
+          type: string
+          writeOnly: true
+          description: Original reservation proof required for Config Wizard task creation.
         reservedAgencyId:
           type: integer
           format: int64
