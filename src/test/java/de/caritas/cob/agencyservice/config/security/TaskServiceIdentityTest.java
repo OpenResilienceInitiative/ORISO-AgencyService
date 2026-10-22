@@ -142,6 +142,42 @@ class TaskServiceIdentityTest {
     assertThat(identity.allows(caller, "INVITE_RESERVATIONS")).isFalse();
   }
 
+  @Test
+  void groupedSetupRejectsAnExtraAudienceOutsideItsCanonicalReceiverSet() {
+    var identity =
+        new TaskServiceIdentity(
+            groupedBindings("CONFIG_WIZARD")
+                .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice"));
+    assertThat(identity.allows(groupedSetupAudience(
+        List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice")),
+        "CONFIG_WIZARD")).isTrue();
+    assertThat(identity.allows(groupedSetupAudience(
+        List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "other-service")),
+        "CONFIG_WIZARD")).isFalse();
+  }
+
+  @Test
+  void groupedSetupRejectsAPartialCanonicalSetEvenWithItsOwnReceiverAudience() {
+    var identity =
+        new TaskServiceIdentity(
+            groupedBindings("CONFIG_WIZARD")
+                .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice"));
+    assertThat(identity.allows(groupedSetupAudience(
+        List.of("agencyservice", "consultingtypeservice", "userservice")),
+        "CONFIG_WIZARD")).isFalse();
+  }
+
+  private JwtAuthenticationToken groupedSetupAudience(List<String> audiences) {
+    var original = groupedCaller(
+        List.of("config-wizard", "invitation-reservations", "consultant-import"));
+    var jwt = Jwt.withTokenValue("fixture")
+        .headers(headers -> headers.putAll(original.getToken().getHeaders()))
+        .claims(claims -> claims.putAll(original.getToken().getClaims()))
+        .audience(audiences)
+        .build();
+    return new JwtAuthenticationToken(jwt, List.of());
+  }
+
   private MockEnvironment groupedBindings(String purposes) {
     return new MockEnvironment()
         .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
