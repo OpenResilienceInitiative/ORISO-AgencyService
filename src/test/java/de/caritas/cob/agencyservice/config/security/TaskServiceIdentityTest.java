@@ -182,7 +182,7 @@ class TaskServiceIdentityTest {
     return new MockEnvironment()
         .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
         .withProperty("TASK_IDENTITY_REQUIRED_TASKS", purposes)
-        .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
+        .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice")
         .withProperty("IDENTITY_SETUP_CLIENT_ID", "backend-setup")
         .withProperty("IDENTITY_SETUP_SERVICE_SUBJECT", "setup-subject");
   }
@@ -193,7 +193,7 @@ class TaskServiceIdentityTest {
             .header("alg", "none")
             .subject("setup-subject")
             .claim("azp", "backend-setup")
-            .audience(List.of("receiver"))
+            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice"))
             .expiresAt(Instant.now().plusSeconds(60))
             .claim("realm_access", Map.of("roles", roles))
             .build(),
@@ -207,7 +207,7 @@ class TaskServiceIdentityTest {
             new MockEnvironment()
                 .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
                 .withProperty("TASK_IDENTITY_REQUIRED_TASKS", "CONFIG_WIZARD,INVITE_RESERVATIONS")
-                .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
+                .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice")
                 .withProperty("IDENTITY_SETUP_CLIENT_ID", "backend-setup")
                 .withProperty("IDENTITY_SETUP_SERVICE_SUBJECT", "setup-subject"));
     var actor =
@@ -215,7 +215,7 @@ class TaskServiceIdentityTest {
             .header("alg", "none")
             .subject("setup-subject")
             .claim("azp", "backend-setup")
-            .audience(List.of("receiver"))
+            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice"))
             .expiresAt(Instant.now().plusSeconds(60))
             .claim(
                 "realm_access",
