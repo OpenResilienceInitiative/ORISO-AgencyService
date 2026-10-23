@@ -9,6 +9,7 @@ import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminSearchResultDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyStatusResponseDTO;
 import de.caritas.cob.agencyservice.api.model.SearchResultLinks;
 import de.caritas.cob.agencyservice.api.model.Sort;
 import de.caritas.cob.agencyservice.api.model.Sort.OrderEnum;
@@ -38,6 +39,7 @@ import java.util.regex.Pattern;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import de.caritas.cob.agencyservice.api.admin.service.AgencyAvailabilityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,6 +68,9 @@ public class AgencyAdminSearchService {
 
   @Autowired(required = false)
   private TenantService tenantService;
+
+  @Autowired(required = false)
+  private AgencyAvailabilityService availabilityService;
 
   private AgencyRepository agencyRepository;
 
@@ -129,10 +134,17 @@ public class AgencyAdminSearchService {
       agencyTopicEnrichmentService.enrichAgenciesWithTopics(agencies);
     }
 
+    Map<Long, AgencyStatusResponseDTO> availability = availabilityService != null
+        ? availabilityService.getAvailabilities(agencies) : Map.of();
     Map<Long, Optional<String>> tenantNames = new HashMap<>();
     var resultList = agencies.stream()
         .map(agency -> {
           var dto = new AgencyAdminFullResponseDTOBuilder(agency).fromAgency();
+          if (dto.getEmbedded() != null) {
+            AgencyAvailabilityService.enrich(dto.getEmbedded(), availabilityService != null
+                ? availability.get(agency.getId())
+                : AgencyAvailabilityService.snapshot(agency, null));
+          }
           if (dto.getEmbedded() != null && agency.getTenantId() != null) {
             dto.getEmbedded().setTenantName(tenantNames
                 .computeIfAbsent(agency.getTenantId(), this::tenantName).orElse(null));

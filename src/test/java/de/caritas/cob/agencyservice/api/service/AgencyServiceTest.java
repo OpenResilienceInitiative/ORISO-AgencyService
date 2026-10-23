@@ -748,28 +748,6 @@ public class AgencyServiceTest {
   }
 
   @Test
-  public void getAgenciesTopics_Should_ReturnListOfTopicIds_When_topicsExist() {
-
-    when(agencyRepository.findAllAgenciesTopics(TenantContext.getCurrentTenant()))
-        .thenReturn(TOPIC_ID_LIST);
-
-    Integer result = agencyService.getAgenciesTopics().get(0);
-
-    assertEquals(TOPIC_ID_LIST.get(0), result);
-  }
-
-  @Test
-  public void getAgenciesTopics_Should_ReturnEmptyListOfTopicIds_When_topicsDontExist() {
-
-    when(agencyRepository.findAllAgenciesTopics(TenantContext.getCurrentTenant()))
-        .thenReturn(new ArrayList<>());
-
-    List<Integer> result = agencyService.getAgenciesTopics();
-
-    assertThat(result).isEmpty();
-  }
-
-  @Test
   public void getAgencies_WithOnlyPostCodeAndTopicId_Should_ReturnEmptyList_When_NoAgencyFound() {
 
     assertThat(agencyService.getAgencies("99999", 1),

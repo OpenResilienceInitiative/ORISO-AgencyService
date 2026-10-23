@@ -118,6 +118,73 @@ paths:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
       security:
         - Bearer: [ ]
+  /agencyadmin/agencies/{agencyId}/status:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: Read centre-owned and effective availability with independent restrictions.
+      operationId: getAgencyStatus
+      parameters:
+        - name: agencyId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: Effective status; missing tenant authority is explicitly unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyStatusResponseDTO'
+        401:
+          description: Authentication required.
+        403:
+          description: Actor cannot manage this centre.
+        404:
+          description: Centre not found in actor scope.
+      security:
+        - Bearer: [ ]
+    put:
+      tags:
+        - admin-agency-controller
+      summary: Change only a centre's own operational status, retaining other data and restrictions.
+      operationId: changeAgencyStatus
+      parameters:
+        - name: agencyId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgencyStatusUpdateDTO'
+      responses:
+        200:
+          description: Authoritative saved centre-owned status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyStatusResponseDTO'
+        400:
+          description: Invalid activation prerequisite or missing active value.
+        401:
+          description: Authentication required.
+        403:
+          description: Actor is not permitted to change this centre.
+        404:
+          description: Centre not found in the actor scope.
+        409:
+          description: Independent tenant or lifecycle restriction prevents activation.
+        500:
+          description: Activation prerequisites or authoritative availability could not be checked.
+      security:
+        - Bearer: [ ]
   /agencyadmin/agencies/{agencyId}:
     get:
       tags:
@@ -1784,6 +1851,22 @@ components:
         teamAgency:
           type: boolean
           example: false
+        active:
+          type: boolean
+          nullable: true
+          description: Effective centre availability; null means its authority is unknown.
+        ownActive:
+          type: boolean
+          description: Saved centre-owned status, inverse of offline.
+        tenantActive:
+          type: boolean
+          nullable: true
+          description: Fresh parent availability; null means unknown.
+        restrictions:
+          type: array
+          items:
+            type: string
+          description: Independent centre, parent or unknown-authority restrictions.
         offline:
           type: boolean
           example: false
@@ -2103,6 +2186,43 @@ components:
             one (TEN-INV-U2). The reservation is consumed atomically with the insert; an ID that is
             not held by an open reservation - or already assigned - is answered with 409.
           example: 42
+
+    AgencyStatusUpdateDTO:
+      type: object
+      required:
+        - active
+      properties:
+        active:
+          type: boolean
+          description: true activates, false pauses the selected centre only.
+    AgencyStatusResponseDTO:
+      type: object
+      required:
+        - agencyId
+        - active
+        - ownActive
+        - tenantActive
+        - restrictions
+      properties:
+        agencyId:
+          type: integer
+          format: int64
+        active:
+          type: boolean
+          nullable: true
+          description: Effective centre availability, or null when authority is unknown.
+        ownActive:
+          type: boolean
+          description: Centre-owned saved status; changing the parent never rewrites it.
+        tenantActive:
+          type: boolean
+          nullable: true
+          description: Fresh parent availability, or null if it cannot be read.
+        restrictions:
+          type: array
+          items:
+            type: string
+          description: Independent inactivity or unknown-authority reasons.
 
     AgencyAdminFullResponseDTO:
       type: object

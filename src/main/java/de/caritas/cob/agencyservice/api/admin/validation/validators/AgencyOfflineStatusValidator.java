@@ -9,6 +9,7 @@ import de.caritas.cob.agencyservice.api.admin.validation.validators.annotation.U
 import de.caritas.cob.agencyservice.api.admin.validation.validators.model.ValidateAgencyDTO;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InvalidOfflineStatusException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
@@ -92,9 +93,8 @@ public class AgencyOfflineStatusValidator implements ConcreteAgencyValidator {
       return this.userAdminService.getConsultantsOfAgency(validateAgencyDto.getId(), 1, 1)
           .isEmpty();
     } catch (Exception e) {
-      // If we can't check consultants (e.g. auth issues), assume there are consultants
-      // This prevents blocking agency updates when the UserService call fails
-      return false;
+      throw new InternalServerErrorException(
+          "Agency activation requires a successful consultant availability check", e);
     }
   }
 }
