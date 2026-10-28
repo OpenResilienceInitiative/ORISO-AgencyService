@@ -2,11 +2,8 @@ package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.caritas.cob.agencyservice.api.model.AgencyAdminAllowedPermissionToggles;
-import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
-import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -35,35 +32,15 @@ class AgencyPermissionPolicyMapperTest {
   }
 
   @Test
-  void applyLegacyUpdate_shouldUnlockToSuggestionAndPreserveCurrentValue() {
-    var existing =
-        new TenantPermissionPolicies()
-            .tenantId(7L)
-            .policies(
-                Map.of(
-                "featureSupervisionEnabled",
-                    policy(true, PermissionPolicyMode.ENFORCED)));
-    var controls =
-        new AgencyAdminControls()
-            .allowedPermissionToggles(
-                new AgencyAdminAllowedPermissionToggles().supervision(true))
-            .enforcedPermissionToggles(
-                new AgencyAdminAllowedPermissionToggles().supervision(false));
-
-    mapper.applyLegacyUpdate(existing, controls);
-
-    assertThat(existing.getPolicies().get("featureSupervisionEnabled"))
-        .isEqualTo(policy(true, PermissionPolicyMode.SUGGESTED));
-  }
-
-  @Test
   void registry_shouldCoverEveryLegacyPolicyFeatureIncludingMedia() {
-    assertThat(mapper.supportedFeatures()).hasSize(42);
+    assertThat(mapper.supportedFeatures()).hasSize(44);
     assertThat(mapper.supportedFeatures())
         .contains(
             "featureMediaAiScanSupervisionChatsEnabled",
             "featureThreadsOneOnOneEnabled",
-            "appearance");
+            "appearance",
+            "featureInternalGroupChatEnabled",
+            "featureSelfHelpGroupsEnabled");
   }
 
   private static BooleanPermissionPolicy policy(boolean value, PermissionPolicyMode mode) {

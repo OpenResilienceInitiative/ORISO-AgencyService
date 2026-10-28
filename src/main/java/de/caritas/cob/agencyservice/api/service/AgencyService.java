@@ -6,14 +6,14 @@ import static org.apache.commons.lang3.BooleanUtils.isTrue;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
-import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
-import de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier;
+import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.model.AgencyDepartmentDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyContactDetailsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyMatrixCredentialsDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyResponseDTO;
 import de.caritas.cob.agencyservice.api.model.DemographicsDTO;
@@ -36,6 +36,8 @@ import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.function.Supplier;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -74,12 +76,8 @@ public class AgencyService {
 
   private final @NonNull AgencySettingsService agencySettingsService;
 
-  private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
-
   private final @NonNull LegalTextInheritanceResolver legalTextInheritanceResolver;
 
-  private final @NonNull AgencyEffectivePermissionSettingsApplier
-      effectivePermissionSettingsApplier;
 
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
@@ -103,9 +101,7 @@ public class AgencyService {
    * @return a list containing regarding agencies
    */
   public List<AgencyResponseDTO> getAgencies(List<Long> agencyIds) {
-    return getAgencyRepositoryForSearch().findByIdIn(agencyIds).stream()
-        .map(this::convertToAgencyResponseDTO)
-        .toList();
+    return convertToAgencyResponses(getAgencyRepositoryForSearch().findByIdIn(agencyIds));
   }
 
   /**
@@ -119,9 +115,7 @@ public class AgencyService {
     try {
       verifyConsultingTypeExists(consultingTypeId);
 
-      return agencyRepository.findByConsultingTypeId(consultingTypeId).stream()
-          .map(this::convertToAgencyResponseDTO)
-          .toList();
+      return convertToAgencyResponses(agencyRepository.findByConsultingTypeId(consultingTypeId));
 
     } catch (MissingConsultingTypeException ex) {
       throw new BadRequestException(
@@ -225,7 +219,7 @@ public class AgencyService {
             agency.getName(), agency.getId(), creds.getUserId());
       }
 
-      return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId(), creds.getPassword()));
+      return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId()));
     } catch (Exception ex) {
       log.warn(
           "Matrix provisioning failed for agency {} (id={}): {}",
@@ -242,10 +236,26 @@ public class AgencyService {
         .map(this::matrixCredentialsDto);
   }
 
+  public Optional<AgencyContactDetailsDTO> getContactDetails(Long agencyId, Long tenantId) {
+    if (agencyId == null || agencyId <= 0 || tenantId == null || tenantId <= 0) {
+      return Optional.empty();
+    }
+    return agencyRepository
+        .findByIdAndDeleteDateNull(agencyId)
+        .filter(agency -> tenantId.equals(agency.getTenantId()))
+        .map(
+            agency ->
+                new AgencyContactDetailsDTO(
+                    agency.getId(),
+                    agency.getTenantId(),
+                    agency.getName(),
+                    agency.getPhone(),
+                    agency.getEmail(),
+                    agency.getOpeningHours()));
+  }
+
   private AgencyMatrixCredentialsDTO matrixCredentialsDto(Agency agency) {
-    return new AgencyMatrixCredentialsDTO(
-        agency.getMatrixUserId(),
-        matrixPasswordCipher.decrypt(agency.getMatrixPassword()));
+    return new AgencyMatrixCredentialsDTO(agency.getMatrixUserId());
   }
 
   private Optional<Integer> getConsultingTypeIdForSearch(int consultingTypeId) {
@@ -442,8 +452,27 @@ public class AgencyService {
     }
   }
 
-  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency) {
-    String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency);
+  /** A failed policy lookup must not expose unverified agency overrides as effective permissions. */
+  private RestrictedTenantDTO findTenantDataRelevantForFeatureToggles(Agency agency) {
+    try {
+      return getTenantDataRelevantForFeatureToggles(agency);
+    } catch (org.springframework.web.client.RestClientException exception) {
+      log.warn("Permission policies unavailable for tenant {}", agency.getTenantId());
+      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
+          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+    }
+  }
+
+  private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
+    Map<Long, Optional<RestrictedTenantDTO>> tenants = new HashMap<>();
+    return agencies.stream().map(agency -> convertToAgencyResponseDTO(agency,
+        tenants.computeIfAbsent(agency.getTenantId(), ignored ->
+            Optional.ofNullable(findTenantDataRelevantForFeatureToggles(agency))).orElse(null)))
+        .toList();
+  }
+
+  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, RestrictedTenantDTO tenantData) {
+    String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency, tenantData);
     return new AgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
@@ -461,33 +490,29 @@ public class AgencyService {
         .houseNumber(agency.getHouseNumber())
         .phone(agency.getPhone())
         .openingHours(agency.getOpeningHours())
+        .lat(agency.getLat())
+        .lng(agency.getLng())
         .departments(
             agency.getAgencyTopics().stream()
                 .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
                 .toList())
-        .settings(buildAgencySettings(agency));
+        .settings(buildAgencySettings(agency, tenantData));
   }
 
   /**
-   * Builds the settings served on the public/registration-facing agency response. Bakes the
-   * platform admin controls into the effective feature flags (forced-off disabled, enforced-on
-   * locked on) without exposing the controls themselves — see {@link
-   * AgencyEffectivePermissionSettingsApplier}. Mirrors ORISO-TenantService's
-   * withEffectivePermissions (ADR-013 P4). The admin-facing path ({@code AgencyAdminService})
-   * still attaches the raw controls via {@link
-   * AgencyAdminControlsService#enrichSettingsWithAgencyAdminControls} so the Admin UI can render
-   * disabled-not-hidden state.
+   * Public consumers receive effective typed policy values; Admin keeps raw leaf overrides and
+   * the resolved policy map separate so a dormant override survives an inherited requirement.
    */
-  private Settings buildAgencySettings(Agency agency) {
+  private Settings buildAgencySettings(Agency agency, RestrictedTenantDTO tenantData) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
-    effectivePermissionSettingsApplier.applyTo(
-        settings, agencyAdminControlsService.getResolvedControls(agency.getTenantId()));
+    EffectiveAgencySettingsResolver.applyTo(
+        settings, tenantData != null ? tenantData.getSettings() : null,
+        tenantData != null ? tenantData.getPermissionPolicies() : null);
     return settings;
   }
 
-  protected String getRenderedAgencySpecificPrivacy(Agency agency) {
-    RestrictedTenantDTO tenantDataHoldingFeatureToggles = getTenantDataRelevantForFeatureToggles(
-        agency);
+  protected String getRenderedAgencySpecificPrivacy(
+      Agency agency, RestrictedTenantDTO tenantDataHoldingFeatureToggles) {
     de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings settings =
         tenantDataHoldingFeatureToggles != null ? tenantDataHoldingFeatureToggles.getSettings() : null;
     if (settings != null && settings.getFeatureCentralDataProtectionTemplateEnabled() != null
@@ -522,7 +547,9 @@ public class AgencyService {
         .street(agency.getStreet())
         .houseNumber(agency.getHouseNumber())
         .phone(agency.getPhone())
-        .openingHours(agency.getOpeningHours());
+        .openingHours(agency.getOpeningHours())
+        .lat(agency.getLat())
+        .lng(agency.getLng());
 
   }
 

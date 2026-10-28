@@ -54,6 +54,17 @@ public class AuthenticatedUser {
     return isRestrictedAgencyAdmin() && !isAgencyAdmin();
   }
 
+  /** Same definition as the UserService: tenant 0 alone is not enough to see every tenant. */
+  @JsonIgnore
+  public boolean isPlatformAdmin() {
+    return Long.valueOf(0L).equals(tenantId) && isAgencyAdmin() && isTenantSuperAdmin();
+  }
+
+  @JsonIgnore
+  public boolean isTechnicalUser() {
+    return nonNull(roles) && roles.contains(Authority.TECHNICAL_USER.getRoleName());
+  }
+
   /**
    * Returns the domain user id for operations scoped to a concrete agency administrator.
    * Platform and tenant administrators are not guaranteed to have this custom Keycloak claim.

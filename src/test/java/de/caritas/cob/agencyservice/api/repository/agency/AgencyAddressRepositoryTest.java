@@ -46,6 +46,8 @@ class AgencyAddressRepositoryTest {
             .phoneSecondary("+49301234568")
             .email("kontakt@zentrum.de")
             .openingHours("Mo-Fr 9-17 Uhr\nSa 10-12 Uhr")
+            .lat(52.520008)
+            .lng(13.404954)
             .createDate(now)
             .updateDate(now)
             .build();
@@ -64,5 +66,7 @@ class AgencyAddressRepositoryTest {
     assertThat(reloaded.getPhoneSecondary()).isEqualTo("+49301234568");
     assertThat(reloaded.getEmail()).isEqualTo("kontakt@zentrum.de");
     assertThat(reloaded.getOpeningHours()).isEqualTo("Mo-Fr 9-17 Uhr\nSa 10-12 Uhr");
+    assertThat(reloaded.getLat()).isEqualTo(52.520008);
+    assertThat(reloaded.getLng()).isEqualTo(13.404954);
   }
 }

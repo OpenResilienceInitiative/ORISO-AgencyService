@@ -1,12 +1,10 @@
 package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminAllowedPermissionToggles;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
-import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -21,6 +19,8 @@ public class AgencyPermissionPolicyMapper {
           Map.entry("appearance", "appearance"),
           Map.entry("featureAnonymousChatEnabled", "anonymousChat"),
           Map.entry("featureGroupChatV2Enabled", "groupChat"),
+          Map.entry("featureInternalGroupChatEnabled", "internalGroupChat"),
+          Map.entry("featureSelfHelpGroupsEnabled", "selfHelpGroups"),
           Map.entry("featureCallsEnabled", "calls"),
           Map.entry("featureSupervisionEnabled", "supervision"),
           Map.entry("featureSupervisionAnonymousChatsEnabled", "supervisionAnonymousChats"),
@@ -102,38 +102,4 @@ public class AgencyPermissionPolicyMapper {
             objectMapper.convertValue(enforced, AgencyAdminAllowedPermissionToggles.class));
   }
 
-  public TenantPermissionPolicies applyLegacyUpdate(
-      TenantPermissionPolicies existing, AgencyAdminControls controls) {
-    Map<String, BooleanPermissionPolicy> updated =
-        new LinkedHashMap<>(existing.getPolicies() == null ? Map.of() : existing.getPolicies());
-    Map<String, Boolean> allowed = asMap(controls.getAllowedPermissionToggles());
-    Map<String, Boolean> enforced = asMap(controls.getEnforcedPermissionToggles());
-    FEATURE_TO_LEGACY_KEY.forEach(
-        (feature, legacyKey) -> {
-          BooleanPermissionPolicy current = updated.get(feature);
-          boolean currentValue = current == null || Boolean.TRUE.equals(current.getValue());
-          if (Boolean.TRUE.equals(enforced.get(legacyKey))) {
-            updated.put(
-                feature, policy(true, PermissionPolicyMode.ENFORCED));
-          } else if (Boolean.FALSE.equals(allowed.get(legacyKey))) {
-            updated.put(
-                feature, policy(false, PermissionPolicyMode.ENFORCED));
-          } else {
-            updated.put(
-                feature, policy(currentValue, PermissionPolicyMode.SUGGESTED));
-          }
-        });
-    existing.setPolicies(updated);
-    return existing;
-  }
-
-  private Map<String, Boolean> asMap(AgencyAdminAllowedPermissionToggles toggles) {
-    return toggles == null
-        ? Map.of()
-        : objectMapper.convertValue(toggles, new TypeReference<Map<String, Boolean>>() {});
-  }
-
-  private BooleanPermissionPolicy policy(boolean value, PermissionPolicyMode mode) {
-    return new BooleanPermissionPolicy().value(value).mode(mode);
-  }
 }

@@ -27,19 +27,19 @@ class SearchResultLinkBuilderTest {
     assertThat(searchResultLinks.getSelf(), notNullValue());
     assertThat(searchResultLinks.getSelf().getMethod(), is(MethodEnum.GET));
     assertThat(searchResultLinks.getSelf().getHref(),
-        is("/agencyadmin/agencies?page=2&perPage=20&q=keyword"));
+        is("/agencyadmin/agencies?page=2&perPage=20&q=keyword{&excludeDeleted,tenantId}"));
     assertThat(searchResultLinks.getPrevious(), notNullValue());
     assertThat(searchResultLinks.getPrevious().getMethod(), is(MethodEnum.GET));
     assertThat(searchResultLinks.getPrevious().getHref(),
-        is("/agencyadmin/agencies?page=1&perPage=20&q=keyword"));
+        is("/agencyadmin/agencies?page=1&perPage=20&q=keyword{&excludeDeleted,tenantId}"));
     assertThat(searchResultLinks.getNext(), notNullValue());
     assertThat(searchResultLinks.getNext().getMethod(), is(MethodEnum.GET));
     assertThat(searchResultLinks.getNext().getHref(),
-        is("/agencyadmin/agencies?page=3&perPage=20&q=keyword"));
+        is("/agencyadmin/agencies?page=3&perPage=20&q=keyword{&excludeDeleted,tenantId}"));
     assertThat(searchResultLinks.getSearch(), notNullValue());
     assertThat(searchResultLinks.getSearch().getMethod(), is(MethodEnum.GET));
     assertThat(searchResultLinks.getSearch().getHref(),
-        is("/agencyadmin/agencies?page=2&perPage=20{&q}"));
+        is("/agencyadmin/agencies?page=2&perPage=20{&q,excludeDeleted,tenantId}"));
   }
 
   @Test
@@ -53,7 +53,7 @@ class SearchResultLinkBuilderTest {
 
     assertThat(searchResultLinks.getPrevious(), notNullValue());
     assertThat(searchResultLinks.getPrevious().getHref(),
-        endsWith("/agencyadmin/agencies?page=1&perPage=20&q=keyword"));
+        endsWith("/agencyadmin/agencies?page=1&perPage=20&q=keyword{&excludeDeleted,tenantId}"));
   }
 
   @Test
@@ -79,7 +79,7 @@ class SearchResultLinkBuilderTest {
 
     assertThat(searchResultLinks.getNext(), notNullValue());
     assertThat(searchResultLinks.getNext().getHref(),
-        endsWith("/agencyadmin/agencies?page=3&perPage=20&q=keyword"));
+        endsWith("/agencyadmin/agencies?page=3&perPage=20&q=keyword{&excludeDeleted,tenantId}"));
   }
 
   @Test
@@ -103,7 +103,7 @@ class SearchResultLinkBuilderTest {
 
     assertThat(searchResultLinks, notNullValue());
     assertThat(searchResultLinks.getSelf().getHref(),
-        is("/agencyadmin/agencies?page=1&perPage=20{&q}"));
+        is("/agencyadmin/agencies?page=1&perPage=20{&q,excludeDeleted,tenantId}"));
   }
 
   @Test
@@ -113,7 +113,7 @@ class SearchResultLinkBuilderTest {
 
     assertThat(searchResultLinks, notNullValue());
     assertThat(searchResultLinks.getSelf().getHref(),
-        is("/agencyadmin/agencies?page=1&perPage=20{&q}"));
+        is("/agencyadmin/agencies?page=1&perPage=20{&q,excludeDeleted,tenantId}"));
   }
 
 }

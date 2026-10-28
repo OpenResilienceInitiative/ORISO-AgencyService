@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-    - pre-dev
+    - dev
 
 env:
   REDOCLY_VERSION: 2.40.0
@@ -32,21 +32,21 @@ jobs:
       uses: actions/checkout@v6
       with:
         repository: OpenResilienceInitiative/ORISO-ConsultingTypeService
-        ref: pre-dev
+        ref: dev
         path: .providers/consulting
 
     - name: Checkout TenantService provider
       uses: actions/checkout@v6
       with:
         repository: OpenResilienceInitiative/ORISO-TenantService
-        ref: ${{ github.event_name == 'pull_request' && '232a7bd59eebb20681f84ad4f2b9e48bfcbd25fd' || 'pre-dev' }}
+        ref: ${{ github.event_name == 'pull_request' && '21f65d4a316ad81fd51da105c7a5d5f0a01a020d' || 'dev' }}
         path: .providers/tenant
 
     - name: Checkout UserService provider
       uses: actions/checkout@v6
       with:
         repository: OpenResilienceInitiative/ORISO-UserService
-        ref: ${{ github.event_name == 'pull_request' && 'd205cf89eadd07c7ee4ec72a2f20950a8dc3e628' || 'pre-dev' }}
+        ref: ${{ github.event_name == 'pull_request' && 'd205cf89eadd07c7ee4ec72a2f20950a8dc3e628' || 'dev' }}
         path: .providers/user
 
     - name: Set up Node.js

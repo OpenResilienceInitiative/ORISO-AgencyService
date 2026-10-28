@@ -45,10 +45,23 @@ public final class LegalTextTokens {
   /** Fachbereich / topic name — substituted server-side (ADR-021 decision 5). */
   public static final String THEMA = "Thema";
 
+  /**
+   * Postal address of the Beratungsstelle (street, postcode and city from its record), so a Träger
+   * or platform template can name each Beratungsstelle's own address. ASCII on purpose: the key has
+   * to survive every sanitiser on the way unchanged.
+   */
+  public static final String ADRESSE = "Adresse";
+
+  /**
+   * Data protection officer of the Beratungsstelle, else of its Träger, else empty (ORISO-Admin#1067).
+   * Never the platform's: that one has its own token, filled by TenantService.
+   */
+  public static final String DATENSCHUTZBEAUFTRAGTE = "Datenschutzbeauftragte";
+
   /** Rendered form of the token that must be present in any published consent text. */
   public static final String LEGAL_LINKS_TOKEN = token(LEGAL_LINKS);
 
-  private static final List<String> KNOWN_KEYS = List.of(LEGAL_LINKS, BERATUNGSSTELLE, THEMA);
+  private static final List<String> KNOWN_KEYS = List.of(LEGAL_LINKS, BERATUNGSSTELLE, THEMA, ADRESSE, DATENSCHUTZBEAUFTRAGTE);
 
   /** Exactly what the OWASP sanitizer leaves behind, for the known keys only. */
   private static final Pattern SPLIT_BY_SANITIZER =

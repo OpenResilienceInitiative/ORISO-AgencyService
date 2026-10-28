@@ -52,15 +52,15 @@ class AgencyAdminControlsFacadeTest {
   }
 
   @Test
-  void updateAgencyAdminControls_Should_ReturnUpdatedControls_When_UserIsSuperAdmin() {
+  void updateAgencyAdminControls_shouldRejectLegacyWriteAfterCheckingTenantAuthorization() {
     when(authenticatedUser.isTenantSuperAdmin()).thenReturn(true);
     when(authenticatedUser.getTenantId()).thenReturn(7L);
     AgencyAdminControls controls = new AgencyAdminControls();
-    when(agencyAdminControlsService.updateControls(7L, controls)).thenReturn(controls);
+    when(agencyAdminControlsService.updateControls(7L, controls))
+        .thenThrow(new de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException("read-only"));
 
-    AgencyAdminControls result = agencyAdminControlsFacade.updateAgencyAdminControls(controls);
-
-    assertThat(result).isEqualTo(controls);
+    assertThatThrownBy(() -> agencyAdminControlsFacade.updateAgencyAdminControls(controls))
+        .isInstanceOf(de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException.class);
     verify(agencyAdminControlsService).updateControls(7L, controls);
   }
 

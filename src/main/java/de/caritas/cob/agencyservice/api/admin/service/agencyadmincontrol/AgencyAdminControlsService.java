@@ -3,6 +3,9 @@ package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.service.TenantService;
+import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
+import org.springframework.security.access.AccessDeniedException;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -47,11 +50,9 @@ public class AgencyAdminControlsService {
 
   public AgencyAdminControls updateControls(
       Long tenantId, AgencyAdminControls agencyAdminControls) {
-    Long effectiveTenantId = requireTenantId(tenantId);
-    var existing = tenantService.getPermissionPolicies(effectiveTenantId);
-    var updated = policyMapper.applyLegacyUpdate(existing, agencyAdminControls);
-    return policyMapper.toLegacyControls(
-        tenantService.updatePermissionPolicies(effectiveTenantId, updated).getPolicies());
+    requireTenantId(tenantId);
+    throw new de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException(
+        "Legacy controls are read-only; use /tenantadmin/{id}/permission-policies");
   }
 
   public Settings enrichSettingsWithAgencyAdminControls(Settings settings) {
@@ -60,8 +61,31 @@ public class AgencyAdminControlsService {
 
   public Settings enrichSettingsWithAgencyAdminControls(Settings settings, Long tenantId) {
     Settings enrichedSettings = settings != null ? settings : new Settings();
-    enrichedSettings.setAgencyAdminControls(getControls(tenantId));
+    if (isSingleTenantWithoutTenantId(tenantId)) {
+      return enrichedSettings;
+    }
+    var policies = tenantService.getPermissionPolicies(requireTenantId(tenantId)).getPolicies();
+    enrichedSettings.setAgencyAdminControls(policyMapper.toLegacyControls(policies));
+    enrichedSettings.setPermissionPolicies(EffectiveAgencySettingsResolver.resolvePolicies(enrichedSettings, policies));
     return enrichedSettings;
+  }
+
+  public void assertSettingsUpdateAllowed(Settings stored, Settings requested, Long tenantId) {
+    var changes = EffectiveAgencySettingsResolver.changedOverrides(stored, requested);
+    if (changes.isEmpty()) {
+      return;
+    }
+    var policies = EffectiveAgencySettingsResolver.withTransitionFallbacks(
+        tenantService.getPermissionPolicies(requireTenantId(tenantId)).getPolicies());
+    changes.forEach((field, value) -> {
+      var policy = policies == null ? null : policies.get(field);
+      if (policy == null || policy.getValue() == null || policy.getMode() == null) {
+        throw new IllegalStateException("Tenant permission policy is unavailable: " + field);
+      }
+      if (policy.getMode() == PermissionPolicyMode.ENFORCED && !value.equals(policy.getValue())) {
+        throw new AccessDeniedException("The tenant requires a different value for " + field);
+      }
+    });
   }
 
   private Long requireTenantId(Long tenantId) {

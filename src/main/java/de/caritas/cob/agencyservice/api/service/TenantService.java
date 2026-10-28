@@ -2,7 +2,6 @@ package de.caritas.cob.agencyservice.api.service;
 
 import de.caritas.cob.agencyservice.config.CacheManagerConfig;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
-import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
@@ -10,7 +9,6 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -20,8 +18,6 @@ public class TenantService {
   private final @NonNull TenantServiceApiControllerFactory tenantServiceApiControllerFactory;
 
   private final @NonNull ApplicationSettingsService applicationSettingsService;
-  private final @NonNull SecurityHeaderSupplier securityHeaderSupplier;
-  private final @NonNull TenantHeaderSupplier tenantHeaderSupplier;
 
   @Value("${multitenancy.enabled}")
   private boolean multitenancy;
@@ -36,31 +32,21 @@ public class TenantService {
     return controllerApi.getRestrictedTenantDataBySubdomain(subdomain, null);
   }
 
-  @Cacheable(cacheNames = CacheManagerConfig.TENANT_CACHE, key = "'id:' + #tenantId")
+  // Effective policies must reflect a just-saved requirement on the next agency read.
+  // Public response lists deduplicate these reads per tenant within that request.
   public RestrictedTenantDTO getRestrictedTenantDataByTenantId(Long tenantId) {
     TenantControllerApi controllerApi = tenantServiceApiControllerFactory.createControllerApi();
     return controllerApi.getRestrictedTenantDataByTenantId(tenantId);
   }
 
+  /** The public tenant projection carries the same resolved boolean policies for every caller. */
   public TenantPermissionPolicies getPermissionPolicies(Long tenantId) {
-    TenantControllerApi controllerApi = tenantServiceApiControllerFactory.createControllerApi();
-    addAuthenticatedHeaders(controllerApi);
-    return controllerApi.getTenantPermissionPolicies(tenantId);
-  }
-
-  @CacheEvict(cacheNames = CacheManagerConfig.TENANT_CACHE, allEntries = true)
-  public TenantPermissionPolicies updatePermissionPolicies(
-      Long tenantId, TenantPermissionPolicies policies) {
-    TenantControllerApi controllerApi = tenantServiceApiControllerFactory.createControllerApi();
-    addAuthenticatedHeaders(controllerApi);
-    return controllerApi.updateTenantPermissionPolicies(tenantId, policies);
-  }
-
-  private void addAuthenticatedHeaders(TenantControllerApi controllerApi) {
-    var headers = securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders();
-    tenantHeaderSupplier.addTenantHeader(headers);
-    headers.forEach(
-        (key, value) -> controllerApi.getApiClient().addDefaultHeader(key, value.getFirst()));
+    var tenant = getRestrictedTenantDataByTenantId(tenantId);
+    if (tenant == null || tenant.getPermissionPolicies() == null) {
+      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
+          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+    }
+    return new TenantPermissionPolicies().tenantId(tenantId).policies(tenant.getPermissionPolicies());
   }
 
   @Cacheable(cacheNames = CacheManagerConfig.TENANT_CACHE, key = "'single-tenant'")

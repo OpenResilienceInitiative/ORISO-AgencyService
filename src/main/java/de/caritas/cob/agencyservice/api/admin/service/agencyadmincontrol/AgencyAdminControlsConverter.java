@@ -53,6 +53,8 @@ public class AgencyAdminControlsConverter {
         .anonymousChat(settings.getAnonymousChat())
         .calls(settings.getCalls())
         .groupChat(settings.getGroupChat())
+        .internalGroupChat(settings.getInternalGroupChat())
+        .selfHelpGroups(settings.getSelfHelpGroups())
         .supervision(settings.getSupervision())
         .supervisionAnonymousChats(settings.getSupervisionAnonymousChats())
         .supervisionOneOnOneChats(settings.getSupervisionOneOnOneChats())
@@ -88,6 +90,9 @@ public class AgencyAdminControlsConverter {
         .anonymousChat(nullAsTrue(toggles.getAnonymousChat()))
         .calls(nullAsTrue(toggles.getCalls()))
         .groupChat(nullAsTrue(toggles.getGroupChat()))
+        // Unset format toggles stay unset so they keep following groupChat (#293).
+        .internalGroupChat(toggles.getInternalGroupChat())
+        .selfHelpGroups(toggles.getSelfHelpGroups())
         .supervision(nullAsTrue(toggles.getSupervision()))
         .supervisionAnonymousChats(nullAsTrue(toggles.getSupervisionAnonymousChats()))
         .supervisionOneOnOneChats(nullAsTrue(toggles.getSupervisionOneOnOneChats()))
@@ -124,6 +129,9 @@ public class AgencyAdminControlsConverter {
         .anonymousChat(nullAsFalse(toggles.getAnonymousChat()))
         .calls(nullAsFalse(toggles.getCalls()))
         .groupChat(nullAsFalse(toggles.getGroupChat()))
+        // Unset format toggles stay unset so they keep following groupChat (#293).
+        .internalGroupChat(toggles.getInternalGroupChat())
+        .selfHelpGroups(toggles.getSelfHelpGroups())
         .supervision(nullAsFalse(toggles.getSupervision()))
         .supervisionAnonymousChats(nullAsFalse(toggles.getSupervisionAnonymousChats()))
         .supervisionOneOnOneChats(nullAsFalse(toggles.getSupervisionOneOnOneChats()))

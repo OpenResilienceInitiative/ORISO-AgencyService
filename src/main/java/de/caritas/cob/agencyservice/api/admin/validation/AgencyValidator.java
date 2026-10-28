@@ -58,6 +58,11 @@ public class AgencyValidator {
         .consultingType(agencyDto.getConsultingType())
         .demographicsDTO(agencyDto.getDemographics())
         .tenantId(agencyDto.getTenantId())
+        // Without this the create path silently dropped the data protection block: the
+        // registry ran with dataProtectionDTO == null, so AgencyDataProtectionValidator had
+        // nothing to check and the very same payload that an update rejects stored fine as a
+        // create.
+        .dataProtectionDTO(agencyDto.getDataProtection())
         .build();
   }
 

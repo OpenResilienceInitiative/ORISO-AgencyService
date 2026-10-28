@@ -129,7 +129,7 @@ public class AgencyAdminControllerAuthorizationIT {
         .header("Authorization", BEARER_AUTHORIZATION))
         .andExpect(status().isOk());
 
-    verify(this.agencyAdminFullResponseDTO, times(1)).searchAgencies(any(), anyInt(), any(), any());
+    verify(this.agencyAdminFullResponseDTO, times(1)).searchAgencies(any(), anyInt(), any(), any(), any(de.caritas.cob.agencyservice.api.admin.service.agency.AgencySearchFilter.class));
   }
 
   @Test

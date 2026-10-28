@@ -3,6 +3,8 @@ package de.caritas.cob.agencyservice.config;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.exception.KeycloakException;
 import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
+import de.caritas.cob.agencyservice.config.security.TechnicalServiceIdentity;
+import de.caritas.cob.agencyservice.config.security.TaskServiceIdentity;
 import org.apache.commons.codec.binary.Base32;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -26,8 +28,17 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  */
 @Configuration
 public class AuthenticatedUserConfig {
+  private final TaskServiceIdentity taskIdentity;
+
+  private final TechnicalServiceIdentity technicalServiceIdentity;
+
+  public AuthenticatedUserConfig(TechnicalServiceIdentity technicalServiceIdentity, TaskServiceIdentity taskIdentity) {
+    this.technicalServiceIdentity = technicalServiceIdentity;
+    this.taskIdentity = taskIdentity;
+  }
 
   private static final String CLAIM_NAME_USER_ID = "userId";
+  private static final String CLAIM_NAME_SUBJECT = "sub";
   private static final String CLAIM_NAME_USERNAME = "username";
   private static final String CLAIM_NAME_TENANT_ID = "tenantId";
 
@@ -41,13 +52,28 @@ public class AuthenticatedUserConfig {
   public AuthenticatedUser getAuthenticatedUser() {
 
     JwtAuthenticationToken authenticationToken = (JwtAuthenticationToken) getRequest().getUserPrincipal();
+    technicalServiceIdentity.requireValidIfTechnical(authenticationToken.getToken());
 
     Map<String, Object> claimMap = authenticationToken.getToken().getClaims();
     AuthenticatedUser authenticatedUser = new AuthenticatedUser();
     authenticatedUser.setAccessToken(authenticationToken.getToken().getTokenValue());
-    authenticatedUser.setUserId(getOptionalUserAttribute(claimMap, CLAIM_NAME_USER_ID));
-    authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
-    authenticatedUser.setTenantId(getTenantId(claimMap));
+    if (taskIdentity.isTaskToken(authenticationToken.getToken())) {
+      if (!taskIdentity.allowsAnyTask(authenticationToken)) {
+        throw new KeycloakException("Task service identity does not match its binding");
+      }
+      authenticatedUser.setUserId(authenticationToken.getToken().getSubject());
+      authenticatedUser.setUsername("service:" + authenticationToken.getToken().getClaimAsString("azp"));
+      authenticatedUser.setTenantId(0L);
+    } else if (technicalServiceIdentity.allows(authenticationToken.getToken())) {
+      authenticatedUser.setUserId(authenticationToken.getToken().getSubject());
+      // This is a service identifier, not a fallback for a missing human username.
+      authenticatedUser.setUsername(authenticationToken.getToken().getClaimAsString("azp"));
+      authenticatedUser.setTenantId(0L);
+    } else {
+      authenticatedUser.setUserId(resolveUserId(claimMap));
+      authenticatedUser.setUsername(decodeUsername(getUserAttribute(claimMap, CLAIM_NAME_USERNAME)));
+      authenticatedUser.setTenantId(getTenantId(claimMap));
+    }
     authenticatedUser.setRoles(extractRealmRoles(authenticationToken.getToken()).stream().collect(
         Collectors.toSet()));
     return authenticatedUser;
@@ -55,6 +81,9 @@ public class AuthenticatedUserConfig {
   }
 
   public Collection<String> extractRealmRoles(Jwt jwt) {
+    if (taskIdentity.isTaskToken(jwt)) {
+      return java.util.List.of();
+    }
     Map<String, Object> realmAccess = (Map<String, Object>) jwt.getClaims().get("realm_access");
     if (realmAccess != null) {
       var roles = (List<String>) realmAccess.get("roles");
@@ -79,6 +108,21 @@ public class AuthenticatedUserConfig {
       throw new KeycloakException("Keycloak user attribute '" + claimValue + "' not found.");
     }
     return claimMap.get(claimValue).toString();
+  }
+
+  /**
+   * The domain user id comes from the custom {@code userId} claim. That claim is only present
+   * while the Keycloak user still carries the {@code userId} attribute, and a profile update that
+   * replaced the attribute map (UserService) has been observed to drop it. For every account the
+   * UserService creates, the domain id IS the Keycloak id, so the token subject is an exact
+   * substitute — fall back to it instead of answering 403 to an admin whose claim went missing.
+   */
+  private String resolveUserId(Map<String, Object> claimMap) {
+    var claimed = getOptionalUserAttribute(claimMap, CLAIM_NAME_USER_ID);
+    if (claimed != null && !claimed.isBlank()) {
+      return claimed;
+    }
+    return getOptionalUserAttribute(claimMap, CLAIM_NAME_SUBJECT);
   }
 
   private String getOptionalUserAttribute(Map<String, Object> claimMap, String claimValue) {

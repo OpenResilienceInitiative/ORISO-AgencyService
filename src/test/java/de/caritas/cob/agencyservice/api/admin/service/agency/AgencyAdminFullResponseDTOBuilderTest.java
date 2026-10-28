@@ -110,6 +110,8 @@ class AgencyAdminFullResponseDTOBuilderTest {
     assertEquals(agency.getConsultingTypeId(), result.getEmbedded().getConsultingType());
     assertEquals(agency.getAgencyLogo(), result.getEmbedded().getAgencyLogo());
     assertEquals(agency.getOpeningHours(), result.getEmbedded().getOpeningHours());
+    assertEquals(agency.getLat(), result.getEmbedded().getLat());
+    assertEquals(agency.getLng(), result.getEmbedded().getLng());
     assertThat(result.getEmbedded().getCounsellingRelations()).containsOnly(AgencyAdminResponseDTO.CounsellingRelationsEnum.PARENTAL_COUNSELLING, AgencyAdminResponseDTO.CounsellingRelationsEnum.RELATIVE_COUNSELLING);
     assertEquals(String.valueOf(agency.getCreateDate()), result.getEmbedded().getCreateDate());
     assertEquals(String.valueOf(agency.getUpdateDate()), result.getEmbedded().getUpdateDate());

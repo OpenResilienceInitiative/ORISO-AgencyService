@@ -14,7 +14,8 @@ import lombok.Getter;
 public enum Authority {
 
   AGENCY_ADMIN("agency-admin", AuthorityValue.AGENCY_ADMIN, AuthorityValue.SEARCH_AGENCIES),
-  TENANT_ADMIN("tenant-admin", AuthorityValue.TENANT_ADMIN, AuthorityValue.GET_ALL_AGENCIES),
+  TENANT_ADMIN("tenant-admin", AuthorityValue.TENANT_ADMIN, AuthorityValue.GET_ALL_AGENCIES,
+      AuthorityValue.SEARCH_AGENCIES),
   RESTRICTED_AGENCY_ADMIN("restricted-agency-admin", AuthorityValue.RESTRICTED_AGENCY_ADMIN, AuthorityValue.SEARCH_AGENCIES),
 
   RESTRICTED_CONSULTANT_ADMIN("restricted-consultant-admin", AuthorityValue.SEARCH_AGENCIES),

@@ -49,6 +49,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
@@ -60,6 +61,9 @@ import org.springframework.transaction.support.TransactionOperations;
 @RequiredArgsConstructor
 @Slf4j
 public class AgencyAdminService {
+  @org.springframework.beans.factory.annotation.Autowired
+  private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskIdentity;
+
 
   private final @NonNull AgencyRepository agencyRepository;
 
@@ -80,6 +84,7 @@ public class AgencyAdminService {
   private final @NonNull LegalContentSanitizer legalContentSanitizer;
   private final @NonNull LegalTextVersionService legalTextVersionService;
   private final @NonNull ConsentTextService consentTextService;
+  private final @NonNull OneTopicPerAgencyPolicy oneTopicPerAgencyPolicy;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -167,7 +172,9 @@ public class AgencyAdminService {
     Agency agency = fromAgencyDTO(agencyDTO);
     setTenantIdOnCreate(agencyDTO, agency);
 
-    var savedAgency = saveWithReservationGuard(agency);
+    var savedAgency = agencyDTO.getReservedAgencyId() == null
+        ? saveWithReservationGuard(agency)
+        : saveWithReservedId(agency, agencyDTO.getReservedAgencyId(), agencyDTO.getReservationToken());
     agencyService.provisionMatrixCredentials(savedAgency);
     enrichWithAgencyTopicsIfTopicFeatureEnabled(savedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(savedAgency);
@@ -190,6 +197,34 @@ public class AgencyAdminService {
       var savedAgency = agencyRepository.save(agency);
       agencyIdAllocationService.guardAssignmentAgainstOpenReservations(savedAgency.getId());
       return savedAgency;
+    });
+  }
+
+  /**
+   * Creation with a pre-reserved ID (counsellor onboarding, ORISO-Admin#998): the invitee's
+   * Beratungsstelle must come into existence under exactly the ID the inviting admin reserved,
+   * because that ID is already stored on the invite and on every routing decision made with it.
+   *
+   * <p>One transaction, three steps: the reservation is consumed and the skeleton row written
+   * under the reserved ID ({@link AgencyIdAllocationService#claimReservedId}), then the ordinary
+   * {@code save()} fills that row — as an UPDATE, since the row now exists — so topics, tenant
+   * scoping and every other field follow the same code as a sequence-created agency. A conflict
+   * (no open reservation, or the ID assigned concurrently) rolls the whole thing back before any
+   * Matrix credential or appointment side effect runs.
+   *
+   * <p>No {@link AgencyIdAllocationService#guardAssignmentAgainstOpenReservations} here: that
+   * guard exists to arbitrate a <em>generated</em> ID against open reservations. On this path the
+   * reservation is the thing being consumed, and re-inserting it would collide with itself.
+   */
+  private Agency saveWithReservedId(Agency agency, Long reservedAgencyId, String proof) {
+    return agencyCreationTransaction.execute(status -> {
+      if (taskIdentity != null && taskIdentity.current("CONFIG_WIZARD")) {
+        agencyIdAllocationService.claimReservedId(reservedAgencyId, agency.getTenantId(), agency.getName(), proof, true);
+      } else {
+        agencyIdAllocationService.claimReservedId(reservedAgencyId, agency.getTenantId(), agency.getName());
+      }
+      agency.setId(reservedAgencyId);
+      return agencyRepository.save(agency);
     });
   }
 
@@ -241,6 +276,8 @@ public class AgencyAdminService {
         .phoneSecondary(agencyDTO.getPhoneSecondary())
         .email(agencyDTO.getEmail())
         .openingHours(agencyDTO.getOpeningHours())
+        .lat(agencyDTO.getLat())
+        .lng(agencyDTO.getLng())
         .offline(true)
         .teamAgency(agencyDTO.getTeamAgency())
         .consultingTypeId(agencyDTO.getConsultingType())
@@ -256,15 +293,24 @@ public class AgencyAdminService {
     }
     dataProtectionConverter.convertToEntity(agencyDTO.getDataProtection(), agencyBuilder);
     var agencyToCreate = agencyBuilder.build();
+    // Counsellors of a new agency start with the strict topic permission.
+    agencyToCreate.setSettings(
+        agencySettingsService.withNewAgencyDefaults(agencyToCreate.getSettings()));
 
     if (featureTopicsEnabled) {
       List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopics(agencyToCreate,
           agencyDTO.getTopicIds());
+      oneTopicPerAgencyPolicy.check(List.of(), topicIdsOf(agencyTopics));
       agencyToCreate.setAgencyTopics(agencyTopics);
     }
 
     convertCounsellingRelations(agencyDTO, agencyToCreate);
     return agencyToCreate;
+  }
+
+  private static List<Long> topicIdsOf(List<AgencyTopic> agencyTopics) {
+    return agencyTopics == null ? List.of()
+        : agencyTopics.stream().map(AgencyTopic::getTopicId).toList();
   }
 
   private void convertCounsellingRelations(AgencyDTO agencyDTO, Agency agencyToCreate) {
@@ -301,8 +347,9 @@ public class AgencyAdminService {
    */
   @Transactional
   public AgencyAdminFullResponseDTO updateAgency(Long agencyId, UpdateAgencyDTO updateAgencyDTO) {
-    var agency = agencyRepository.findById(agencyId).orElseThrow(NotFoundException::new);
-    applySettingsUpdate(updateAgencyDTO);
+    var agency = agencyRepository.findLockedById(agencyId).orElseThrow(NotFoundException::new);
+    agencyAdminControlsService.assertSettingsUpdateAllowed(
+        agencySettingsService.toSettings(agency.getSettings()), updateAgencyDTO.getSettings(), agency.getTenantId());
     // Read the stored wording before the merge overwrites it: what makes an agency-level save a
     // publish is that the wording CHANGED, and afterwards there is nothing left to compare against.
     final var storedDpp = agency.getContentDpp();
@@ -357,11 +404,6 @@ public class AgencyAdminService {
     }
   }
 
-  private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {
-    // Parent policies are owned by TenantService. Agency updates may carry the read-only
-    // compatibility view, but must never mutate it.
-  }
-
   private Map<String, String> legalContent(
       UpdateAgencyDTO updateAgencyDTO,
       Function<AgencyLegalContentDTO, Map<String, String>> kind) {
@@ -404,7 +446,9 @@ public class AgencyAdminService {
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
     if (updateAgencyDTO.getSettings() != null) {
-      return agencySettingsService.toSettingsJson(updateAgencyDTO.getSettings());
+      return agencySettingsService.toSettingsJson(
+          agencySettingsService.keepStoredCounsellorTopicPermission(
+              updateAgencyDTO.getSettings(), agency.getSettings()));
     }
     return agency.getSettings();
   }
@@ -430,6 +474,19 @@ public class AgencyAdminService {
     return updateAgencyDTO.getOpeningHours() != null
         ? updateAgencyDTO.getOpeningHours()
         : agency.getOpeningHours();
+  }
+
+  /**
+   * Null coordinates on update keep the stored values, same as {@code openingHours}: a partial
+   * payload that never mentions {@code lat}/{@code lng} must not silently drop an agency off the
+   * map (#278). There is no "clear" form yet — coordinates are corrected by sending new ones.
+   */
+  private Double resolveLatForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    return updateAgencyDTO.getLat() != null ? updateAgencyDTO.getLat() : agency.getLat();
+  }
+
+  private Double resolveLngForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
+    return updateAgencyDTO.getLng() != null ? updateAgencyDTO.getLng() : agency.getLng();
   }
 
   /**
@@ -466,6 +523,8 @@ public class AgencyAdminService {
         .phoneSecondary(updateAgencyDTO.getPhoneSecondary())
         .email(updateAgencyDTO.getEmail())
         .openingHours(resolveOpeningHoursForUpdate(agency, updateAgencyDTO))
+        .lat(resolveLatForUpdate(agency, updateAgencyDTO))
+        .lng(resolveLngForUpdate(agency, updateAgencyDTO))
         .offline(resolveOfflineForUpdate(agency, updateAgencyDTO))
         .teamAgency(agency.isTeamAgency())
         .url(updateAgencyDTO.getUrl())
@@ -508,6 +567,7 @@ public class AgencyAdminService {
       var existingAgencyTopics = agencyTopicRepository.findAllByAgencyId(agency.getId());
       List<AgencyTopic> agencyTopics = agencyTopicMergeService.getMergedTopicsForUpdate(
           agencyToUpdate, existingAgencyTopics, updateAgencyDTO.getTopicIds());
+      oneTopicPerAgencyPolicy.check(topicIdsOf(existingAgencyTopics), topicIdsOf(agencyTopics));
       agencyToUpdate.setAgencyTopics(agencyTopics);
     } else {
       // If the Topic feature is not enabled, Hibernate use an empty PersistentBag,
@@ -557,9 +617,34 @@ public class AgencyAdminService {
   /**
    * Returns all agencies for the provided tenant ID.
    *
+   * <p>The lookup runs through the tenant-unaware repository, so the tenant in the URL is the
+   * only filter. A Träger admin may therefore only ask for their own tenant; only the platform
+   * admin (tenant {@code 0}) and single-tenant mode (no tenant known) may name any tenant.
+   * Without this check a Träger admin of tenant A could list every agency of tenant B.
+   *
    * @param tenantId the provided tenantId
    */
   public List<Agency> getAgenciesByTenantId(Long tenantId) {
+    assertCallerMayReadTenant(tenantId);
     return this.agencyTenantUnawareRepository.findByTenantId(tenantId);
+  }
+
+  private void assertCallerMayReadTenant(Long requestedTenantId) {
+    Long callerTenantId = authenticatedUser.getTenantId();
+    if (callerTenantId == null) {
+      callerTenantId = TenantContext.getCurrentTenant();
+    }
+    if (callerTenantId == null || callerTenantId.equals(0L)) {
+      return;
+    }
+    if (!callerTenantId.equals(requestedTenantId)) {
+      log.warn(
+          "Admin user {} (tenant {}) may not list the agencies of tenant {}",
+          authenticatedUser.getUserId(),
+          callerTenantId,
+          requestedTenantId);
+      throw new AccessDeniedException(
+          "Access denied. Requested tenant does not match the caller's tenant.");
+    }
   }
 }

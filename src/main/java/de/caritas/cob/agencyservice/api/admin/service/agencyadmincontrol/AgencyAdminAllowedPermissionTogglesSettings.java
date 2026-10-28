@@ -15,6 +15,9 @@ public class AgencyAdminAllowedPermissionTogglesSettings {
   private Boolean anonymousChat;
   private Boolean calls;
   private Boolean groupChat;
+  // Group-chat formats (ORISO-AgencyService#293). Stored as given: unset means "follow groupChat".
+  private Boolean internalGroupChat;
+  private Boolean selfHelpGroups;
   private Boolean supervision;
   private Boolean supervisionAnonymousChats;
   private Boolean supervisionOneOnOneChats;

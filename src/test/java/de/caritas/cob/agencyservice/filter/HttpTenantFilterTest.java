@@ -1,5 +1,9 @@
 package de.caritas.cob.agencyservice.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.tenant.TenantResolverService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,5 +57,22 @@ class HttpTenantFilterTest {
 
     // then
     Mockito.verify(tenantResolverService).resolve(request);
+  }
+
+  @Test
+  void doFilterInternal_Should_ClearTheTenant_When_TheChainThrows()
+      throws ServletException, IOException {
+    Mockito.when(request.getRequestURI()).thenReturn("/agencies/1");
+    Mockito.when(tenantResolverService.resolve(request)).thenReturn(7L);
+    Mockito.doThrow(new ServletException("boom")).when(filterChain).doFilter(request, response);
+
+    try {
+      assertThatThrownBy(() -> httpTenantFilter.doFilterInternal(request, response, filterChain))
+          .isInstanceOf(ServletException.class);
+
+      assertThat(TenantContext.getCurrentTenant()).isNull();
+    } finally {
+      TenantContext.clear();
+    }
   }
 }

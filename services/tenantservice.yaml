@@ -1,8 +1,10 @@
 openapi: 3.0.1
+
 info:
   title: Definition for Tenant API
   description: This information will be replaced by the SpringFox config information
   version: 0.0.1
+
 paths:
   /tenantadmin:
     post:
@@ -12,29 +14,34 @@ paths:
       operationId: createTenant
       requestBody:
         content:
-          application/json:
+          'application/json':
             schema:
               $ref: '#/components/schemas/MultilingualTenantDTO'
       responses:
-        '200':
+        200:
           description: OK - successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MultilingualTenantDTO'
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or body object
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '500':
+        409:
+          description: CONFLICT - the requested tenant ID is already assigned or reserved
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+        503:
+          description: SERVICE UNAVAILABLE - AUTO tenant ID allocation exhausted its retry
+            budget under contention; retry later
     get:
       tags:
         - tenant-controller
       summary: 'Get all tenants with admin data [Authorization: Role: tenant-admin]'
       operationId: getAllTenantsWithAdminData
       responses:
-        '200':
+        200:
           description: OK - successful operation
           content:
             application/json:
@@ -42,14 +49,15 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/AdminTenantDTO'
-        '204':
+        204:
           description: NO CONTENT - no content found
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or body object
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+
   /tenantadmin/search:
     get:
       tags:
@@ -59,7 +67,8 @@ paths:
       parameters:
         - name: query
           in: query
-          description: URL-encoded infix to search for name or id. A non-encoded star symbol searches for all.
+          description: URL-encoded infix to search for name or id.
+            A non-encoded star symbol searches for all.
           required: true
           schema:
             type: string
@@ -82,38 +91,32 @@ paths:
           description: field to sort by
           schema:
             type: string
-            enum:
-              - NAME
-              - ID
-              - SUBDOMAIN
-              - BERATERCOUNT
+            enum: [ NAME, ID, SUBDOMAIN, BERATERCOUNT ]
             default: NAME
-            pattern: ^(NAME|ID|SUBDOMAIN|BERATERCOUNT)$
+            pattern: '^(NAME|ID|SUBDOMAIN|BERATERCOUNT)$'
         - name: order
           in: query
           description: sort order
           schema:
             type: string
-            enum:
-              - ASC
-              - DESC
+            enum: [ ASC, DESC ]
             default: ASC
-            pattern: ^(ASC|DESC)$
+            pattern: '^(ASC|DESC)$'
       responses:
-        '200':
+        200:
           description: OK - successful operation
           content:
-            application/hal+json:
+            'application/hal+json':
               schema:
                 $ref: '#/components/schemas/TenantsSearchResultDTO'
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or body object
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid role/authorization
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
       security:
-        - Bearer: []
+        - Bearer: [ ]
   /tenantadmin/controls:
     get:
       tags:
@@ -121,17 +124,17 @@ paths:
       summary: 'Gets platform-level tenant admin controls [Authorization: Super admin]'
       operationId: getTenantAdminControls
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantAdminControls'
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '403':
+        403:
           description: FORBIDDEN - only super admin can access platform controls
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
     put:
       tags:
@@ -140,46 +143,350 @@ paths:
       operationId: updateTenantAdminControls
       requestBody:
         content:
-          application/json:
+          'application/json':
             schema:
               $ref: '#/components/schemas/TenantAdminControls'
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantAdminControls'
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '403':
+        403:
           description: FORBIDDEN - only super admin can update platform controls
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+
+  /tenantadmin/controls/chat-recovery:
+    get:
+      tags: [tenant-controller]
+      summary: 'Gets recovery defaults for newly created accounts [Authorization: Super admin]'
+      operationId: getChatRecoverySettings
+      responses:
+        200:
+          description: Current role defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatRecoverySettings'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - platform administrator required
+    put:
+      tags: [tenant-controller]
+      summary: 'Updates recovery defaults for newly created accounts [Authorization: Super admin]'
+      operationId: updateChatRecoverySettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRecoverySettings'
+      responses:
+        200:
+          description: Confirmed role defaults with current revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatRecoverySettings'
+        400:
+          description: BAD REQUEST - missing or invalid modes or revision
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - platform administrator required
+        409:
+          description: CONFLICT - reload current settings before saving
+
+  /tenantadmin/controls/account-inactivity:
+    get:
+      tags: [tenant-controller]
+      summary: 'Gets inactivity defaults for newly created accounts [Authorization: Super admin]'
+      operationId: getAccountInactivitySettings
+      responses:
+        200:
+          description: Current role defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInactivitySettings'
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - platform administrator required
+    put:
+      tags: [tenant-controller]
+      summary: 'Updates inactivity defaults for newly created accounts [Authorization: Super admin]'
+      operationId: updateAccountInactivitySettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountInactivitySettings'
+      responses:
+        200:
+          description: Confirmed role defaults with current revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountInactivitySettings'
+        400:
+          description: BAD REQUEST - missing or invalid months or revision
+        401:
+          description: UNAUTHORIZED
+        403:
+          description: FORBIDDEN - platform administrator required
+        409:
+          description: CONFLICT - reload current settings before saving
+
+  /tenantadmin/{id}/legal-drafts/{kind}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer, format: int64}
+      - name: kind
+        in: path
+        required: true
+        schema: {type: string, enum: [PRIVACY, IMPRINT]}
+    get:
+      tags: [tenant-controller]
+      summary: Gets a tenant legal draft
+      operationId: getTenantLegalDraft
+      responses:
+        200:
+          description: Successful operation
+          content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalDraftDTO'}}}
+        400: {description: Invalid legal draft kind}
+        404: {description: No saved draft or tenant}
+        403: {description: Forbidden}
+    put:
+      tags: [tenant-controller]
+      summary: Saves a tenant legal draft using its expected revision
+      operationId: updateTenantLegalDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TenantLegalDraftUpdateRequest'}
+      responses:
+        200:
+          description: Successful operation
+          content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalDraftDTO'}}}
+        400: {description: Invalid legal draft kind or request body}
+        404: {description: Tenant not found}
+        409: {description: Stale draft revision}
+        403: {description: Forbidden}
+    delete:
+      tags: [tenant-controller]
+      summary: Deletes a tenant legal draft using its expected revision
+      operationId: deleteTenantLegalDraft
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema: {type: string, pattern: '^(new|[1-9][0-9]*:[0-9]+)$'}
+      responses:
+        204: {description: Deleted}
+        400: {description: Invalid legal draft kind or revision}
+        404: {description: No saved draft or tenant}
+        409: {description: Stale draft revision}
+        403: {description: Forbidden}
+  /tenantadmin/legal-proposal-distributions:
+    get:
+      tags: [tenant-controller]
+      summary: Lists the template versions the platform has sent for one legal document
+      description: >-
+        Platform administrator only. Newest first. Each entry is one distribution with the exact
+        snapshot every recipient received, so the admin can look back at what went out and to how
+        many Träger.
+      operationId: getTenantLegalTemplateHistory
+      parameters:
+        - {name: kind, in: query, required: true, schema: {type: string, enum: [PRIVACY, IMPRINT]}}
+      responses:
+        200:
+          description: Sent template versions, newest first
+          content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/TenantLegalTemplateVersionDTO'}}}}
+        400: {description: Invalid kind}
+        401: {description: Unauthorized}
+        403: {description: Platform administrator required}
+    post:
+      tags: [tenant-controller]
+      summary: Shares an immutable platform legal draft revision with a fixed tenant audience
+      description: >-
+        Platform administrator only. requestKey makes retries return the original fixed audience,
+        including ALL deliveries after the platform draft or tenant set changes. This never
+        publishes or changes a recipient draft.
+      operationId: distributeTenantLegalProposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TenantLegalProposalDistributionRequest'}
+      responses:
+        200:
+          description: Existing idempotent distribution
+          content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalProposalDistributionDTO'}}}
+        201:
+          description: Created distribution
+          content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalProposalDistributionDTO'}}}
+        400: {description: 'Invalid audience, recipients, kind, or request key'}
+        401: {description: Unauthorized}
+        403: {description: Platform administrator required}
+        404: {description: Platform draft not found}
+        409: {description: Source revision changed or request key reused with different input}
+  /tenantadmin/{id}/legal-proposals:
+    get:
+      tags: [tenant-controller]
+      summary: Lists incoming legal proposal history for a tenant
+      description: Platform sender or exact recipient. Newest proposals sort first; SUPERSEDED entries remain readable history.
+      operationId: getTenantLegalProposals
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: kind, in: query, required: false, schema: {type: string, enum: [PRIVACY, IMPRINT]}}
+      responses:
+        200:
+          description: Proposal history
+          content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/TenantLegalProposalDTO'}}}}
+        400: {description: Invalid tenant or kind}
+        401: {description: Unauthorized}
+        403: {description: Neither platform sender nor exact recipient}
+  /tenantadmin/{id}/legal-proposals/{proposalId}:
+    get:
+      tags: [tenant-controller]
+      summary: Gets one incoming legal proposal snapshot
+      operationId: getTenantLegalProposal
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: proposalId, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        200: {description: Proposal snapshot, content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalProposalDTO'}}}}
+        401: {description: Unauthorized}
+        403: {description: Neither platform sender nor exact recipient}
+        404: {description: Proposal not found within tenant scope}
+  /tenantadmin/{id}/legal-proposals/{proposalId}/dismiss:
+    post:
+      tags: [tenant-controller]
+      summary: Acknowledges the proposal notice without preventing later adoption
+      description: Exact recipient legal editor only. A newer version may later move this entry to SUPERSEDED history.
+      operationId: dismissTenantLegalProposal
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: proposalId, in: path, required: true, schema: {type: integer, format: int64}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalProposalDismissRequest'}}}
+      responses:
+        200: {description: Notice acknowledged, content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalProposalDTO'}}}}
+        401: {description: Unauthorized}
+        403: {description: Exact recipient legal editor required}
+        404: {description: Proposal not found within tenant scope}
+        409: {description: Stale or terminal proposal revision}
+  /tenantadmin/{id}/legal-proposals/{proposalId}/adopt:
+    post:
+      tags: [tenant-controller]
+      summary: Adopts an incoming proposal into the recipient's editable draft
+      description: >-
+        Exact recipient legal editor only. CREATE_IF_EMPTY cannot overwrite. ARCHIVE_AND_REPLACE
+        requires both current proposal and draft revisions, archives the full old draft atomically,
+        and never changes published legal text.
+      operationId: adoptTenantLegalProposal
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: proposalId, in: path, required: true, schema: {type: integer, format: int64}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalProposalAdoptRequest'}}}
+      responses:
+        200: {description: Adopted editable draft, content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalDraftDTO'}}}}
+        400: {description: Invalid adoption mode or revision combination}
+        401: {description: Unauthorized}
+        403: {description: Exact recipient legal editor required}
+        404: {description: Proposal not found within tenant scope}
+        409: {description: 'Existing draft requires confirmation, stale revision, or terminal proposal'}
+  /tenantadmin/{id}/legal-draft-archives:
+    get:
+      tags: [tenant-controller]
+      summary: Lists immutable recipient draft history created by confirmed replacement
+      operationId: getTenantLegalDraftArchives
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: kind, in: query, required: false, schema: {type: string, enum: [PRIVACY, IMPRINT]}}
+      responses:
+        200: {description: Draft archive history, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/TenantLegalDraftArchiveDTO'}}}}}
+        401: {description: Unauthorized}
+        403: {description: Neither platform sender nor exact recipient}
+  /tenantadmin/{id}/legal-draft-archives/{archiveId}:
+    get:
+      tags: [tenant-controller]
+      summary: Gets one immutable archived editable draft
+      operationId: getTenantLegalDraftArchive
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: archiveId, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        200: {description: Archived draft, content: {application/json: {schema: {$ref: '#/components/schemas/TenantLegalDraftArchiveDTO'}}}}
+        401: {description: Unauthorized}
+        403: {description: Neither platform sender nor exact recipient}
+        404: {description: Archive not found within tenant scope}
+  /tenantadmin/{id}/legal-versions:
+    get:
+      tags: [tenant-controller]
+      summary: Publication history of the Träger's (id > 0) or the platform's (id 0) imprint or privacy policy
+      description: >-
+        Newest first, one entry per published wording (ORISO-Admin#270). A save of the tenant's
+        imprint or privacy content is its publication, so every save that changes the stored
+        wording adds an entry; a save that leaves it unchanged does not, and a draft save never
+        does. Texts published before this history existed have no entry (no guessed dates).
+        Same shape as AgencyService's LegalTextVersionDTO. Readable by the platform administrator
+        and by admins whose token names this tenant.
+      operationId: getTenantLegalTextVersions
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: kind, in: query, required: true, schema: {type: string, enum: [DPP, IMPRINT]}}
+      responses:
+        200:
+          description: Publication history, newest first (empty if never published since the history exists)
+          content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/TenantLegalTextVersionDTO'}}}}
+        400: {description: Invalid tenant id or kind}
+        401: {description: Unauthorized}
+        403: {description: Caller is neither the platform administrator nor an admin of this tenant}
   /tenantadmin/{id}/permission-policies:
     parameters:
       - name: id
         in: path
         required: true
+        description: Tenant ID
         schema:
           type: integer
           format: int64
     get:
       tags:
         - tenant-controller
+      summary: Gets the tenant-resolved permission policies
       operationId: getTenantPermissionPolicies
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantPermissionPolicies'
-        '403':
-          description: Tenant admins can access only their own tenant
+        403:
+          description: FORBIDDEN - tenant admins can access only their own tenant
     put:
       tags:
         - tenant-controller
+      summary: Updates tenant-scoped permission policy overrides
+      description: >-
+        Omitting `internalGroupChat` keeps the stored override. A platform requirement (ENFORCED)
+        of `internalGroupChat.recipientScope` cannot be changed: an unchanged echo of it is
+        accepted and discarded, a changed value or mode is refused with 400 and nothing is stored.
       operationId: updateTenantPermissionPolicies
       requestBody:
         required: true
@@ -188,45 +495,93 @@ paths:
             schema:
               $ref: '#/components/schemas/TenantPermissionPolicies'
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantPermissionPolicies'
-        '403':
-          description: Tenant admins can update only their own tenant
+        400:
+          description: BAD REQUEST - the body tries to change an ENFORCED internalGroupChat.recipientScope
+        403:
+          description: FORBIDDEN - tenant admins can update only their own tenant
+  /tenantadmin/dpia:
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Gets platform-level DPIA operator master data [Authorization: Super admin]'
+      operationId: getPlatformDpiaMasterData
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDpiaMasterDataDTO'
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - only super admin can access platform DPIA master data
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+    put:
+      tags:
+        - tenant-controller
+      summary: 'Updates platform-level DPIA operator master data [Authorization: Super admin]'
+      operationId: updatePlatformDpiaMasterData
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/PlatformDpiaMasterDataDTO'
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDpiaMasterDataDTO'
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - only super admin can update platform DPIA master data
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/translation/keys:
     get:
       tags:
         - tenant-controller
       summary: 'Gets the configured machine-translation provider API keys, masked [Authorization: Super admin]'
-      description: Returns the platform-global translation provider API keys. Keys are always returned MASKED (first characters plus the last 4, e.g. "sk-…abcd") and can never be read back in full. A provider without a configured key is returned as null.
+      description: 'Returns the platform-global translation provider API keys. Keys are always
+        returned MASKED (first characters plus the last 4, e.g. "sk-…abcd") and can never be read
+        back in full. A provider without a configured key is returned as null.'
       operationId: getTranslationApiKeys
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationApiKeysDTO'
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '403':
+        403:
           description: FORBIDDEN - only super admin can access translation provider keys
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/translation/keys/{provider}:
     put:
       tags:
         - tenant-controller
       summary: 'Sets the machine-translation API key for a provider [Authorization: Super admin]'
-      description: Stores the API key for the given provider ("openrouter" or "mistral") in the platform-global admin controls. Returns all keys masked.
+      description: 'Stores the API key for the given provider ("openrouter" or "mistral") in the
+        platform-global admin controls. Returns all keys masked.'
       operationId: setTranslationApiKey
       parameters:
         - name: provider
           in: path
-          description: Translation provider id, one of "openrouter" or "mistral" (validated server-side, unknown providers are rejected with 400)
+          description: Translation provider id, one of "openrouter" or "mistral"
+            (validated server-side, unknown providers are rejected with 400)
           required: true
           schema:
             type: string
@@ -237,26 +592,38 @@ paths:
             schema:
               $ref: '#/components/schemas/TranslationApiKeyUpdateDTO'
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationApiKeysDTO'
-        '400':
+        400:
           description: BAD REQUEST - unknown provider or invalid/empty key
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '403':
+        403:
           description: FORBIDDEN - only super admin can update translation provider keys
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/translate:
     post:
       tags:
         - tenant-controller
       summary: 'Machine-translates HTML texts into one or more target languages [Authorization: Authority.UPDATE_TENANT]'
-      description: 'Translates the given HTML texts (fieldKey -> HTML) from sourceLang into every requested target language using an LLM provider (OpenRouter or Mistral) with the platform-global API keys. HTML tags, attributes and structure are preserved; only human-readable text is translated. If no provider is requested explicitly, openrouter is used when its key is configured, otherwise mistral. Typed error codes: TRANSLATION_NOT_CONFIGURED (409, no API key configured), TRANSLATION_KEY_INVALID (502, provider rejected the key), TRANSLATION_NO_CREDIT (502, provider credit exhausted), TRANSLATION_RATE_LIMITED (502, provider rate limit hit), TRANSLATION_PROVIDER_UNAVAILABLE (502, provider timeout or 5xx). The response is meant to be published together with the machine-translation metadata convention: for every machine translated language the client stores a parallel "<lang>__meta" key with the strict JSON value {"mt":true,"src":"<sourceLang>","at":"<ISO-timestamp>"} next to the translated HTML in the same language->HTML map.'
+      description: 'Translates the given HTML texts (fieldKey -> HTML) from sourceLang into every
+        requested target language using an LLM provider (OpenRouter or Mistral) with the
+        platform-global API keys. HTML tags, attributes and structure are preserved; only
+        human-readable text is translated. If no provider is requested explicitly, openrouter is
+        used when its key is configured, otherwise mistral. Typed error codes:
+        TRANSLATION_NOT_CONFIGURED (409, no API key configured), TRANSLATION_KEY_INVALID (502,
+        provider rejected the key), TRANSLATION_NO_CREDIT (502, provider credit exhausted),
+        TRANSLATION_RATE_LIMITED (502, provider rate limit hit),
+        TRANSLATION_PROVIDER_UNAVAILABLE (502, provider timeout or 5xx). The response is meant to
+        be published together with the machine-translation metadata convention: for every machine
+        translated language the client stores a parallel "<lang>__meta" key with the strict JSON
+        value {"mt":true,"src":"<sourceLang>","at":"<ISO-timestamp>"} next to the translated HTML
+        in the same language->HTML map.'
       operationId: translate
       requestBody:
         required: true
@@ -265,36 +632,39 @@ paths:
             schema:
               $ref: '#/components/schemas/TranslationRequestDTO'
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationResponseDTO'
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or unknown provider
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '409':
+        409:
           description: CONFLICT - no translation provider API key configured (TRANSLATION_NOT_CONFIGURED)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationErrorDTO'
-        '500':
-          description: INTERNAL SERVER ERROR - server encountered unexpected condition
-        '502':
-          description: BAD GATEWAY - translation provider error (TRANSLATION_KEY_INVALID, TRANSLATION_NO_CREDIT, TRANSLATION_RATE_LIMITED, TRANSLATION_PROVIDER_UNAVAILABLE)
+        502:
+          description: BAD GATEWAY - translation provider error (TRANSLATION_KEY_INVALID,
+            TRANSLATION_NO_CREDIT, TRANSLATION_RATE_LIMITED, TRANSLATION_PROVIDER_UNAVAILABLE)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationErrorDTO'
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenant/translate/group-chat-author-content:
     post:
       tags:
         - tenant-controller
       summary: 'Translates bounded self-help group welcome and rule content [Authorization: consultant, group-chat-consultant]'
-      description: Uses the configured translation provider for short, plain-text welcome and group-rule content. The endpoint is intentionally separate from tenant administration so consultants never receive tenant-management privileges.
+      description: 'Uses the configured translation provider for short, plain-text welcome and
+        group-rule content. The endpoint is intentionally separate from tenant administration so
+        consultants never receive tenant-management privileges.'
       operationId: translateGroupChatAuthorContent
       requestBody:
         required: true
@@ -303,32 +673,58 @@ paths:
             schema:
               $ref: '#/components/schemas/TranslationRequestDTO'
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationResponseDTO'
-        '400':
+        400:
           description: BAD REQUEST - content is missing or exceeds the group-chat limits
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '403':
+        403:
           description: FORBIDDEN - dedicated group-chat translation authority is missing
-        '409':
+        409:
           description: CONFLICT - no translation provider API key configured
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationErrorDTO'
-        '500':
-          description: INTERNAL SERVER ERROR - server encountered unexpected condition
-        '502':
+        502:
           description: BAD GATEWAY - translation provider error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranslationErrorDTO'
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenantadmin/{id}/status:
+    put:
+      tags: [tenant-controller]
+      summary: Change only the selected Träger's operational status
+      operationId: updateTenantOperationalStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer, format: int64, minimum: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TenantOperationalStatusUpdateDTO'}
+      responses:
+        '200':
+          description: Persisted operational status
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TenantOperationalStatusDTO'}
+        '400': {description: Invalid status request}
+        '403': {description: Only a matching Träger administrator may change status}
+        '404': {description: Tenant not found}
+      security:
+        - Bearer: []
   /tenantadmin/{id}:
     put:
       tags:
@@ -345,21 +741,21 @@ paths:
             format: int64
       requestBody:
         content:
-          application/json:
+          'application/json':
             schema:
               $ref: '#/components/schemas/MultilingualTenantDTO'
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MultilingualTenantDTO'
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '409':
+        409:
           description: CONFLICT - unique constraint validation fails
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
     get:
       tags:
@@ -375,28 +771,171 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MultilingualTenantDTO'
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or body object
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '404':
+        404:
           description: Not found
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenantadmin/tenant-ids/{id}/availability:
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Returns the allocation status of a single tenant ID [Authorization: platform admin]'
+      operationId: getTenantIdAvailability
+      parameters:
+        - name: id
+          in: path
+          description: Tenant ID to check
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        200:
+          description: OK - successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantIdAvailabilityDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - no platform admin authority
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /tenantadmin/tenant-ids/next-free:
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Returns the next free tenant ID from a value in a direction, skipping assigned
+        and reserved IDs [Authorization: platform admin]'
+      operationId: getNextFreeTenantId
+      parameters:
+        - name: from
+          in: query
+          description: Value to navigate from (exclusive)
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: direction
+          in: query
+          description: Navigation direction
+          required: true
+          schema:
+            type: string
+            enum: [ UP, DOWN ]
+      responses:
+        200:
+          description: OK - successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NextFreeTenantIdDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - no platform admin authority
+        404:
+          description: NOT FOUND - no free tenant ID exists in the given direction
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+  /tenantadmin/tenant-ids/reservations:
+    post:
+      tags:
+        - tenant-controller
+      summary: 'Reserves a tenant ID for an open invite. Without a tenantId in the body (AUTO
+        mode) the smallest currently free ID is reserved atomically [Authorization: platform admin]'
+      operationId: reserveTenantId
+      requestBody:
+        content:
+          'application/json':
+            schema:
+              $ref: '#/components/schemas/TenantIdReservationRequestDTO'
+      responses:
+        201:
+          description: CREATED - the ID was reserved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantIdReservationDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - no platform admin authority
+        409:
+          description: CONFLICT - the requested ID is already assigned or reserved
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+        503:
+          description: SERVICE UNAVAILABLE - AUTO reservation exhausted its retry budget
+            under contention; retry later
+      security:
+        - Bearer: [ ]
+  /tenantadmin/tenant-ids/reservations/{id}:
+    delete:
+      tags:
+        - tenant-controller
+      summary: 'Releases an unconsumed tenant ID reservation so the ID becomes assignable
+        again [Authorization: platform admin]'
+      operationId: releaseTenantIdReservation
+      parameters:
+        - name: id
+          in: path
+          description: Reserved tenant ID to release
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: reservationToken
+          in: query
+          required: false
+          description: Original reservation proof, required for invitation-reservations task callers.
+          schema:
+            type: string
+      responses:
+        204:
+          description: NO CONTENT - reservation released
+        401:
+          description: UNAUTHORIZED - no/invalid Keycloak token
+        403:
+          description: FORBIDDEN - no platform admin authority
+        404:
+          description: NOT FOUND - no open reservation exists for this ID
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
   /tenant:
     get:
       tags:
         - tenant-controller
-      summary: Get all tenants
+      summary: 'Get all tenants'
       operationId: getAllTenants
       responses:
-        '200':
+        200:
           description: OK - successful operation
           content:
             application/json:
@@ -404,13 +943,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/BasicTenantLicensingDTO'
-        '204':
+        204:
           description: NO CONTENT - no content found
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or body object
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenant/{id}:
     summary: Represents a tenant
@@ -429,22 +968,22 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantDTO'
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or body object
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '404':
+        404:
           description: Not found
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenant/public/{subdomain}:
-    summary: Represents a publicly allowed tenant data
+    summary: 'Represents a publicly allowed tenant data'
     description: This resource represents an individual tenant in a system.
     get:
       tags:
@@ -466,20 +1005,20 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestrictedTenantDTO'
-        '400':
-          description: BAD REQUEST - invalid/incomplete request or body object
-        '404':
+        404:
           description: Not found
-        '500':
+        400:
+          description: BAD REQUEST - invalid/incomplete request or body object
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenant/public/id/{tenantId}:
-    summary: Represents a publicly allowed tenant data
+    summary: 'Represents a publicly allowed tenant data'
     description: This resource represents an individual tenant in a system.
     get:
       tags:
@@ -495,20 +1034,53 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestrictedTenantDTO'
-        '400':
-          description: BAD REQUEST - invalid/incomplete request or body object
-        '404':
+        404:
           description: Not found
-        '500':
+        400:
+          description: BAD REQUEST - invalid/incomplete request or body object
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenant/public/ids:
+    summary: 'Represents publicly allowed tenant data for a bounded set of ids'
+    description: Existing tenants are returned; unknown ids are omitted and duplicate ids are normalized.
+    post:
+      tags:
+        - tenant-controller
+      summary: 'Gets public tenant information in one bounded batch [Authorization: no-auth]'
+      operationId: getRestrictedTenantDataByTenantIds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items:
+                type: integer
+                format: int64
+      responses:
+        200:
+          description: Existing requested tenants; unknown ids are omitted
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: '#/components/schemas/RestrictedTenantDTO'
+        400:
+          description: BAD REQUEST - request must contain 1 to 100 tenant ids
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenant/public/single:
-    summary: Represents a publicly allowed tenant data
+    summary: 'Represents a publicly allowed tenant data'
     description: This resource represents the tenant in a single-tenant system.
     get:
       tags:
@@ -516,20 +1088,21 @@ paths:
       summary: 'Gets a tenant public information [Authorization: no-auth]'
       operationId: getRestrictedSingleTenancyTenantData
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestrictedTenantDTO'
-        '400':
-          description: BAD REQUEST - invalid/incomplete request or body object
-        '404':
+        404:
           description: Not found
-        '500':
+        400:
+          description: BAD REQUEST - invalid/incomplete request or body object
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenant/public/:
-    summary: Represents a publicly allowed tenant data. Tenant is resolved based on the request context. For single domain multitenancy it overerrides some of the attributes from main tenant and the current tenant like privacy or some tenant settings
+    summary: 'Represents a publicly allowed tenant data. Tenant is resolved based on the request context.
+     For single domain multitenancy it overerrides some of the attributes from main tenant and the current tenant like privacy or some tenant settings'
     description: This resource represents the tenant.
     get:
       tags:
@@ -537,20 +1110,20 @@ paths:
       summary: 'Gets a tenant public information [Authorization: no-auth]'
       operationId: getRestrictedTenantData
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestrictedTenantDTO'
-        '400':
-          description: BAD REQUEST - invalid/incomplete request or body object
-        '404':
+        404:
           description: Not found
-        '500':
+        400:
+          description: BAD REQUEST - invalid/incomplete request or body object
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenant/access:
-    summary: Validate if user can access tenant
+    summary: 'Validate if user can access tenant'
     description: This resource represents the access status for the given user to current tenant.
     get:
       tags:
@@ -558,18 +1131,120 @@ paths:
       summary: 'Validate if user can access tenant [Authorization: no-auth]'
       operationId: canAccessTenant
       responses:
-        '204':
+        204:
           description: Successful operation
-        '400':
-          description: BAD REQUEST - invalid/incomplete request or body object
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid permission for current tenant
-        '404':
+        404:
           description: Not found
-        '500':
+        400:
+          description: BAD REQUEST - invalid/incomplete request or body object
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenant/public/dpia:
+    summary: 'Public DPIA operator master data and document branding source'
+    description: >-
+      Read-only, unauthenticated master data for the living DPIA / legal document renderers.
+      Exposes ONLY the platform operator master data plus the existing public branding
+      (logo/appearance) of the resolved tenant context — never secrets, SMTP configuration
+      or tokens.
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Gets public DPIA operator master data [Authorization: no-auth]'
+      operationId: getPublicDpiaMasterData
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicDpiaMasterDataDTO'
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenant/public/branding/{asset}:
+    summary: 'Public effective tenant branding asset'
+    description: >-
+      Serves an uploaded effective logo or favicon as a normal HTTP image. Missing tenant
+      values inherit from platform tenant 0. This allows mail clients and document renderers,
+      which cannot use data URIs, to display the same branding as the application.
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Gets an effective branding image [Authorization: no-auth]'
+      operationId: getPublicBrandingAsset
+      parameters:
+        - name: asset
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [logo, favicon]
+      responses:
+        200:
+          description: Effective branding image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/x-icon:
+              schema:
+                type: string
+                format: binary
+        404:
+          description: No valid image configured
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenant/public/branding/{tenantId}/{asset}:
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Gets a tenant branding image without cookies [Authorization: no-auth]'
+      description: >-
+        Returns only stored effective logo or favicon bytes for the specified tenant,
+        including inherited platform branding. The URL identifies the tenant so mail
+        clients and image proxies cannot accidentally resolve another tenant's image.
+        Unknown tenants or unsupported assets return 404; no external image is fetched.
+      operationId: getPublicTenantBrandingAsset
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: asset
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [logo, favicon]
+      responses:
+        200:
+          description: Effective tenant branding image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/x-icon:
+              schema:
+                type: string
+                format: binary
+        404:
+          description: Tenant or valid branding image not found
   /tenant/public/dpa/confirm/{token}:
-    summary: Public confirmation (signature) of a tenant Data Processing Agreement
+    summary: 'Public confirmation (signature) of a tenant Data Processing Agreement'
     get:
       tags:
         - tenant-controller
@@ -583,15 +1258,15 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DpaSignPreviewDTO'
-        '410':
+        410:
           description: GONE - token unknown, already used, expired, or its contract version is missing
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
     post:
       tags:
@@ -612,20 +1287,62 @@ paths:
             schema:
               $ref: '#/components/schemas/DpaSignatureRequestDTO'
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DpaSignatureDTO'
-        '400':
+        400:
           description: BAD REQUEST - invalid/incomplete request or body object
-        '410':
+        410:
           description: GONE - token unknown, already used, or expired
-        '500':
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenant/public/dpa/forward:
+    summary: 'Create a DPA sign link from the public tenant onboarding context'
+    description: 'Forward path for the tenant onboarding wizard (ORISO-TenantService#179): an
+      administrator who is not authorised to sign can create a single-use sign link BEFORE the
+      registration completes. The call is authorised by the onboarding context itself - the
+      tenant-ID reservation pair (reserved tenant id + reservation token) issued for the invite -
+      instead of a user session. The resulting PENDING signature is bound to the reserved tenant
+      id, so the signature lands on the tenant once it exists; the link works immediately, before
+      and after the registration finishes. The signed version is the operator DPA governing a
+      tenant without an own published DPA.'
+    post:
+      tags:
+        - tenant-controller
+      summary: 'Creates a single-use DPA sign link for a reserved tenant [Authorization: no-auth,
+        tenant-ID reservation token]'
+      operationId: createPublicDpaForwardInvite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicDpaForwardRequestDTO'
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DpaSignInviteDTO'
+        400:
+          description: BAD REQUEST - invalid/incomplete request or body object
+        409:
+          description: CONFLICT - no data processing agreement is published to sign yet
+        410:
+          description: GONE - unknown reservation, reservation token mismatch, a reservation
+            already consumed by registration, or a released one; no information about the
+            reservation state is leaked
+        429:
+          description: TOO MANY REQUESTS - too many unexpired sign links are already outstanding
+            for this onboarding; existing links stay valid, so wait for one to be used or expire
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/{id}/dpa/signatures:
-    summary: Confirmed DPA signatures of a tenant (audit list)
+    summary: 'Confirmed DPA signatures of a tenant (audit list)'
     get:
       tags:
         - tenant-controller
@@ -640,7 +1357,7 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
@@ -648,16 +1365,20 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DpaSignatureDTO'
-        '403':
+        403:
           description: FORBIDDEN - not authorized to access this tenant
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/{id}/dpa/gate:
-    summary: DPA legal-gate status of a tenant
+    summary: 'DPA legal-gate status of a tenant'
+    description: 'Boolean projection of the authoritative DPA status (/dpa/status): dpaPublished
+      means a DPA is in force for the tenant (its own or the governing operator DPA), dpaSigned
+      means that exact version is signed - by an authenticated tenant admin in-app or by the
+      authorised signer through a forwarded invite.'
     get:
       tags:
         - tenant-controller
-      summary: 'Whether the tenant DPA is published and signed [Authorization: Authority.GET_TENANT]'
+      summary: 'Whether a DPA is in force for the tenant and signed [Authorization: Authority.GET_TENANT]'
       operationId: getDataProcessingAgreementGate
       parameters:
         - name: id
@@ -668,18 +1389,22 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DpaGateStatusDTO'
-        '403':
+        403:
           description: FORBIDDEN - not authorized to access this tenant
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/{id}/dpa/invite:
-    summary: Create a single-use DPA sign invite (link) for a tenant
+    summary: 'Create a single-use DPA sign invite (link) for a tenant'
+    description: 'Forwarding path of the SAME single agreement: the natural person authorised to
+      sign for the tenant organisation need not be an app user. The invite covers the DPA version
+      in force for the tenant - its own published DPA, or the governing operator DPA - and the
+      resulting signature always belongs to this tenant.'
     post:
       tags:
         - tenant-controller
@@ -694,20 +1419,21 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DpaSignInviteDTO'
-        '403':
+        403:
           description: FORBIDDEN - not authorized to access this tenant
-        '409':
+        409:
           description: CONFLICT - the tenant has no published DPA to sign yet
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/{id}/dpa:
-    summary: Publish a tenant Data Processing Agreement (multilingual)
+    summary: 'Publish a tenant Data Processing Agreement (multilingual)'
+    description: 'Legacy publication. After this document adopts deadline policy, use /dpa/v2; legacy writes return 409.'
     put:
       tags:
         - tenant-controller
@@ -723,7 +1449,15 @@ paths:
             format: int64
       requestBody:
         required: true
-        description: 'Per-language DPA HTML content (language code -> HTML). Supports the machine-translation metadata convention: next to a translated language (e.g. "en") the map may carry a parallel "en__meta" key whose value is the strict JSON string {"mt":true,"src":"de","at":"<ISO-timestamp>"} marking the language as machine translated. Meta values are validated as strict JSON with only these fields and stored unsanitized; all other values are HTML-sanitized. When the HTML of a language is changed manually (i.e. the content changed but the resent meta is the previously stored one), the meta key for that language is removed - a manual edit clears the machine-translated tag.'
+        description: 'Per-language DPA HTML content (language code -> HTML). Supports the
+          machine-translation metadata convention: next to a translated language (e.g. "en") the
+          map may carry a parallel "en__meta" key whose value is the strict JSON string
+          {"mt":true,"src":"de","at":"<ISO-timestamp>"} marking the language as machine
+          translated. Meta values are validated as strict JSON with only these fields and stored
+          unsanitized; all other values are HTML-sanitized. When the HTML of a language is changed
+          manually (i.e. the content changed but the resent meta is the previously stored one),
+          the meta key for that language is removed - a manual edit clears the
+          machine-translated tag.'
         content:
           application/json:
             schema:
@@ -731,24 +1465,86 @@ paths:
               additionalProperties:
                 type: string
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DpaGateStatusDTO'
-        '403':
+        403:
           description: FORBIDDEN - not authorized to access this tenant
-        '404':
+        404:
           description: NOT FOUND - tenant does not exist
-        '500':
+        409:
+          description: CONFLICT - this document requires deadline-managed publication through /dpa/v2
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenantadmin/{id}/dpa/v2:
+    summary: 'Publish a tenant Data Processing Agreement (multilingual)'
+    put:
+      tags:
+        - tenant-controller
+      summary: 'Publishes the tenant DPA text and stamps a new version [Authorization: Authority.UPDATE_TENANT]'
+      operationId: publishDataProcessingAgreementV2
+      parameters:
+        - name: id
+          in: path
+          description: Tenant ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: signingDeadlineAt
+          in: query
+          required: true
+          description: 'Global signing deadline for this publication, including the first AVV.
+            Must be a future instant with an explicit offset. No default duration is applied.'
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: 'Per-language DPA HTML content (language code -> HTML). Supports the
+          machine-translation metadata convention: next to a translated language (e.g. "en") the
+          map may carry a parallel "en__meta" key whose value is the strict JSON string
+          {"mt":true,"src":"de","at":"<ISO-timestamp>"} marking the language as machine
+          translated. Meta values are validated as strict JSON with only these fields and stored
+          unsanitized; all other values are HTML-sanitized. When the HTML of a language is changed
+          manually (i.e. the content changed but the resent meta is the previously stored one),
+          the meta key for that language is removed - a manual edit clears the
+          machine-translated tag.'
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DpaGateStatusDTO'
+        400:
+          description: BAD REQUEST - missing, invalid or nonfuture signing deadline
+        403:
+          description: FORBIDDEN - not authorized to access this tenant
+        404:
+          description: NOT FOUND - tenant does not exist
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/{id}/dpa/versions:
-    summary: Published DPA versions of a tenant (newest first)
+    summary: 'Published versions of the DPA in force for a tenant (newest first)'
+    description: 'The tenant''s own publish history if it authored a DPA, otherwise the governing
+      operator DPA (tenant app.dpa.operator-tenant-id) it is measured against - the same document
+      the DPA status and the in-app signing path use, so a tenant always has the agreement it is
+      blocked on available to read. The content is the unchanged multilingual map; the caller
+      picks the language.'
     get:
       tags:
         - tenant-controller
-      summary: 'Lists the published DPA versions of a tenant [Authorization: Authority.GET_TENANT]'
+      summary: 'Lists the published versions of the DPA in force for a tenant
+        [Authorization: Authority.GET_TENANT]'
       operationId: getDataProcessingAgreementVersions
       parameters:
         - name: id
@@ -759,7 +1555,7 @@ paths:
             type: integer
             format: int64
       responses:
-        '200':
+        200:
           description: Successful operation
           content:
             application/json:
@@ -767,15 +1563,124 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DpaVersionDTO'
-        '403':
+        403:
           description: FORBIDDEN - not authorized to access this tenant
-        '500':
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenantadmin/{id}/dpa/status:
+    summary: 'Authoritative DPA status of a tenant for its authenticated tenant admins'
+    get:
+      tags:
+        - tenant-controller
+      summary: 'Returns the authoritative DPA state (MISSING, UNSIGNED, OUTDATED, VALID,
+        INCONSISTENT) of a tenant [Authorization: Authority.GET_TENANT]'
+      operationId: getDataProcessingAgreementStatus
+      parameters:
+        - name: id
+          in: path
+          description: Tenant ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DpaStatusDTO'
+        403:
+          description: FORBIDDEN - not authorized to access this tenant
+        404:
+          description: NOT FOUND - no tenant with the given id exists
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenantadmin/{id}/dpa/sign:
+    summary: 'Sign the currently published DPA version as an authenticated tenant admin'
+    description: 'Legacy signing for documents without deadline policy. Deadline-managed documents require /dpa/v2/sign and an exact displayed version; legacy signing returns 409.'
+    post:
+      tags:
+        - tenant-controller
+      summary: 'Signs the current DPA version; persists signer identity, version, timestamp and
+        form data append-only. Idempotent for an already-VALID tenant.
+        [Authorization: Authority.UPDATE_TENANT]'
+      operationId: signDataProcessingAgreement
+      parameters:
+        - name: id
+          in: path
+          description: Tenant ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DpaAdminSignRequestDTO'
+      responses:
+        200:
+          description: Successful operation - returns the resulting authoritative DPA status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DpaStatusDTO'
+        400:
+          description: BAD REQUEST - the agreement checkbox was not accepted
+        403:
+          description: FORBIDDEN - not authorized to access this tenant
+        409:
+          description: CONFLICT - no published DPA, or deadline-managed document requires /dpa/v2/sign
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+  /tenantadmin/{id}/dpa/v2/sign:
+    summary: 'Sign the currently published DPA version as an authenticated tenant admin'
+    post:
+      tags:
+        - tenant-controller
+      summary: 'Signs the current DPA version; persists signer identity, version, timestamp and
+        form data append-only. Idempotent for an already-VALID tenant.
+        [Authorization: Authority.UPDATE_TENANT]'
+      operationId: signDataProcessingAgreementV2
+      parameters:
+        - name: id
+          in: path
+          description: Tenant ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DpaVersionedAdminSignRequestDTO'
+      responses:
+        200:
+          description: Successful operation - returns the resulting authoritative DPA status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DpaStatusDTO'
+        400:
+          description: BAD REQUEST - missing or malformed displayed version, or agreement checkbox not accepted
+        403:
+          description: FORBIDDEN - not authorized to access this tenant
+        409:
+          description: CONFLICT - no published DPA or displayed version is outdated
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /tenantadmin/media:
     post:
       tags:
         - tenant-controller
-      summary: 'Uploads an editor image owned by the calling admin''s tenant. Content type is derived from magic bytes (PNG/JPEG/WebP only, max 2 MB) [Authorization: tenant-admin, single-tenant-admin]'
+      summary:
+        'Uploads an editor image owned by the calling admin''s tenant. Content type is derived
+        from magic bytes (PNG/JPEG/WebP only, max 2 MB) [Authorization: tenant-admin,
+        single-tenant-admin]'
       operationId: uploadTenantMedia
       requestBody:
         content:
@@ -789,23 +1694,25 @@ paths:
                   type: string
                   format: binary
       responses:
-        '201':
+        201:
           description: CREATED - media stored
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantMediaResponseDTO'
-        '400':
+        400:
           description: BAD REQUEST - unsupported content or size limit exceeded
-        '401':
+        401:
           description: UNAUTHORIZED - no/invalid Keycloak token
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
   /media/{mediaId}:
     get:
       tags:
         - tenant-controller
-      summary: 'Serves a stored tenant media file. Public: legal-text images are read by anonymous visitors. Immutable content (UUID ids), aggressively cacheable.'
+      summary:
+        'Serves a stored tenant media file. Public: legal-text images are read by anonymous
+        visitors. Immutable content (UUID ids), aggressively cacheable.'
       operationId: getTenantMedia
       parameters:
         - name: mediaId
@@ -814,29 +1721,42 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        200:
           description: OK - media content
           content:
             application/octet-stream:
               schema:
                 type: string
                 format: binary
-        '404':
+        404:
           description: NOT FOUND - unknown media id
-        '500':
+        500:
           description: INTERNAL SERVER ERROR - server encountered unexpected condition
 components:
   schemas:
+    TenantOperationalStatusUpdateDTO:
+      type: object
+      required: [active]
+      properties:
+        active: {type: boolean}
+    TenantOperationalStatusDTO:
+      type: object
+      required: [id, active]
+      properties:
+        id: {type: integer, format: int64}
+        active: {type: boolean}
     TranslationApiKeysDTO:
       type: object
-      description: Masked machine-translation provider API keys. A key is shown as its first characters plus the last 4 (e.g. "sk-…abcd"); null means no key is configured for that provider.
+      description: 'Masked machine-translation provider API keys. A key is shown as its first
+        characters plus the last 4 (e.g. "sk-…abcd"); null means no key is configured for that
+        provider.'
       properties:
         openrouter:
           type: string
-          example: sk-…abcd
+          example: "sk-…abcd"
         mistral:
           type: string
-          example: Fgh…9xyz
+          example: "Fgh…9xyz"
     TranslationApiKeyUpdateDTO:
       type: object
       required:
@@ -846,7 +1766,7 @@ components:
           type: string
           minLength: 1
           maxLength: 500
-          example: sk-or-v1-0123456789abcdef
+          example: "sk-or-v1-0123456789abcdef"
     TranslationRequestDTO:
       type: object
       required:
@@ -857,28 +1777,29 @@ components:
         sourceLang:
           type: string
           maxLength: 10
-          example: de
+          example: "de"
         targetLangs:
           type: array
           items:
             type: string
             maxLength: 10
           minItems: 1
-          example:
-            - en
-            - fr
+          example: [ "en", "fr" ]
         provider:
           type: string
-          description: Optional explicit provider (openrouter or mistral). If omitted, openrouter is used when its key is configured, otherwise mistral.
-          example: openrouter
+          description: 'Optional explicit provider (openrouter or mistral). If omitted, openrouter
+            is used when its key is configured, otherwise mistral.'
+          example: "openrouter"
         texts:
           type: object
-          description: HTML texts to translate, keyed by a caller-defined field key (e.g. "privacy", "impressum").
+          description: 'HTML texts to translate, keyed by a caller-defined field key
+            (e.g. "privacy", "impressum").'
           additionalProperties:
             type: string
     TranslationResponseDTO:
       type: object
-      description: Translations keyed by target language, each holding the translated HTML per field key. HTML tags, attributes and structure are preserved by the provider prompt.
+      description: 'Translations keyed by target language, each holding the translated HTML per
+        field key. HTML tags, attributes and structure are preserved by the provider prompt.'
       properties:
         translations:
           type: object
@@ -888,25 +1809,30 @@ components:
               type: string
         provider:
           type: string
-          example: openrouter
+          example: "openrouter"
         model:
           type: string
-          example: openai/gpt-4o-mini
+          example: "openai/gpt-4o-mini"
     TranslationErrorDTO:
       type: object
-      description: Typed machine-translation error. errorCode is one of TRANSLATION_NOT_CONFIGURED, TRANSLATION_KEY_INVALID, TRANSLATION_NO_CREDIT, TRANSLATION_RATE_LIMITED, TRANSLATION_PROVIDER_UNAVAILABLE.
+      description: 'Typed machine-translation error. errorCode is one of
+        TRANSLATION_NOT_CONFIGURED, TRANSLATION_KEY_INVALID, TRANSLATION_NO_CREDIT,
+        TRANSLATION_RATE_LIMITED, TRANSLATION_PROVIDER_UNAVAILABLE.'
       properties:
         errorCode:
           type: string
-          example: TRANSLATION_KEY_INVALID
+          example: "TRANSLATION_KEY_INVALID"
         provider:
           type: string
-          example: openrouter
+          example: "openrouter"
         message:
           type: string
     DpaVersionDTO:
       type: object
       properties:
+        signingDeadlineAt:
+          type: string
+          description: 'UTC deadline of the governing publication. Absent on legacy snapshots.'
         activationDate:
           type: string
         content:
@@ -920,6 +1846,24 @@ components:
           type: string
         expiresAt:
           type: string
+    PublicDpaForwardRequestDTO:
+      type: object
+      required:
+        - reservedTenantId
+        - tenantIdReservationToken
+      description: 'Onboarding-context credential for the public DPA forward: the reservation
+        pair the tenant-admin onboarding invite carries (TenantIdReservationDTO). The raw
+        reservation token is validated against the authoritative tenant-ID ledger and never
+        persisted or logged by this endpoint.'
+      properties:
+        reservedTenantId:
+          type: integer
+          format: int64
+          example: 42
+        tenantIdReservationToken:
+          type: string
+          maxLength: 36
+          example: "a81bc81b-dead-4e5d-abff-90865d1e13b1"
     DpaSignPreviewDTO:
       type: object
       required:
@@ -930,20 +1874,135 @@ components:
       properties:
         tenantName:
           type: string
+          description: 'Name of the tenant the signature belongs to. A sign link created from
+            the public onboarding context is bound to a reserved tenant id whose tenant row does
+            not exist yet; until the registration completes this carries the same neutral
+            placeholder the forward e-mail uses. Never null - the field stays required.'
         dpaVersion:
           type: string
         content:
           type: string
-          description: Sanitized multilingual DPA snapshot as JSON (language code -> HTML).
+          description: 'Sanitized multilingual DPA snapshot as JSON (language code -> HTML).'
         expiresAt:
           type: string
     DpaGateStatusDTO:
       type: object
       properties:
+        signingDeadlineAt:
+          type: string
+          description: 'UTC deadline of the governing publication. Absent on legacy snapshots.'
+        renewalGraceActive:
+          type: boolean
+          description: 'True only for a previously signed, outdated renewal before its deadline. Never grants initial unsigned access.'
+        dpaStatus:
+          type: string
+          description: 'Authoritative legal state, separate from renewal grace.'
+        currentDpaVersion:
+          type: string
+        newCounsellingAllowed:
+          type: boolean
+          description: 'Current signature or active renewal grace. Begun counselling continuation is evaluated separately by its owner.'
         dpaPublished:
           type: boolean
         dpaSigned:
           type: boolean
+        dpaForwardPending:
+          type: boolean
+          description: 'True while the governing DPA version is not signed but at least one
+            unexpired sign link is outstanding for the tenant - the contract is "on hold"
+            awaiting the authorised signer (status PENDING_FORWARDED).'
+    DpaStatusDTO:
+      type: object
+      required:
+        - tenantId
+        - status
+      properties:
+        newCounsellingAllowed:
+          type: boolean
+          description: 'Current signature or active renewal grace. Route access for begun counselling and signing recovery is separate.'
+        signingDeadlineAt:
+          type: string
+          description: 'UTC deadline of the governing publication. Absent on legacy snapshots.'
+        renewalGraceActive:
+          type: boolean
+          description: 'True only for a previously signed, outdated renewal before its deadline. Never grants initial unsigned access.'
+        tenantId:
+          type: integer
+          format: int64
+          example: 7
+        status:
+          type: string
+          description: MISSING = no DPA ever published and nothing signed, UNSIGNED = published
+            but never signed, OUTDATED = only an older version is signed, VALID = the current
+            version is signed, INCONSISTENT = stored signature data contradicts the publish
+            history. The "forwarded, awaiting signature" case is NOT a status value - it is the
+            orthogonal forwardPending flag below, so existing consumers keep receiving the
+            values they already handle.
+          enum: [ MISSING, UNSIGNED, OUTDATED, VALID, INCONSISTENT ]
+        forwardPending:
+          type: boolean
+          description: 'True while the tenant is not validly signed AND at least one unexpired
+            sign link is outstanding - the contract is "on hold" awaiting the authorised signer.
+            Never true for VALID, MISSING or INCONSISTENT.'
+          example: false
+        currentDpaVersion:
+          type: string
+          description: Activation timestamp of the currently published DPA version, if any
+          example: "2026-07-01T12:00:00"
+        signedDpaVersion:
+          type: string
+          description: Newest DPA version a signature exists for, if any
+          example: "2026-05-01T10:00:00"
+        signedAt:
+          type: string
+          description: Timestamp of the signature covering the newest signed version
+          example: "2026-05-02T09:30:00"
+        signedBy:
+          type: string
+          description: Display name of the signer of the newest signed version
+          example: "Toni Tenantadmin"
+    DpaAdminSignRequestDTO:
+      type: object
+      required:
+        - signerName
+        - accepted
+      properties:
+        signerName:
+          type: string
+          maxLength: 255
+          example: "Toni Tenantadmin"
+        signerPosition:
+          type: string
+          maxLength: 255
+          example: "Geschäftsführung"
+        signerEmail:
+          type: string
+          maxLength: 255
+          format: email
+          example: "toni@example.org"
+        signerOrganisation:
+          type: string
+          maxLength: 255
+          example: "Träger Nord e.V."
+        accepted:
+          type: boolean
+          description: Must be true - the signer explicitly accepted the current DPA version
+          example: true
+        language:
+          type: string
+          maxLength: 10
+          example: "de"
+    DpaVersionedAdminSignRequestDTO:
+      allOf:
+        - $ref: '#/components/schemas/DpaAdminSignRequestDTO'
+        - type: object
+          required:
+            - dpaVersion
+          properties:
+            dpaVersion:
+              type: string
+              maxLength: 40
+              description: 'Exact activationDate/currentDpaVersion of the contract displayed to the signer. Missing/malformed input is rejected; an outdated displayed version returns 409 without signing the unseen renewal.'
     DpaSignatureRequestDTO:
       type: object
       required:
@@ -957,28 +2016,36 @@ components:
         signerName:
           type: string
           maxLength: 255
-          example: Erika Mustermann
+          example: "Erika Mustermann"
         signerPosition:
           type: string
           maxLength: 255
-          example: Geschäftsführerin
+          example: "Geschäftsführerin"
         signerEmail:
           type: string
           maxLength: 255
           format: email
-          example: erika.mustermann@example.org
+          example: "erika.mustermann@example.org"
         signerOrganisation:
           type: string
           maxLength: 255
-          example: Caritas Beispiel e.V.
+          example: "Caritas Beispiel e.V."
         forwardedByUserId:
           type: string
           maxLength: 64
-          example: tenant-admin-1
+          example: "tenant-admin-1"
+          deprecated: true
+          description: 'Ignored since ORISO-TenantService#179: the forwarder identity is stamped
+            server-side when the sign link is created and can no longer be supplied by the
+            signing client.'
         source:
           type: string
           maxLength: 64
-          example: PUBLIC_SIGN_LINK
+          example: "FORWARDED_EXTERNAL"
+          deprecated: true
+          description: 'Ignored since ORISO-TenantService#179: the signature source is stamped
+            server-side when the sign link is created and can no longer be supplied by the
+            signing client.'
         signerIsMember:
           type: boolean
           example: false
@@ -988,7 +2055,7 @@ components:
         language:
           type: string
           maxLength: 10
-          example: de
+          example: "de"
     DpaSignatureDTO:
       type: object
       properties:
@@ -997,7 +2064,11 @@ components:
           format: int64
         status:
           type: string
-          example: SIGNED
+          example: "SIGNED"
+        dpaVersion:
+          type: string
+          description: Activation timestamp identifying the signed DPA version
+          example: "2026-07-01T12:00:00"
         signerName:
           type: string
         signerPosition:
@@ -1012,6 +2083,10 @@ components:
           type: string
         signedAt:
           type: string
+        language:
+          type: string
+          description: Optional stored confirmation language; absent for legacy signatures.
+          example: "de"
     TenantDTO:
       type: object
       required:
@@ -1019,25 +2094,50 @@ components:
         - name
         - subdomain
       properties:
+        active:
+          type: boolean
+          description: Operational status of this Träger. Existing and new tenants start active; omission on update preserves the stored status. Only the matching Träger-admin may change status after creation. Independent of legal agreement state.
         id:
           type: integer
           format: int64
           example: 12132
         name:
           type: string
-          example: Company name AG
+          example: "Company name AG"
           maxLength: 40
         subdomain:
           type: string
-          example: companyname
+          example: "companyname"
           maxLength: 100
         address:
           type: string
           maxLength: 255
-          example: Musterstraße 1, 12345 Musterstadt
+          example: "Musterstraße 1, 12345 Musterstadt"
         description:
           type: string
-          example: Short description of the tenant.
+          example: "Short description of the tenant."
+        legalName:
+          type: string
+          maxLength: 255
+          description: >-
+            Full legal name of the Träger, e.g. "Caritasverband für die Erzdiözese Musterstadt e.V.".
+            Optional; `name` stays the short display name (max 40). Mail footers name this as the
+            sender where it is set. Same limit as the platform operator's `DpiaOperatorDTO.legalName`.
+          example: "Caritasverband für die Erzdiözese Musterstadt e.V."
+        contactEmail:
+          type: string
+          format: email
+          maxLength: 255
+          description: >-
+            Contact e-mail address of the Träger, shown in the mail footer's contact line. Optional.
+          example: "beratung@caritas-musterstadt.de"
+        contactPhone:
+          type: string
+          maxLength: 64
+          description: Contact phone number of the Träger, shown in the mail footer. Optional.
+          example: "+49 761 200-0"
+        dataProtectionOfficer:
+          $ref: '#/components/schemas/TenantDataProtectionOfficerDTO'
         createDate:
           type: string
         updateDate:
@@ -1045,52 +2145,153 @@ components:
         licensing:
           $ref: '#/components/schemas/Licensing'
         theming:
-          $ref: '#/components/schemas/Theming'
+          $ref:
+            '#/components/schemas/Theming'
         content:
-          $ref: '#/components/schemas/Content'
+          $ref:
+            '#/components/schemas/Content'
         settings:
-          $ref: '#/components/schemas/Settings'
+          $ref:
+            '#/components/schemas/Settings'
     MultilingualTenantDTO:
+          type: object
+          required:
+            - name
+          properties:
+            active:
+              type: boolean
+              description: Operational status of this Träger. Existing and new tenants start active; omission on update preserves the stored status. Only the matching Träger-admin may change status after creation. Independent of legal agreement state.
+            id:
+              type: integer
+              format: int64
+              example: 12132
+            name:
+              type: string
+              example: "Company name AG"
+              maxLength: 40
+            subdomain:
+              type: string
+              description: >-
+                Multitenancy routing key. Must match `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`: lowercase
+                letters, digits and hyphens, starting and ending alphanumeric. Enforced by the
+                service on create, and on update whenever the submitted value differs from the
+                stored one - rows written before the rule existed stay editable. A violation is
+                answered with 400 and `X-Reason: SUBDOMAIN_INVALID`.
+
+                Deliberately not expressed as `pattern`: that would apply the rule to every
+                update of an already-stored value as well, locking admins out of records that
+                predate it.
+              example: "companyname"
+              maxLength: 100
+            address:
+              type: string
+              maxLength: 255
+              example: "Musterstraße 1, 12345 Musterstadt"
+            description:
+              type: string
+              example: "Short description of the tenant."
+            legalName:
+              type: string
+              maxLength: 255
+              description: >-
+                Full legal name of the Träger, e.g. "Caritasverband für die Erzdiözese Musterstadt e.V.".
+                Optional; `name` stays the short display name (max 40). Mail footers name this as the
+                sender where it is set. Same limit as the platform operator's `DpiaOperatorDTO.legalName`.
+                On update, an absent value keeps the stored one and a blank value clears it, so a
+                client that does not know the field cannot wipe it by saving the rest of the tenant.
+                The same applies to `contactEmail` and `contactPhone`.
+              example: "Caritasverband für die Erzdiözese Musterstadt e.V."
+            contactEmail:
+              type: string
+              format: email
+              maxLength: 255
+              description: >-
+                Contact e-mail address of the Träger, shown in the mail footer's contact line. Optional.
+              example: "beratung@caritas-musterstadt.de"
+            contactPhone:
+              type: string
+              maxLength: 64
+              description: Contact phone number of the Träger, shown in the mail footer. Optional.
+              example: "+49 761 200-0"
+            dataProtectionOfficer:
+              $ref: '#/components/schemas/TenantDataProtectionOfficerDTO'
+            adminEmails:
+              type: array
+              items:
+                type: string
+              example: "[admin1@ob.de, admin2@ob.de]"
+            createDate:
+              type: string
+            updateDate:
+              type: string
+            tenantIdReservationToken:
+              type: string
+              maxLength: 36
+              description: Token of an open tenant ID reservation. When creating a tenant with
+                a reserved ID, the matching token proves ownership of the reservation, which is
+                then consumed atomically with the creation. Without a matching token a reserved
+                ID is rejected with a conflict.
+            licensing:
+              $ref: '#/components/schemas/Licensing'
+            theming:
+              $ref:
+                '#/components/schemas/Theming'
+            content:
+              $ref:
+                '#/components/schemas/MultilingualContent'
+            settings:
+              $ref:
+                '#/components/schemas/Settings'
+            onboardingDpaAcceptance:
+              $ref: '#/components/schemas/OnboardingDpaAcceptanceDTO'
+    OnboardingDpaAcceptanceDTO:
       type: object
+      description: 'Creation-only: the data processing agreement acceptance a tenant admin gave
+        while onboarding through a public invite link (TEN-INV-U9/#569). Persisted append-only as
+        the tenant''s admin signature in the SAME unit of work as the tenant creation, so a tenant
+        never exists without the acceptance that created it. Ignored on update. Only the
+        tenant-creating authority (platform admin / technical user) may submit it, which is why
+        the signer identity is taken from the body instead of the access token: the signer is the
+        freshly created tenant admin, not the calling service account.'
       required:
-        - name
+        - accepted
+        - signerUserId
+        - signerName
       properties:
-        id:
-          type: integer
-          format: int64
-          example: 12132
-        name:
-          type: string
-          example: Company name AG
-          maxLength: 40
-        subdomain:
-          type: string
-          example: companyname
-          maxLength: 100
-        address:
+        accepted:
+          type: boolean
+          description: Must be true - the tenant admin explicitly accepted the agreement
+          example: true
+        signerUserId:
           type: string
           maxLength: 255
-          example: Musterstraße 1, 12345 Musterstadt
-        description:
+          description: Keycloak user id of the tenant-admin account created for this onboarding
+        signerUsername:
           type: string
-          example: Short description of the tenant.
-        adminEmails:
-          type: array
-          items:
-            type: string
-          example: '[admin1@ob.de, admin2@ob.de]'
-        createDate:
+          maxLength: 255
+        signerName:
           type: string
-        updateDate:
+          maxLength: 255
+          example: "Toni Tenantadmin"
+        signerPosition:
           type: string
-        licensing:
-          $ref: '#/components/schemas/Licensing'
-        theming:
-          $ref: '#/components/schemas/Theming'
-        content:
-          $ref: '#/components/schemas/MultilingualContent'
-        settings:
-          $ref: '#/components/schemas/Settings'
+          maxLength: 255
+        signerEmail:
+          type: string
+          maxLength: 255
+        signerOrganisation:
+          type: string
+          maxLength: 255
+        language:
+          type: string
+          maxLength: 10
+        dpaVersion:
+          type: string
+          description: Activation timestamp of the operator DPA version that was actually shown
+            to the signer (ISO-8601 local date-time, as served by DpaVersionDTO.activationDate).
+            Must be a genuinely published version; an unknown value is rejected with a conflict.
+            Omitted means "the version currently in force".
+          example: "2026-07-01T12:00:00"
     BasicTenantLicensingDTO:
       type: object
       required:
@@ -1104,11 +2305,11 @@ components:
           example: 12132
         name:
           type: string
-          example: Company name AG
+          example: "Company name AG"
           maxLength: 40
         subdomain:
           type: string
-          example: companyname
+          example: "companyname"
           maxLength: 100
         createDate:
           type: string
@@ -1122,29 +2323,43 @@ components:
         - id
         - name
       properties:
+        active:
+          type: boolean
+          description: Operational status of this Träger. Existing and new tenants start active; omission on update preserves the stored status. Only the matching Träger-admin may change status after creation. Independent of legal agreement state.
         id:
           type: integer
           format: int64
           example: 12132
         name:
           type: string
-          example: Company name AG
+          example: "Company name AG"
           maxLength: 40
         subdomain:
           type: string
-          example: subdomain
+          example: "subdomain"
           maxLength: 100
+        dataProtectionOfficer:
+          $ref: '#/components/schemas/TenantDataProtectionOfficerDTO'
         theming:
-          $ref: '#/components/schemas/Theming'
+          $ref:
+            '#/components/schemas/Theming'
         content:
-          $ref: '#/components/schemas/Content'
+          $ref:
+            '#/components/schemas/Content'
         settings:
-          $ref: '#/components/schemas/Settings'
+          $ref:
+            '#/components/schemas/Settings'
         permissionPolicies:
           type: object
           readOnly: true
+          description: Resolved boolean policies for downstream services. Suggestions are not applied to settings.
           additionalProperties:
             $ref: '#/components/schemas/BooleanPermissionPolicy'
+        internalGroupChat:
+          allOf:
+            - $ref: '#/components/schemas/InternalGroupChatPolicies'
+          readOnly: true
+          description: Resolved internal group chat policies (recipient scope) for downstream services.
     Licensing:
       type: object
       required:
@@ -1155,22 +2370,63 @@ components:
           example: 1
     Theming:
       type: object
+      description: >-
+        Tenant branding. The two accents form a pair: `primaryColor` is the DARK accent
+        and `accent` is the LIGHT accent. Which one a surface uses depends on the surface's
+        background, not on the user's theme preference alone — see the field descriptions.
       properties:
+        assistantName:
+          type: string
+          maxLength: 80
+          description: Tenant assistant name; absent uses the established Carimat default.
+        assistantIcon:
+          type: string
+          description: Predefined robot identifier or validated SVG/PNG data URI.
         logo:
           type: string
-          example: base64 encoded image
+          example: "base64 encoded image"
         associationLogo:
           type: string
-          example: base64 encoded image
+          example: "base64 encoded image"
         favicon:
           type: string
-          example: base64 encoded image
+          example: "base64 encoded image"
         primaryColor:
           type: string
-          example: '#FFFFFF'
+          example: "#8B1A2B"
+          description: >-
+            The DARK accent ("Dunkle Akzentfarbe"). Used on LIGHT-MODE surfaces, where a dark
+            colour carries the contrast. Historic field name — semantics are unchanged and
+            existing consumers depend on it, so it is not renamed.
+        accent:
+          type: string
+          example: "#FFB3C7"
+          description: >-
+            The LIGHT accent ("Helle Akzentfarbe"). Used on DARK-MODE surfaces, where a light
+            colour carries the contrast. May be null for tenants configured before this field
+            existed; consumers then derive a light accent from `primaryColor` and must present
+            that as a derived value, never as a configured one.
         secondaryColor:
           type: string
-          example: '#FFFFFF'
+          example: "#FFFFFF"
+        loginEffect:
+          type: string
+          enum: [NONE, LINES, CONNECTED_DOTS, CRACKS]
+          example: "CRACKS"
+          description: >-
+            Which decorative effect the tenant's login stage runs. `NONE` (the default,
+            and what an unset value means) keeps the plain stage with its cursor light
+            cone. The other three are mutually exclusive looks; the frontend loads the
+            code for exactly the one named here and never the others, so this field also
+            decides what a visitor downloads. Desktop only — the stage is not rendered on
+            small viewports, so no effect code is fetched there regardless of this value.
+        signal:
+          type: string
+          example: "#D93025"
+          description: >-
+            Optional signal/attention colour of the tenant seed set (errors, warnings,
+            destructive actions). Persisted so nothing the Admin panel submits is silently
+            dropped; may be null when the tenant has never configured one.
     Content:
       type: object
       required:
@@ -1178,271 +2434,605 @@ components:
       properties:
         impressum:
           type: string
-          example: Llorem ipsum...
+          example: "Llorem ipsum..."
         impressumLanguages:
           type: object
           additionalProperties:
             type: string
-          description: Raw stored language map for the impressum, including the `<lang>__meta` machine-translation metadata keys (JSON strings like `{"mt":true,"src":"de","at":"<ISO>"}`). Lets clients show a "machine translated / legally binding is German" notice. The `<lang>` values are the same sanitized HTML the resolved `impressum` field is picked from; the map is exposed as stored, no additional processing.
+          description: >-
+            Raw stored language map for the impressum, including the `<lang>__meta`
+            machine-translation metadata keys (JSON strings like
+            `{"mt":true,"src":"de","at":"<ISO>"}`). Lets clients show a
+            "machine translated / legally binding is German" notice. The `<lang>`
+            values are the same sanitized HTML the resolved `impressum` field is
+            picked from; the map is exposed as stored, no additional processing.
         claim:
           type: string
-          example: Llorem ipsum...
+          example: "Llorem ipsum..."
           maxLength: 40
+        erstantwortGreeting:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            ORISO-Admin#601 / ADR-018. Träger-authored Erstantwort Baustein, stored as the
+            same `<lang>` → HTML map the legal texts use, including the `<lang>__meta`
+            machine-translation metadata keys. Absent means this Träger authored nothing and
+            the resolution chain falls through to the platform text — which is not the same
+            as an empty string, and must not be normalised into one.
+            Applies to all five Bausteine on save: an absent or empty map keeps the stored text;
+            a language whose value is a blank string is removed (with its `<lang>__meta`); when
+            every language is removed the stored value becomes `{}`.
+        erstantwortWhoReadsAlong:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Who reads along. Träger-authored and mandatory by decision, because the Träger is
+            the controller and ORISO the processor — the platform must not derive a claim about
+            who has access to a counselling room.
+        erstantwortEmergencyAddition:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Träger addition to the platform emergency numbers. An addition, never a replacement:
+            the platform numbers carry no toggle at all (ADR-018 §6).
+        erstantwortFreeNotice:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            The single "Freier Hinweis" (ADR-018 §2) — the one Baustein the catalogue does not
+            anticipate. Exactly one exists, enforced by the schema rather than by a rule.
+        erstantwortClosing:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Träger-authored closing.
+        erstantwortResponseDeadlineDays:
+          type: integer
+          example: 2
+          minimum: 1
+          maximum: 30
+          description: >-
+            The Antwortfrist in working days, as a NUMBER and never as prose (ADR-018), so the
+            promise is one value comparable against what actually happened. Absent means the
+            Träger never chose one and the platform default (2) applies — deliberately
+            distinguishable from a Träger that chose 2. A response never carries 0.
         privacy:
           type: string
-          example: Llorem ipsum...
+          example: "Llorem ipsum..."
         privacyLanguages:
           type: object
           additionalProperties:
             type: string
-          description: 'Raw stored language map for the privacy statement, including the `<lang>__meta` machine-translation metadata keys. Same semantics as `impressumLanguages`. Note: contains the stored (unrendered) privacy text, i.e. without the data-protection placeholder rendering applied to `renderedPrivacy`.'
+          description: >-
+            Raw stored language map for the privacy statement, including the
+            `<lang>__meta` machine-translation metadata keys. Same semantics as
+            `impressumLanguages`. Note: contains the stored (unrendered) privacy
+            text, i.e. without the data-protection placeholder rendering applied
+            to `renderedPrivacy`.
         renderedPrivacy:
           type: string
-          example: Llorem ipsum...
+          example: "Llorem ipsum..."
         termsAndConditions:
           type: string
-          example: Llorem ipsum...
+          example: "Llorem ipsum..."
         termsAndConditionsConfirmation:
           type: string
           format: date-time
-          example: '2022-12-07T11:51:01'
-          description: Datetime stamp when new terms and condition defined
+          example: 2022-12-07T11:51:01
+          description: "Datetime stamp when new terms and condition defined"
         dataPrivacyConfirmation:
           type: string
           format: date-time
-          example: '2022-12-07T11:51:01'
-          description: Datetime stamp when new privacy defined
+          example: 2022-12-07T11:51:01
+          description: "Datetime stamp when new privacy defined"
         dataProtectionContactTemplate:
           $ref: '#/components/schemas/DataProtectionContactTemplateDTO'
+
     Settings:
       type: object
       properties:
         featureStatisticsEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
         featureTopicsEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
         topicsInRegistrationEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
         featureDemographicsEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
         featureAppointmentsEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
         featureGroupChatV2Enabled:
           type: boolean
-          example: 'false'
+          example: "false"
+        featureInternalGroupChatEnabled:
+          type: boolean
+          description: >-
+            Internal group chats (counsellors only), switched separately from conversation
+            circles (#250). When the tenant never stored a value, this reads the tenant's
+            featureGroupChatV2Enabled.
+          example: "true"
+        featureSelfHelpGroupsEnabled:
+          type: boolean
+          description: >-
+            Conversation circles / self-help groups (advice seekers take part), switched
+            separately from internal group chats (#250). When the tenant never stored a value,
+            this reads the tenant's featureGroupChatV2Enabled.
+          example: "true"
         featureTeamDiscussionEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
         featureToolsEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
         featureAnonymousChatEnabled:
           type: boolean
-          example: 'true'
+          example: "true"
+        featureDisplayNameEditable:
+          type: boolean
+          example: "true"
+          description: "ORISO-Admin#602 switch 1. Whether an advice seeker may type their own Anzeigename (displayName), or may only re-roll the generated one. Never governs the Anmeldename (userName), which is immutable at every layer. Opt-out: defaults to true."
+        featureAskerEmailEnabled:
+          type: boolean
+          example: "true"
+          description: "ORISO-Admin#602 switch 2. Whether an advice seeker may leave an e-mail address at all. When false it must silence both the in-chat Erstantwort Baustein and the profile e-mail field. Opt-out: defaults to true."
+        featureAskerEmailAgencyCounsellingEnabled:
+          type: boolean
+          default: true
+          description: "Effective advice-seeker notification channel permission for EmailAgencyCounselling. Email additionally requires featureAskerEmailEnabled."
+        featureAskerEmailLiveChatEnabled:
+          type: boolean
+          default: false
+          description: "Effective advice-seeker notification channel permission for EmailLiveChat. Email additionally requires featureAskerEmailEnabled."
+        featureAskerEmailSelfHelpEnabled:
+          type: boolean
+          default: true
+          description: "Effective advice-seeker notification channel permission for EmailSelfHelp. Email additionally requires featureAskerEmailEnabled."
+        featureAskerBrowserAgencyCounsellingEnabled:
+          type: boolean
+          default: true
+          description: "Effective advice-seeker notification channel permission for BrowserAgencyCounselling. Email additionally requires featureAskerEmailEnabled."
+        featureAskerBrowserLiveChatEnabled:
+          type: boolean
+          default: true
+          description: "Effective advice-seeker notification channel permission for BrowserLiveChat. Email additionally requires featureAskerEmailEnabled."
+        featureAskerBrowserSelfHelpEnabled:
+          type: boolean
+          default: true
+          description: "Effective advice-seeker notification channel permission for BrowserSelfHelp. Email additionally requires featureAskerEmailEnabled."
+        featureConsultantEmailInternalGroupEnabled:
+          type: boolean
+          default: true
+          description: "Effective counsellor notification channel permission: e-mail for new messages in internal group chats (FE#1725 story 40). Opt-out: defaults to true."
+        featureConsultantBrowserInternalGroupEnabled:
+          type: boolean
+          default: true
+          description: "Effective counsellor notification channel permission: browser notification for new messages in internal group chats (FE#1725 story 40). Opt-out: defaults to true."
         featureCallsEnabled:
           type: boolean
-          example: 'true'
+          example: "true"
         featureSupervisionEnabled:
           type: boolean
-          example: 'true'
-          description: Master toggle for supervision functionality (adding/removing supervisors, supervision views).
+          example: "true"
+          description: "Master toggle for supervision functionality (adding/removing supervisors, supervision views)."
         featureSupervisionAnonymousChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable supervision functionality in anonymous chats.
+          example: "true"
+          description: "Enable supervision functionality in anonymous chats."
         featureSupervisionOneOnOneChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable supervision functionality in 1-on-1 chats.
+          example: "true"
+          description: "Enable supervision functionality in 1-on-1 chats."
         featureAudioCallsEnabled:
           type: boolean
-          example: 'true'
-          description: Master toggle for audio call button availability (all chat types).
+          example: "true"
+          description: "Master toggle for audio call button availability (all chat types)."
         featureAudioCallsAnonymousChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable audio call button in anonymous chats.
+          example: "true"
+          description: "Enable audio call button in anonymous chats."
         featureAudioCallsOneOnOneChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable audio call button in 1-on-1 chats.
+          example: "true"
+          description: "Enable audio call button in 1-on-1 chats."
         featureAudioCallsGroupChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable audio call button in group chats.
+          example: "true"
+          description: "Enable audio call button in group chats."
         featureAudioCallsSupervisionChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable audio call button when a user is in supervision mode.
+          example: "true"
+          description: "Enable audio call button when a user is in supervision mode."
         featureVideoCallsEnabled:
           type: boolean
-          example: 'true'
-          description: Master toggle for video call button availability (all chat types).
+          example: "true"
+          description: "Master toggle for video call button availability (all chat types)."
         featureVideoCallsAnonymousChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable video call button in anonymous chats.
+          example: "true"
+          description: "Enable video call button in anonymous chats."
         featureVideoCallsOneOnOneChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable video call button in 1-on-1 chats.
+          example: "true"
+          description: "Enable video call button in 1-on-1 chats."
         featureVideoCallsGroupChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable video call button in group chats.
+          example: "true"
+          description: "Enable video call button in group chats."
         featureVideoCallsSupervisionChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable video call button when a user is in supervision mode.
+          example: "true"
+          description: "Enable video call button when a user is in supervision mode."
         featureThreadsEnabled:
           type: boolean
-          example: 'true'
-          description: Master toggle for threads availability (all chat types).
+          example: "true"
+          description: "Master toggle for threads availability (all chat types)."
         featureThreadsAnonymousChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable threads in anonymous chats.
+          example: "true"
+          description: "Enable threads in anonymous chats."
         featureThreadsGroupChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable threads in group chats.
+          example: "true"
+          description: "Enable threads in group chats."
         featureThreadsOneOnOneEnabled:
           type: boolean
-          example: 'true'
-          description: Enable threads in 1-on-1 chats.
+          example: "true"
+          description: "Enable threads in 1-on-1 chats."
         featureThreadsSupervisionChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable threads when a user is in supervision mode.
+          example: "true"
+          description: "Enable threads when a user is in supervision mode."
         featureVoiceMessagesEnabled:
           type: boolean
-          example: 'true'
-          description: Master toggle for voice messages availability (all chat types).
+          example: "true"
+          description: "Master toggle for voice messages availability (all chat types)."
         featureVoiceMessagesAnonymousChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable voice messages in anonymous chats.
+          example: "true"
+          description: "Enable voice messages in anonymous chats."
         featureVoiceMessagesOneOnOneChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable voice messages in 1-on-1 chats.
+          example: "true"
+          description: "Enable voice messages in 1-on-1 chats."
         featureVoiceMessagesGroupChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable voice messages in group chats.
+          example: "true"
+          description: "Enable voice messages in group chats."
         featureVoiceMessagesSupervisionChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable voice messages when a user is in supervision mode.
+          example: "true"
+          description: "Enable voice messages when a user is in supervision mode."
         featureMediaUploadEnabled:
           type: boolean
-          example: 'true'
-          description: 'Master toggle: may images/media be uploaded into chats at all. Replaces the retired featureAttachmentUploadDisabled (ADR-015).'
+          example: "true"
+          description: "Master toggle: may images/media be uploaded into chats at all. Replaces the retired featureAttachmentUploadDisabled (ADR-015)."
         featureMediaUploadAnonymousChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable media upload in anonymous chats.
+          example: "true"
+          description: "Enable media upload in anonymous chats."
         featureMediaUploadOneOnOneChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable media upload in 1-on-1 chats.
+          example: "true"
+          description: "Enable media upload in 1-on-1 chats."
         featureMediaUploadGroupChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable media upload in group chats.
+          example: "true"
+          description: "Enable media upload in group chats."
         featureMediaUploadSupervisionChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Enable media upload when a user is in supervision mode.
+          example: "true"
+          description: "Enable media upload when a user is in supervision mode."
         featureMediaInlineDisplayEnabled:
           type: boolean
-          example: 'true'
-          description: 'Master toggle: render media as scaled thumbnails (on) or deliver as downloadable file only (off). The virus-scan requirement is attached to this switch.'
+          example: "true"
+          description: "Master toggle: render media as scaled thumbnails (on) or deliver as downloadable file only (off). The virus-scan requirement is attached to this switch."
         featureMediaInlineDisplayAnonymousChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Inline media display in anonymous chats.
+          example: "true"
+          description: "Inline media display in anonymous chats."
         featureMediaInlineDisplayOneOnOneChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Inline media display in 1-on-1 chats.
+          example: "true"
+          description: "Inline media display in 1-on-1 chats."
         featureMediaInlineDisplayGroupChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Inline media display in group chats.
+          example: "true"
+          description: "Inline media display in group chats."
         featureMediaInlineDisplaySupervisionChatsEnabled:
           type: boolean
-          example: 'true'
-          description: Inline media display when a user is in supervision mode.
+          example: "true"
+          description: "Inline media display when a user is in supervision mode."
         featureMediaAiScanEnabled:
           type: boolean
-          example: 'false'
-          description: 'Master toggle: AI content check (content scanner) sets the media check state automatically; off = phase-1 behaviour (blurred until counsellor click-to-reveal).'
+          example: "false"
+          description: "Master toggle: AI content check (content scanner) sets the media check state automatically; off = phase-1 behaviour (blurred until counsellor click-to-reveal)."
         featureMediaAiScanAnonymousChatsEnabled:
           type: boolean
-          example: 'false'
-          description: AI media scan for anonymous chats.
+          example: "false"
+          description: "AI media scan for anonymous chats."
         featureMediaAiScanOneOnOneChatsEnabled:
           type: boolean
-          example: 'false'
-          description: AI media scan for 1-on-1 chats.
+          example: "false"
+          description: "AI media scan for 1-on-1 chats."
         featureMediaAiScanGroupChatsEnabled:
           type: boolean
-          example: 'false'
-          description: AI media scan for group chats.
+          example: "false"
+          description: "AI media scan for group chats."
         featureMediaAiScanSupervisionChatsEnabled:
           type: boolean
-          example: 'false'
-          description: AI media scan when a user is in supervision mode.
+          example: "false"
+          description: "AI media scan when a user is in supervision mode."
         featureToolsOICDToken:
           type: string
-          example: 1234-1234-1234-1234
+          example: "1234-1234-1234-1234"
         activeLanguages:
           type: array
           items:
             type: string
-          example: '[en, de, fr]'
+          example: "[en, de, fr]"
         showAskerProfile:
           type: boolean
           default: false
-          example: 'false'
+          example: "false"
         isVideoCallAllowed:
           type: boolean
           default: false
-          example: 'false'
+          example: "false"
         featureSystemNotificationEmailsEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
+        smtpMode:
+          type: string
+          enum: [PLATFORM, OWN]
+          description: "Explicit mail transport selection. Absent on legacy tenants until audited."
         smtp:
           $ref: '#/components/schemas/SmtpConfig'
         extendedSettings:
-          $ref: '#/components/schemas/ConsultingTypePatchDTO'
+          $ref: './../services/consultingtypeservice.yaml#/components/schemas/ConsultingTypePatchDTO'
         featureCentralDataProtectionTemplateEnabled:
           type: boolean
-          example: 'false'
+          example: "false"
+        emailVisible:
+          type: boolean
+          default: false
+          example: "false"
+          description: "Whether the registration flow shows an email field at all."
+        emailRequired:
+          type: boolean
+          default: false
+          example: "false"
+          description: "Whether the email field, when shown, must be filled in."
         tenantAdminControls:
           $ref: '#/components/schemas/TenantAdminControls'
+
+    # DPIA operator master data (ORISO-Admin#735). Platform-level singleton maintained by
+    # the platform super admin; consumed publicly by the living-DPIA/legal document
+    # renderers. Public consumers additionally get the resolved tenant branding
+    # (PublicDpiaMasterDataDTO). Deliberately NO secrets and NO free-form maps here:
+    # every field is typed so nothing secret can ride along unnoticed.
+    PlatformDpiaMasterDataDTO:
+      type: object
+      properties:
+        operator:
+          $ref: '#/components/schemas/DpiaOperatorDTO'
+        supervisoryAuthority:
+          $ref: '#/components/schemas/DpiaSupervisoryAuthorityDTO'
+        document:
+          $ref: '#/components/schemas/DpiaDocumentMetadataDTO'
+        keyFigures:
+          $ref: '#/components/schemas/DpiaKeyFiguresDTO'
+
+    DpiaOperatorDTO:
+      type: object
+      properties:
+        legalName:
+          type: string
+          maxLength: 255
+          example: "Deutscher Caritasverband e. V."
+        shortName:
+          type: string
+          maxLength: 255
+          example: "DCV"
+        address:
+          type: string
+          maxLength: 512
+          example: "Karlstrasse 40, 79104 Freiburg"
+        contactEmail:
+          type: string
+          maxLength: 255
+          example: "datenschutz@example.org"
+        contactPhone:
+          type: string
+          maxLength: 64
+          example: "+49 761 200-0"
+        dpoName:
+          type: string
+          maxLength: 255
+          description: 'Name or organisation of the data protection officer.'
+        department:
+          type: string
+          maxLength: 255
+          description: 'Department responsible for the processing activity.'
+        responsiblePerson:
+          type: string
+          maxLength: 255
+          description: 'Person responsible for the processing activity.'
+
+    DpiaSupervisoryAuthorityDTO:
+      type: object
+      properties:
+        legalFramework:
+          type: string
+          enum: [KDG, GDPR]
+          description: >-
+            Compliance preset the supervisory authority follows: KDG (diocesan data
+            protection officer) or GDPR (state data protection authority). Switches
+            all norm citations in the rendered documents.
+        name:
+          type: string
+          maxLength: 255
+        address:
+          type: string
+          maxLength: 512
+        email:
+          type: string
+          maxLength: 255
+
+    DpiaDocumentMetadataDTO:
+      type: object
+      properties:
+        documentDate:
+          type: string
+          format: date
+          description: 'Date of the current document version.'
+        nextReviewDate:
+          type: string
+          format: date
+          description: 'Date the document is due for its next review.'
+
+    DpiaKeyFiguresDTO:
+      type: object
+      description: >-
+        Manually maintained platform key figures (count + as-of date each).
+        Automatic fill from platform statistics is a follow-up.
+      properties:
+        tenants:
+          $ref: '#/components/schemas/DpiaKeyFigureDTO'
+        counsellingCentres:
+          $ref: '#/components/schemas/DpiaKeyFigureDTO'
+        activeCounsellors:
+          $ref: '#/components/schemas/DpiaKeyFigureDTO'
+        registeredClients:
+          $ref: '#/components/schemas/DpiaKeyFigureDTO'
+
+    DpiaKeyFigureDTO:
+      type: object
+      properties:
+        count:
+          type: integer
+          format: int64
+          minimum: 0
+        asOfDate:
+          type: string
+          format: date
+
+    PublicDpiaMasterDataDTO:
+      type: object
+      properties:
+        operator:
+          $ref: '#/components/schemas/DpiaOperatorDTO'
+        supervisoryAuthority:
+          $ref: '#/components/schemas/DpiaSupervisoryAuthorityDTO'
+        document:
+          $ref: '#/components/schemas/DpiaDocumentMetadataDTO'
+        keyFigures:
+          $ref: '#/components/schemas/DpiaKeyFiguresDTO'
+        branding:
+          $ref: '#/components/schemas/DpiaBrandingDTO'
+
+    DpiaBrandingDTO:
+      type: object
+      description: >-
+        Document branding source: reuses the existing public tenant appearance
+        (logo upload + appearance tokens) of the resolved tenant context, with missing
+        fields inherited from platform tenant 0. Uses platform tenant 0 directly when no
+        tenant context can be resolved.
+      properties:
+        tenantName:
+          type: string
+        theming:
+          $ref: '#/components/schemas/Theming'
+
+    ChatRecoveryMode:
+      type: string
+      enum: [RECOVERY_KEY, LOGIN_PASSWORD]
+
+    ChatRecoverySettings:
+      type: object
+      required: [asker, consultant, revision]
+      properties:
+        asker:
+          $ref: '#/components/schemas/ChatRecoveryMode'
+        consultant:
+          $ref: '#/components/schemas/ChatRecoveryMode'
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+
+    AccountInactivitySettings:
+      type: object
+      description: Platform creation defaults only. Existing people retain their assigned months.
+      required: [askerMonths, consultantMonths, otherMonths, revision]
+      properties:
+        askerMonths:
+          type: integer
+          format: int32
+          minimum: 1
+        consultantMonths:
+          type: integer
+          format: int32
+          minimum: 1
+        otherMonths:
+          type: integer
+          format: int32
+          minimum: 1
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+
     TenantAdminControls:
       type: object
       properties:
+        accountInactivitySettings:
+          $ref: '#/components/schemas/AccountInactivitySettings'
+        chatRecoverySettings:
+          $ref: '#/components/schemas/ChatRecoverySettings'
         permissionsPageEnabled:
           type: boolean
-          example: 'true'
+          example: "true"
         allowedPermissionToggles:
           $ref: '#/components/schemas/TenantAdminAllowedPermissionToggles'
+        # enforcedPermissionToggles: per-feature flags an upper role locks ON for every lower role
+        # (Platform -> Traeger -> Beratungsstelle). true = enforced-on; absent/false = not enforced.
+        # Same shape as allowedPermissionToggles; retained only for transition reads.
         enforcedPermissionToggles:
           $ref: '#/components/schemas/TenantAdminAllowedPermissionToggles'
+        permissionPolicies:
+          type: object
+          description: >-
+            Canonical per-feature policy map. Keys are PermissionFeatureKey values. This is the
+            only write model for new clients; legacy allowed/enforced maps remain read-compatible
+            for the transition release.
+          additionalProperties:
+            $ref: '#/components/schemas/BooleanPermissionPolicy'
+        caseHandoverPolicies:
+          $ref: '#/components/schemas/CaseHandoverPolicies'
+        internalGroupChat:
+          $ref: '#/components/schemas/InternalGroupChatPolicies'
+
     PermissionPolicyMode:
       type: string
-      enum: [ENFORCED, SUGGESTED]
+      enum:
+        - ENFORCED
+        - SUGGESTED
+
     BooleanPermissionPolicy:
       type: object
-      required: [value, mode]
+      required:
+        - value
+        - mode
       properties:
         value:
           type: boolean
@@ -1451,6 +3041,8 @@ components:
         inherited:
           type: boolean
           readOnly: true
+          description: True when the resolved tenant value comes from the platform policy.
+
     IntegerPermissionPolicy:
       type: object
       required: [value, mode]
@@ -1459,11 +3051,13 @@ components:
           type: integer
           minimum: 15
           multipleOf: 15
+          description: Finite duration in 15-minute steps. There is intentionally no product maximum.
         mode:
           $ref: '#/components/schemas/PermissionPolicyMode'
         inherited:
           type: boolean
           readOnly: true
+
     StringListPermissionPolicy:
       type: object
       required: [value, mode]
@@ -1478,6 +3072,7 @@ components:
         inherited:
           type: boolean
           readOnly: true
+
     MultilingualTextPermissionPolicy:
       type: object
       required: [value, mode]
@@ -1491,9 +3086,14 @@ components:
         inherited:
           type: boolean
           readOnly: true
+
     CaseHandoverConsentValue:
       type: string
-      enum: [OPT_IN, OPT_OUT, NONE]
+      enum:
+        - OPT_IN
+        - OPT_OUT
+        - NONE
+
     ConsentPermissionPolicy:
       type: object
       required: [value, mode]
@@ -1505,9 +3105,51 @@ components:
         inherited:
           type: boolean
           readOnly: true
+
+    InternalGroupChatRecipientScope:
+      type: string
+      description: >-
+        Whom a counsellor may pick as recipient of an internal group chat. PLATFORM = any counsellor
+        of the platform, TENANT = counsellors of the same Traeger, AGENCY = counsellors of the same
+        counselling centre only. Unset means AGENCY (the most restrictive).
+      enum:
+        - PLATFORM
+        - TENANT
+        - AGENCY
+
+    RecipientScopePermissionPolicy:
+      type: object
+      required: [value, mode]
+      properties:
+        value:
+          $ref: '#/components/schemas/InternalGroupChatRecipientScope'
+        mode:
+          $ref: '#/components/schemas/PermissionPolicyMode'
+        inherited:
+          type: boolean
+          readOnly: true
+          description: True when the resolved tenant value comes from the platform policy.
+
+    InternalGroupChatPolicies:
+      type: object
+      description: >-
+        Functionality Access policies for internal group chats that are not on/off switches
+        (ORISO-TenantService#319). ENFORCED = requirement the Traeger admin cannot change,
+        SUGGESTED = recommendation the Traeger admin may override.
+      properties:
+        recipientScope:
+          $ref: '#/components/schemas/RecipientScopePermissionPolicy'
+
     CaseHandoverReasonPolicy:
       type: object
-      required: [code, labels, enabled, accessAllowed, clientConsent, approvalRoles, clientNotificationTemplates]
+      required:
+        - code
+        - labels
+        - enabled
+        - accessAllowed
+        - clientConsentRequired
+        - approvalRoles
+        - clientNotificationTemplates
       properties:
         code:
           type: string
@@ -1525,6 +3167,7 @@ components:
           $ref: '#/components/schemas/BooleanPermissionPolicy'
         clientConsent:
           $ref: '#/components/schemas/ConsentPermissionPolicy'
+          description: Canonical typed consent policy. Optional while legacy clients migrate from clientConsentRequired.
         clientConsentRequired:
           $ref: '#/components/schemas/BooleanPermissionPolicy'
           deprecated: true
@@ -1537,6 +3180,7 @@ components:
           allOf:
             - $ref: '#/components/schemas/IntegerPermissionPolicy'
           description: Required only for COUNSELLOR_ASKED_FOR_ADVICE; absent for non-expiring takeover reasons.
+
     CaseHandoverPolicies:
       type: object
       required: [reasons]
@@ -1545,9 +3189,242 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/CaseHandoverReasonPolicy'
+
+    PermissionFeatureKey:
+      type: string
+      enum:
+        - appearance
+        - featureAnonymousChatEnabled
+        - featureGroupChatV2Enabled
+        - featureInternalGroupChatEnabled
+        - featureSelfHelpGroupsEnabled
+        - featureCallsEnabled
+        - featureSupervisionEnabled
+        - featureSupervisionAnonymousChatsEnabled
+        - featureSupervisionOneOnOneChatsEnabled
+        - featureAudioCallsEnabled
+        - featureAudioCallsAnonymousChatsEnabled
+        - featureAudioCallsOneOnOneChatsEnabled
+        - featureAudioCallsGroupChatsEnabled
+        - featureAudioCallsSupervisionChatsEnabled
+        - featureVideoCallsEnabled
+        - featureVideoCallsAnonymousChatsEnabled
+        - featureVideoCallsOneOnOneChatsEnabled
+        - featureVideoCallsGroupChatsEnabled
+        - featureVideoCallsSupervisionChatsEnabled
+        - featureThreadsEnabled
+        - featureThreadsAnonymousChatsEnabled
+        - featureThreadsOneOnOneEnabled
+        - featureThreadsGroupChatsEnabled
+        - featureThreadsSupervisionChatsEnabled
+        - featureVoiceMessagesEnabled
+        - featureVoiceMessagesAnonymousChatsEnabled
+        - featureVoiceMessagesOneOnOneChatsEnabled
+        - featureVoiceMessagesGroupChatsEnabled
+        - featureVoiceMessagesSupervisionChatsEnabled
+        - featureMediaUploadEnabled
+        - featureMediaUploadAnonymousChatsEnabled
+        - featureMediaUploadOneOnOneChatsEnabled
+        - featureMediaUploadGroupChatsEnabled
+        - featureMediaUploadSupervisionChatsEnabled
+        - featureMediaInlineDisplayEnabled
+        - featureMediaInlineDisplayAnonymousChatsEnabled
+        - featureMediaInlineDisplayOneOnOneChatsEnabled
+        - featureMediaInlineDisplayGroupChatsEnabled
+        - featureMediaInlineDisplaySupervisionChatsEnabled
+        - featureMediaAiScanEnabled
+        - featureMediaAiScanAnonymousChatsEnabled
+        - featureMediaAiScanOneOnOneChatsEnabled
+        - featureMediaAiScanGroupChatsEnabled
+        - featureMediaAiScanSupervisionChatsEnabled
+        - featureDisplayNameEditable
+        - featureAskerEmailEnabled
+        - featureAskerEmailAgencyCounsellingEnabled
+        - featureAskerEmailLiveChatEnabled
+        - featureAskerEmailSelfHelpEnabled
+        - featureAskerBrowserAgencyCounsellingEnabled
+        - featureAskerBrowserLiveChatEnabled
+        - featureAskerBrowserSelfHelpEnabled
+        - featureConsultantEmailInternalGroupEnabled
+        - featureConsultantBrowserInternalGroupEnabled
+        - caseHandoverEnabled
+
+    TenantLegalDraftDTO:
+      type: object
+      required: [kind, content, revision, updatedAt]
+      properties:
+        kind:
+          type: string
+          enum: [PRIVACY, IMPRINT]
+          readOnly: true
+        content:
+          type: object
+          additionalProperties: {type: string}
+        privacyConsent:
+          type: object
+          additionalProperties: {type: string}
+          description: >-
+            Optional privacy consent sentence map by language. Values are plain text. Supported
+            only for PRIVACY drafts; omit for IMPRINT drafts.
+        revision:
+          type: string
+          pattern: '^(new|[1-9][0-9]*:[0-9]+)$'
+          description: Opaque concurrency token. Use new only when no draft exists.
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+        originProposalId: {type: integer, format: int64, readOnly: true}
+        originDistributionId: {type: string, format: uuid, readOnly: true}
+        originSourceRevision: {type: string, readOnly: true}
+        originSourceUpdatedAt: {type: string, format: date-time, readOnly: true}
+        originSharedBy: {type: string, readOnly: true}
+
+    TenantLegalDraftUpdateRequest:
+      type: object
+      required: [content, revision]
+      properties:
+        content:
+          type: object
+          additionalProperties: {type: string}
+        privacyConsent:
+          type: object
+          description: >-
+            Optional privacy consent sentence map by language. Every value must be plain text.
+            Supported only for PRIVACY drafts; omit for IMPRINT drafts.
+        revision:
+          type: string
+          pattern: '^(new|[1-9][0-9]*:[0-9]+)$'
+          description: Opaque concurrency token. Use new only when no draft exists.
+
+    TenantLegalProposalDistributionRequest:
+      type: object
+      required: [requestKey, kind, sourceRevision, audience]
+      properties:
+        requestKey: {type: string, minLength: 1, maxLength: 128}
+        kind: {type: string, enum: [PRIVACY, IMPRINT]}
+        sourceRevision: {type: string, pattern: '^[1-9][0-9]*:[0-9]+$'}
+        audience: {type: string, enum: [SELECTED, ALL]}
+        tenantIds:
+          type: array
+          uniqueItems: true
+          items: {type: integer, format: int64, minimum: 1}
+    TenantLegalProposalDistributionDTO:
+      type: object
+      required: [requestKey, recipientTenantIds, proposals]
+      properties:
+        requestKey: {type: string}
+        recipientTenantIds:
+          type: array
+          description: Immutable original audience, including recipients deleted after delivery.
+          items: {type: integer, format: int64}
+        proposals: {type: array, items: {$ref: '#/components/schemas/TenantLegalProposalDTO'}}
+    TenantLegalTemplateVersionDTO:
+      type: object
+      required: [distributionId, sourceRevision, createdAt, recipientCount]
+      properties:
+        distributionId: {type: string, format: uuid}
+        sourceRevision: {type: string, description: 'Platform draft revision (id:version) that was sent'}
+        createdAt: {type: string, format: date-time, description: 'When it was sent (UTC)'}
+        recipientCount: {type: integer, format: int32}
+        content:
+          type: object
+          additionalProperties: {type: string}
+          description: Snapshot that was sent; absent only if it can no longer be recovered.
+        privacyConsent: {type: object, additionalProperties: {type: string}}
+    TenantLegalProposalDTO:
+      type: object
+      required: [id, recipientTenantId, kind, content, status, revision, sourceRevision, sourceUpdatedAt, distributionId, createdBy, createdAt]
+      properties:
+        id: {type: integer, format: int64}
+        recipientTenantId: {type: integer, format: int64}
+        kind: {type: string, enum: [PRIVACY, IMPRINT]}
+        content: {type: object, additionalProperties: {type: string}}
+        privacyConsent: {type: object, additionalProperties: {type: string}}
+        status: {type: string, enum: [PENDING, DISMISSED, SUPERSEDED, ADOPTED]}
+        revision: {type: string}
+        sourceRevision: {type: string}
+        sourceUpdatedAt: {type: string, format: date-time}
+        distributionId:
+          type: string
+          format: uuid
+          description: Distribution that first created this immutable proposal snapshot.
+        audience: {type: string, enum: [SELECTED, ALL]}
+        createdBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        decidedBy: {type: string}
+        decidedAt: {type: string, format: date-time}
+        supersededByProposalId: {type: integer, format: int64}
+        supersededAt: {type: string, format: date-time}
+    TenantLegalProposalDismissRequest:
+      type: object
+      required: [expectedProposalRevision]
+      properties:
+        expectedProposalRevision: {type: string}
+    TenantLegalProposalAdoptRequest:
+      type: object
+      required: [mode, expectedProposalRevision]
+      properties:
+        mode: {type: string, enum: [CREATE_IF_EMPTY, ARCHIVE_AND_REPLACE]}
+        expectedProposalRevision: {type: string}
+        expectedDraftRevision: {type: string}
+    TenantLegalDraftArchiveDTO:
+      type: object
+      required: [id, tenantId, kind, draftRowId, draftRevision, content, draftSavedAt, archivedBy, archivedAt]
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: integer, format: int64}
+        kind: {type: string, enum: [PRIVACY, IMPRINT]}
+        draftRowId: {type: integer, format: int64}
+        draftRevision: {type: string}
+        content: {type: object, additionalProperties: {type: string}}
+        privacyConsent: {type: object, additionalProperties: {type: string}}
+        draftSavedAt: {type: string, format: date-time}
+        originProposalId: {type: integer, format: int64}
+        originDistributionId: {type: string, format: uuid}
+        originSourceRevision: {type: string}
+        originSourceUpdatedAt: {type: string, format: date-time}
+        originSharedBy: {type: string}
+        archivedBy: {type: string}
+        archivedAt: {type: string, format: date-time}
+
+    TenantLegalTextVersionDTO:
+      type: object
+      description: >-
+        One immutable published wording. Identity is the surrogate id, never publishedAt.
+        Mirrors AgencyService LegalTextVersionDTO; ownerLevel adds the two TenantService levels.
+      required: [id, kind, ownerLevel, ownerId, content, publishedAt]
+      properties:
+        id: {type: integer, format: int64}
+        kind: {type: string, enum: [DPP, IMPRINT]}
+        ownerLevel:
+          type: string
+          description: PLATFORM for tenant 0 (platform operator), TENANT for a Träger
+          enum: [PLATFORM, TENANT]
+        ownerId:
+          type: integer
+          format: int64
+          description: The tenant id (0 = platform)
+        content:
+          type: string
+          description: The wording as published, verbatim - a JSON language->HTML map string
+        publishedAt:
+          type: string
+          description: Local date-time (UTC) in the fixed 19-character form yyyy-MM-ddTHH:mm:ss
+          example: "2026-09-25T13:12:08"
+        publishedBy:
+          type: string
+          description: Keycloak user id of the publisher; null when none was known, never guessed
+        supersededAt:
+          type: string
+          description: When a newer publication (or a removal) replaced this one; null = still in force
+          example: "2026-09-26T08:00:00"
+
     TenantPermissionPolicies:
       type: object
-      required: [tenantId, policies]
+      required:
+        - tenantId
+        - policies
       properties:
         tenantId:
           type: integer
@@ -1558,175 +3435,204 @@ components:
             $ref: '#/components/schemas/BooleanPermissionPolicy'
         caseHandoverPolicies:
           $ref: '#/components/schemas/CaseHandoverPolicies'
+        internalGroupChat:
+          $ref: '#/components/schemas/InternalGroupChatPolicies'
+
     TenantAdminAllowedPermissionToggles:
       type: object
       properties:
         appearance:
           type: boolean
-          example: 'true'
+          example: "true"
         anonymousChat:
           type: boolean
-          example: 'true'
+          example: "true"
         calls:
           type: boolean
-          example: 'true'
+          example: "true"
         groupChat:
           type: boolean
-          example: 'true'
+          example: "true"
+        internalGroupChat:
+          type: boolean
+          example: "true"
+        selfHelpGroups:
+          type: boolean
+          example: "true"
         supervision:
           type: boolean
-          example: 'true'
+          example: "true"
         supervisionAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         supervisionOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         audioCalls:
           type: boolean
-          example: 'true'
+          example: "true"
         audioCallsAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         audioCallsOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         audioCallsGroupChats:
           type: boolean
-          example: 'true'
+          example: "true"
         audioCallsSupervisionChats:
           type: boolean
-          example: 'true'
+          example: "true"
         videoCalls:
           type: boolean
-          example: 'true'
+          example: "true"
         videoCallsAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         videoCallsOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         videoCallsGroupChats:
           type: boolean
-          example: 'true'
+          example: "true"
         videoCallsSupervisionChats:
           type: boolean
-          example: 'true'
+          example: "true"
         threads:
           type: boolean
-          example: 'true'
+          example: "true"
         threadsAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         threadsOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         threadsGroupChats:
           type: boolean
-          example: 'true'
+          example: "true"
         threadsSupervisionChats:
           type: boolean
-          example: 'true'
+          example: "true"
         voiceMessages:
           type: boolean
-          example: 'true'
+          example: "true"
         voiceMessagesAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         voiceMessagesOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         voiceMessagesGroupChats:
           type: boolean
-          example: 'true'
+          example: "true"
         voiceMessagesSupervisionChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaUpload:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaUploadAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaUploadOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaUploadGroupChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaUploadSupervisionChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaInlineDisplay:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaInlineDisplayAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaInlineDisplayOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaInlineDisplayGroupChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaInlineDisplaySupervisionChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaAiScan:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaAiScanAnonymousChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaAiScanOneOnOneChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaAiScanGroupChats:
           type: boolean
-          example: 'true'
+          example: "true"
         mediaAiScanSupervisionChats:
           type: boolean
-          example: 'true'
+          example: "true"
+
     TenantMediaResponseDTO:
       type: object
       properties:
         id:
           type: string
-          example: 3f6f1c1e-8a7b-4c2d-9e0f-1a2b3c4d5e6f
+          example: "3f6f1c1e-8a7b-4c2d-9e0f-1a2b3c4d5e6f"
         url:
           type: string
-          description: Server-relative path the stored media is served from.
-          example: /media/3f6f1c1e-8a7b-4c2d-9e0f-1a2b3c4d5e6f
+          description: "Server-relative path the stored media is served from."
+          example: "/media/3f6f1c1e-8a7b-4c2d-9e0f-1a2b3c4d5e6f"
         contentType:
           type: string
-          example: image/png
+          example: "image/png"
+
     SmtpConfig:
       type: object
       properties:
         enabled:
           type: boolean
-          example: 'false'
+          example: "false"
         host:
           type: string
-          example: smtp.titan.email
+          example: "smtp.titan.email"
         port:
           type: integer
           example: 587
         secure:
           type: boolean
-          example: 'false'
+          example: "false"
+        nonstandardTransportConfirmed:
+          type: boolean
+          writeOnly: true
+          description:
+            "Write-only acknowledgement when a changed OWN SMTP port and TLS mode
+            are not the usual 465/implicit-TLS or 587/STARTTLS pair. Not stored
+            or returned. An unchanged legacy pair does not require a new acknowledgement."
+          example: false
         username:
           type: string
-          example: notifications@oriso.org
+          example: "notifications@oriso.org"
         password:
           type: string
-          example: '********'
+          description:
+            "Write-only. Never returned in responses; a blank, absent or
+            \"********\" value on update keeps the stored password."
+          example: "********"
+        passwordSet:
+          type: boolean
+          description:
+            "Read-only. True if an SMTP password is stored for this tenant.
+            Ignored on create/update."
+          example: true
         from:
           type: string
-          example: notifications@oriso.org
+          example: "notifications@oriso.org"
         emailThemeColor:
           type: string
-          example: '#0f3b8f'
+          example: "#0f3b8f"
+
     MultilingualContent:
       type: object
       required:
@@ -1736,6 +3642,49 @@ components:
           type: object
           additionalProperties:
             type: string
+        erstantwortGreeting:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            ORISO-Admin#601 / ADR-018. Träger-authored Erstantwort Baustein as a `<lang>` → HTML
+            map, the same shape the legal texts use, so machine translation on publish applies
+            unchanged. Absent means the Träger authored nothing and the resolution chain falls
+            through to the platform text — not the same as an empty string.
+        erstantwortWhoReadsAlong:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Mandatory by decision: the Träger is the controller and ORISO the processor, so the
+            platform must not derive a claim about who can read a counselling room.
+        erstantwortEmergencyAddition:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Addition to the platform emergency numbers, never a replacement — those carry no
+            toggle at all (ADR-018 §6).
+        erstantwortFreeNotice:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            The single "Freier Hinweis" (ADR-018 §2). Exactly one, enforced by the schema.
+        erstantwortClosing:
+          type: object
+          additionalProperties:
+            type: string
+        erstantwortResponseDeadlineDays:
+          type: integer
+          example: 2
+          maximum: 30
+          description: >-
+            The Antwortfrist in working days — a NUMBER, never prose (ADR-018). Absent means the
+            platform default (2) applies, deliberately distinguishable from a Träger that chose 2.
+            Request: 0 to 30. On save, null/absent keeps the stored value and 0 clears it
+            (stored as no value, so a response never carries 0). No `minimum` is declared here
+            because the same schema is a response and the response lower bound is 1.
         claim:
           type: object
           additionalProperties:
@@ -1756,13 +3705,50 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/DataProtectionContactTemplateDTO'
-    DataProtectionContactTemplateDTO:
+
+    TenantDataProtectionOfficerDTO:
       type: object
+      description: >-
+        Optional data protection officer (Datenschutzbeauftragte:r) of the Träger, same shape as an
+        agency's `dataProtectionOfficerContact`. Its Beratungsstellen inherit it for the
+        `{{Datenschutzbeauftragte}}` legal-text placeholder unless they enter their own. Never
+        required. On update an absent object keeps the stored one; an object whose fields are all
+        blank clears it. Public on the restricted tenant read on purpose: a DPO's contact details
+        have to be published (Art. 37(7) GDPR).
       properties:
-        agencyContext:
-          $ref: '#/components/schemas/AgencyContextDTO'
-        noAgencyContext:
-          $ref: '#/components/schemas/NoAgencyContextDTO'
+        nameAndLegalForm:
+          type: string
+          maxLength: 255
+          example: "Dr. Maria Muster"
+        street:
+          type: string
+          maxLength: 100
+          example: "Musterstraße 1"
+        postcode:
+          type: string
+          maxLength: 10
+          example: "79106"
+        city:
+          type: string
+          maxLength: 100
+          example: "Freiburg"
+        phoneNumber:
+          type: string
+          maxLength: 64
+          example: "+49 761 200-0"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: "datenschutz@caritas-musterstadt.de"
+    DataProtectionContactTemplateDTO:
+        type: object
+        properties:
+            agencyContext:
+              $ref: '#/components/schemas/AgencyContextDTO'
+            noAgencyContext:
+              $ref: '#/components/schemas/NoAgencyContextDTO'
+
     AgencyContextDTO:
       type: object
       properties:
@@ -1770,6 +3756,7 @@ components:
           type: string
         dataProtectionOfficer:
           $ref: '#/components/schemas/DataProtectionOfficerDTO'
+
     NoAgencyContextDTO:
       type: object
       properties:
@@ -1777,6 +3764,7 @@ components:
           type: string
         dataProtectionOfficerContact:
           type: string
+
     DataProtectionOfficerDTO:
       type: object
       properties:
@@ -1786,6 +3774,8 @@ components:
           type: string
         dataProtectionOfficerContact:
           type: string
+
+
     AdminTenantDTO:
       type: object
       required:
@@ -1793,25 +3783,28 @@ components:
         - name
         - subdomain
       properties:
+        active:
+          type: boolean
+          description: Operational status of this Träger. Existing and new tenants start active; omission on update preserves the stored status. Only the matching Träger-admin may change status after creation. Independent of legal agreement state.
         id:
           type: integer
           format: int64
           example: 12132
         name:
           type: string
-          example: Company name AG
+          example: "Company name AG"
           maxLength: 40
         subdomain:
           type: string
-          example: companyname
+          example: "companyname"
           maxLength: 100
         address:
           type: string
           maxLength: 255
-          example: Musterstraße 1, 12345 Musterstadt
+          example: "Musterstraße 1, 12345 Musterstadt"
         description:
           type: string
-          example: Short description of the tenant.
+          example: "Short description of the tenant."
         beraterCount:
           type: integer
           example: 10
@@ -1819,11 +3812,12 @@ components:
           type: array
           items:
             type: string
-          example: '[admin1@ob.de, admin2@ob.de]'
+          example: "[admin1@ob.de, admin2@ob.de]"
         createDate:
           type: string
         updateDate:
           type: string
+
     TenantsSearchResultDTO:
       type: object
       properties:
@@ -1835,6 +3829,7 @@ components:
           $ref: '#/components/schemas/PaginationLinks'
         total:
           type: integer
+
     PaginationLinks:
       type: object
       required:
@@ -1846,6 +3841,7 @@ components:
           $ref: '#/components/schemas/HalLink'
         previous:
           $ref: '#/components/schemas/HalLink'
+
     HalLink:
       type: object
       required:
@@ -1855,34 +3851,58 @@ components:
           type: string
         method:
           type: string
-          enum:
-            - GET
-            - POST
-            - DELETE
-            - PUT
+          enum: [ GET, POST, DELETE, PUT ]
         templated:
           type: boolean
-    WelcomeMessageDTO:
+
+    TenantIdAvailabilityDTO:
       type: object
+      required:
+        - id
+        - status
       properties:
-        sendWelcomeMessage:
-          type: boolean
-          example: true
-        welcomeMessageText:
+        id:
+          type: integer
+          format: int64
+          example: 21
+        status:
           type: string
-          example: Lorem ipsum
-    ConsultingTypePatchDTO:
+          description: FREE = assignable, RESERVED = held by an open invite,
+            ASSIGNED = consumed by an existing tenant
+          enum: [ FREE, RESERVED, ASSIGNED ]
+
+    NextFreeTenantIdDTO:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 36
+
+    TenantIdReservationRequestDTO:
       type: object
       properties:
-        isVideoCallAllowed:
-          type: boolean
-          example: true
-        languageFormal:
-          type: boolean
-          example: true
-        sendFurtherStepsMessage:
-          type: boolean
-          example: true
-        welcomeMessage:
-          allOf:
-            - $ref: '#/components/schemas/WelcomeMessageDTO'
+        tenantId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Specific tenant ID to reserve. Omit for AUTO mode, which reserves
+            the smallest currently free ID atomically.
+
+    TenantIdReservationDTO:
+      type: object
+      required:
+        - tenantId
+        - token
+      properties:
+        tenantId:
+          type: integer
+          format: int64
+          example: 21
+        token:
+          type: string
+          maxLength: 36
+          description: Reservation token. Required to consume the reserved ID when the
+            tenant is created.

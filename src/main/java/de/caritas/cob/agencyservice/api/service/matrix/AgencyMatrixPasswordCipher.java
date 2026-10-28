@@ -33,10 +33,14 @@ public class AgencyMatrixPasswordCipher {
   }
 
   public String encrypt(String plaintext) {
-    if (StringUtils.isBlank(plaintext) || plaintext.startsWith(ENCRYPTED_PREFIX)) {
+    if (plaintext == null) {
       return plaintext;
     }
     requireApplicationKey();
+    if (plaintext.startsWith(ENCRYPTED_PREFIX)) {
+      decrypt(plaintext);
+      return plaintext;
+    }
     try {
       Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
       cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec());
@@ -56,14 +60,18 @@ public class AgencyMatrixPasswordCipher {
     try {
       Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
       cipher.init(Cipher.DECRYPT_MODE, secretKeySpec());
-      byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(ciphertext));
+      byte[] encrypted = Base64.getDecoder().decode(ciphertext);
+      if (encrypted.length == 0 || encrypted.length % cipher.getBlockSize() != 0) {
+        throw new IllegalArgumentException("Invalid encrypted password format");
+      }
+      byte[] decrypted = cipher.doFinal(encrypted);
       return new String(decrypted, StandardCharsets.UTF_8);
     } catch (Exception ex) {
       throw new InternalServerErrorException("Unable to decrypt agency Matrix password", ex);
     }
   }
 
-  private void requireApplicationKey() {
+  void requireApplicationKey() {
     if (StringUtils.isBlank(applicationKey)) {
       throw new InternalServerErrorException(
           "Agency Matrix password encryption key is not configured");

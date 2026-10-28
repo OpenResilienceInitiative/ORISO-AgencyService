@@ -30,7 +30,8 @@ public class AgencyAdminSearchTenantSupportService extends AgencyAdminSearchServ
       Root<Agency> root) {
     return new Predicate[]{
         tenantPredicate(criteriaBuilder, root),
-        keywordSearchPredicate(agencyAdminSearch.getKeyword(), criteriaBuilder, root),
+        keywordSearchPredicate(agencyAdminSearch, criteriaBuilder, root),
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root),
         agencyAdminFilterPredicate(criteriaBuilder, root)};
   }
 
@@ -45,8 +46,12 @@ public class AgencyAdminSearchTenantSupportService extends AgencyAdminSearchServ
   }
 
   @Override
-  protected Predicate[] agenciesWithoutKeywordFilterPredicates(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
-    return new Predicate[] { agencyAdminFilterPredicate(criteriaBuilder, root), tenantPredicate(criteriaBuilder, root) };
+  protected Predicate[] agenciesWithoutKeywordFilterPredicates(
+      AgencyAdminSearch agencyAdminSearch, CriteriaBuilder criteriaBuilder, Root<Agency> root) {
+    return new Predicate[] {
+        agencyAdminFilterPredicate(criteriaBuilder, root),
+        tenantPredicate(criteriaBuilder, root),
+        searchFilterPredicate(agencyAdminSearch, criteriaBuilder, root)};
   }
 
 }

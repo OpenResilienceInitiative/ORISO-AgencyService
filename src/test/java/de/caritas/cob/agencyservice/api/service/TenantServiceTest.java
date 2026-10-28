@@ -88,19 +88,20 @@ class TenantServiceTest {
   }
 
   @Test
-  void getPermissionPolicies_shouldUseExactlyTheRequestedTenantAndForwardAuthentication() {
-    var headers = new HttpHeaders();
-    headers.add("Authorization", "Bearer token");
-    var expected = new TenantPermissionPolicies().tenantId(7L).policies(java.util.Map.of());
+  void getPermissionPolicies_shouldUseThePublicResolvedProjectionWithoutHumanAdminAuthority() {
+    var policies = java.util.Map.of("featureVideoCallsEnabled",
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
+            .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED));
     when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
-    when(tenantControllerApi.getApiClient()).thenReturn(apiClient);
-    when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(headers);
-    when(tenantControllerApi.getTenantPermissionPolicies(7L)).thenReturn(expected);
+    when(tenantControllerApi.getRestrictedTenantDataByTenantId(7L))
+        .thenReturn(new RestrictedTenantDTO(policies, null).id(7L));
 
-    assertEquals(expected, tenantService.getPermissionPolicies(7L));
+    var result = tenantService.getPermissionPolicies(7L);
 
-    verify(tenantControllerApi).getTenantPermissionPolicies(7L);
-    verify(apiClient).addDefaultHeader("Authorization", "Bearer token");
+    assertEquals(7L, result.getTenantId());
+    assertEquals(policies, result.getPolicies());
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantId(7L);
+    verify(tenantControllerApi, never()).getTenantPermissionPolicies(any());
   }
 
   @Test

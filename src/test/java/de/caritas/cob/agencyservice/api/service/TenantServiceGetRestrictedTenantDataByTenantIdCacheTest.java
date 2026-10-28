@@ -54,15 +54,23 @@ class TenantServiceGetRestrictedTenantDataByTenantIdCacheTest {
   @Autowired private TenantService tenantService;
 
   @Test
-  void getRestrictedTenantDataByTenantId_shouldCacheResult() {
+  void getRestrictedTenantDataByTenantId_shouldReadFreshPoliciesAfterAParentChange() {
     TenantControllerApi controllerApi = org.mockito.Mockito.mock(TenantControllerApi.class);
     when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(controllerApi);
     when(controllerApi.getRestrictedTenantDataByTenantId(TENANT_ID))
-        .thenReturn(new RestrictedTenantDTO().id(TENANT_ID));
+        .thenReturn(
+            new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsEnabled",
+                new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
+                    .value(true).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.SUGGESTED)), null),
+            new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsEnabled",
+                new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
+                    .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED)), null));
 
-    tenantService.getRestrictedTenantDataByTenantId(TENANT_ID);
-    tenantService.getRestrictedTenantDataByTenantId(TENANT_ID);
+    var before = tenantService.getRestrictedTenantDataByTenantId(TENANT_ID);
+    var after = tenantService.getRestrictedTenantDataByTenantId(TENANT_ID);
 
-    verify(controllerApi, times(1)).getRestrictedTenantDataByTenantId(TENANT_ID);
+    org.assertj.core.api.Assertions.assertThat(before.getPermissionPolicies().get("featureVideoCallsEnabled").getValue()).isTrue();
+    org.assertj.core.api.Assertions.assertThat(after.getPermissionPolicies().get("featureVideoCallsEnabled").getValue()).isFalse();
+    verify(controllerApi, times(2)).getRestrictedTenantDataByTenantId(TENANT_ID);
   }
 }

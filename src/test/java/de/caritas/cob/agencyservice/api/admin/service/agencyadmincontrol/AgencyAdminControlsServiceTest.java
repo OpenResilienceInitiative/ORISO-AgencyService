@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
@@ -28,6 +29,26 @@ class AgencyAdminControlsServiceTest {
   @Mock private AgencyPermissionPolicyMapper policyMapper;
 
   @Test
+  void enrichSettings_shouldExposeTheInheritedRequirementWithoutReplacingTheRawOverride() {
+    var parent = new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED);
+    var policies = new TenantPermissionPolicies().tenantId(8L)
+        .policies(Map.of("featureVideoCallsOneOnOneChatsEnabled", parent));
+    when(tenantService.getPermissionPolicies(8L)).thenReturn(policies);
+    var actualService = new AgencyAdminControlsService(tenantService, new AgencyPermissionPolicyMapper());
+    var settings = new Settings().featureVideoCallsOneOnOneChatsEnabled(true);
+
+    var result = actualService.enrichSettingsWithAgencyAdminControls(settings, 8L);
+    var json = new ObjectMapper().valueToTree(result);
+
+    assertThat(result.getFeatureVideoCallsOneOnOneChatsEnabled()).isTrue();
+    var effective = json.path("permissionPolicies").path("featureVideoCallsOneOnOneChatsEnabled");
+    assertThat(effective.path("value").isBoolean()).isTrue();
+    assertThat(effective.path("value").booleanValue()).isFalse();
+    assertThat(effective.path("mode").asText()).isEqualTo("ENFORCED");
+    assertThat(effective.path("inherited").booleanValue()).isTrue();
+  }
+
+  @Test
   void getControls_shouldReadOnlyTheAuthenticatedTenantsResolvedPolicy() {
     var policies = new TenantPermissionPolicies().tenantId(7L).policies(Map.of());
     var expected = new AgencyAdminControls();
@@ -42,7 +63,7 @@ class AgencyAdminControlsServiceTest {
   void getResolvedControls_shouldUseThePublicResolvedTenantContract() {
     var policy = new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED);
     var restricted =
-        new RestrictedTenantDTO(Map.of("featureVideoCallsEnabled", policy))
+        new RestrictedTenantDTO(Map.of("featureVideoCallsEnabled", policy), null)
             .id(7L)
             .name("Tenant");
     var expected = new AgencyAdminControls();
@@ -53,18 +74,11 @@ class AgencyAdminControlsServiceTest {
   }
 
   @Test
-  void updateControls_shouldRoundTripThroughTenantServiceWithoutLocalSingleton() {
+  void updateControls_shouldRejectLegacyWritesWithoutChangingTenantPolicies() {
     var controls = new AgencyAdminControls();
-    var current = new TenantPermissionPolicies().tenantId(7L).policies(Map.of());
-    var updated = new TenantPermissionPolicies().tenantId(7L).policies(Map.of());
-    var expected = new AgencyAdminControls();
-    when(tenantService.getPermissionPolicies(7L)).thenReturn(current);
-    when(policyMapper.applyLegacyUpdate(current, controls)).thenReturn(updated);
-    when(tenantService.updatePermissionPolicies(7L, updated)).thenReturn(updated);
-    when(policyMapper.toLegacyControls(updated.getPolicies())).thenReturn(expected);
-
-    assertThat(service.updateControls(7L, controls)).isSameAs(expected);
-    verify(tenantService).updatePermissionPolicies(7L, updated);
+    assertThatThrownBy(() -> service.updateControls(7L, controls))
+        .isInstanceOf(de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException.class);
+    org.mockito.Mockito.verifyNoInteractions(tenantService);
   }
 
   @Test
