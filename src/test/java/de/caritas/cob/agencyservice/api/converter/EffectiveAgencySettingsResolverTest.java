@@ -28,21 +28,29 @@ class EffectiveAgencySettingsResolverTest {
       "SUGGESTED,false,null,false,true", "SUGGESTED,false,true,true,false", "SUGGESTED,false,false,false,false"
   }, nullValues = "null")
   void canonicalPolicies_shouldRespectRequirementsAndOverrideableRecommendations(
-      PermissionPolicyMode mode, boolean parent, Boolean own, boolean expected, boolean inherited) {
-    var settings = new Settings().featureVideoCallsOneOnOneChatsEnabled(own)
-        .caseHandoverEnabled(own);
-    var policy = new BooleanPermissionPolicy().value(parent).mode(mode);
-    var parents = Map.of("featureVideoCallsOneOnOneChatsEnabled", policy,
-        "caseHandoverEnabled", policy);
+      PermissionPolicyMode mode, boolean parent, Boolean own, boolean expected, boolean inherited) throws Exception {
+    var settings = new Settings();
+    var fields = new java.util.TreeSet<>(EXPECTED_COMMON_FLAGS);
+    fields.add("caseHandoverEnabled");
+    var parents = new java.util.LinkedHashMap<String, BooleanPermissionPolicy>();
+    for (String field : fields) {
+      String suffix = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+      Settings.class.getMethod("set" + suffix, Boolean.class).invoke(settings, own);
+      parents.put(field, new BooleanPermissionPolicy().value(parent).mode(mode));
+    }
     var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings, parents);
-    resolved.values().forEach(value -> {
-      assertThat(value.getValue()).isEqualTo(expected);
-      assertThat(value.getMode().getValue()).isEqualTo(mode.getValue());
-      assertThat(value.getInherited()).isEqualTo(inherited);
-    });
+    assertThat(resolved.keySet()).containsAll(fields);
+    for (String field : fields) {
+      var value = resolved.get(field);
+      assertThat(value.getValue()).as(field).isEqualTo(expected);
+      assertThat(value.getMode().getValue()).as(field).isEqualTo(mode.getValue());
+      assertThat(value.getInherited()).as(field).isEqualTo(inherited);
+    }
     EffectiveAgencySettingsResolver.applyTo(settings, null, parents);
-    assertThat(settings.getFeatureVideoCallsOneOnOneChatsEnabled()).isEqualTo(expected);
-    assertThat(settings.getCaseHandoverEnabled()).isEqualTo(expected);
+    for (String field : fields) {
+      String suffix = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+      assertThat(Settings.class.getMethod("get" + suffix).invoke(settings)).as(field).isEqualTo(expected);
+    }
   }
 
   @Test
