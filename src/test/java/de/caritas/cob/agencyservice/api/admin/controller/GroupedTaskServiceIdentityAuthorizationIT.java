@@ -59,10 +59,10 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
     })
 class GroupedTaskServiceIdentityAuthorizationIT {
   private static final List<String> SETUP_ROLES =
-      List.of("config-wizard", "invitation-reservations", "consultant-import");
+      List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync");
   private static final List<String> MAIL_ROLES =
       List.of(
-          "smtp-sync", "system-email-delivery", "notification-dispatch", "notifications-technical");
+          "system-email-delivery", "notification-dispatch", "notifications-technical");
   private static final List<String> RUNTIME_ROLES =
       List.of(
           "runtime-policy",
@@ -279,9 +279,9 @@ class GroupedTaskServiceIdentityAuthorizationIT {
     }
     return switch (client) {
       case "backend-setup" -> List.of(
-          "tenantservice", "agencyservice", "consultingtypeservice", "userservice");
-      case "backend-mail" -> List.of(
           "tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands");
+      case "backend-mail" -> List.of(
+          "tenantservice", "agencyservice", "consultingtypeservice", "userservice");
       case "backend-runtime" -> List.of("tenantservice", "agencyservice", "appointmentservice");
       case "backend-account-create" -> List.of("userservice", "oriso-account-lifecycle");
       case "backend-account-admin" -> List.of("userservice", "oriso-account-lifecycle", "oriso-otp");

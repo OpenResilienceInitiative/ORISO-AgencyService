@@ -71,7 +71,7 @@ class TaskServiceIdentityTest {
               identity.allows(
                   groupedCaller(
                       List.of(
-                          "config-wizard", "invitation-reservations", "consultant-import", grant)),
+                          "config-wizard", "invitation-reservations", "consultant-import", "smtp-sync", grant)),
                   "CONFIG_WIZARD"))
           .isFalse();
     }
@@ -103,7 +103,7 @@ class TaskServiceIdentityTest {
   void groupedActorCannotInheritDefaultClientRoles() {
     var identity = new TaskServiceIdentity(groupedBindings("CONFIG_WIZARD"));
     var actor =
-        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import"));
+        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync"));
     var jwt =
         Jwt.withTokenValue("fixture")
             .headers(headers -> headers.putAll(actor.getToken().getHeaders()))
@@ -136,7 +136,7 @@ class TaskServiceIdentityTest {
   void groupedActorCannotActivateAnUndeclaredReceiverPurpose() {
     var identity = new TaskServiceIdentity(groupedBindings("CONFIG_WIZARD"));
     var caller =
-        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import"));
+        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync"));
 
     assertThat(identity.allows(caller, "CONFIG_WIZARD")).isTrue();
     assertThat(identity.allows(caller, "INVITE_RESERVATIONS")).isFalse();
@@ -149,7 +149,7 @@ class TaskServiceIdentityTest {
             groupedBindings("CONFIG_WIZARD")
                 .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice"));
     assertThat(identity.allows(groupedSetupAudience(
-        List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice")),
+        List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands")),
         "CONFIG_WIZARD")).isTrue();
     assertThat(identity.allows(groupedSetupAudience(
         List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "other-service")),
@@ -169,7 +169,7 @@ class TaskServiceIdentityTest {
 
   private JwtAuthenticationToken groupedSetupAudience(List<String> audiences) {
     var original = groupedCaller(
-        List.of("config-wizard", "invitation-reservations", "consultant-import"));
+        List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync"));
     var jwt = Jwt.withTokenValue("fixture")
         .headers(headers -> headers.putAll(original.getToken().getHeaders()))
         .claims(claims -> claims.putAll(original.getToken().getClaims()))
@@ -193,7 +193,7 @@ class TaskServiceIdentityTest {
             .header("alg", "none")
             .subject("setup-subject")
             .claim("azp", "backend-setup")
-            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice"))
+            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands"))
             .expiresAt(Instant.now().plusSeconds(60))
             .claim("realm_access", Map.of("roles", roles))
             .build(),
@@ -215,13 +215,13 @@ class TaskServiceIdentityTest {
             .header("alg", "none")
             .subject("setup-subject")
             .claim("azp", "backend-setup")
-            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice"))
+            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands"))
             .expiresAt(Instant.now().plusSeconds(60))
             .claim(
                 "realm_access",
                 Map.of(
                     "roles",
-                    List.of("config-wizard", "invitation-reservations", "consultant-import")))
+                    List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync")))
             .build();
     var caller = new JwtAuthenticationToken(actor, List.of());
 
