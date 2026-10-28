@@ -31,7 +31,6 @@ class EffectiveAgencySettingsResolverTest {
       PermissionPolicyMode mode, boolean parent, Boolean own, boolean expected, boolean inherited) throws Exception {
     var settings = new Settings();
     var fields = new java.util.TreeSet<>(EXPECTED_COMMON_FLAGS);
-    fields.add("caseHandoverEnabled");
     var parents = new java.util.LinkedHashMap<String, BooleanPermissionPolicy>();
     for (String field : fields) {
       String suffix = Character.toUpperCase(field.charAt(0)) + field.substring(1);
@@ -74,15 +73,18 @@ class EffectiveAgencySettingsResolverTest {
     assertThat(resolved.get("featureSelfHelpGroupsEnabled").getMode().getValue()).isEqualTo("ENFORCED");
   }
 
-  @Test
-  void accountPolicies_shouldRemainTenantOwnedDespiteDormantAgencyJson() {
+  @ParameterizedTest
+  @CsvSource({"SUGGESTED,true", "SUGGESTED,false", "ENFORCED,true", "ENFORCED,false"})
+  void tenantOwnedPolicies_shouldIgnoreDormantAgencyOverrides(PermissionPolicyMode mode, boolean value) {
     var settings = new de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService()
-        .toSettings("{\"featureDisplayNameEditable\":false,\"featureAskerEmailEnabled\":false}");
-    var parent = new BooleanPermissionPolicy().value(true).mode(PermissionPolicyMode.SUGGESTED);
+        .toSettings("{\"featureDisplayNameEditable\":false,\"featureAskerEmailEnabled\":false,\"caseHandoverEnabled\":false}");
+    var parent = new BooleanPermissionPolicy().value(value).mode(mode);
     var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings,
-        Map.of("featureDisplayNameEditable", parent, "featureAskerEmailEnabled", parent));
+        Map.of("featureDisplayNameEditable", parent, "featureAskerEmailEnabled", parent,
+            "caseHandoverEnabled", parent));
     resolved.values().forEach(policy -> {
-      assertThat(policy.getValue()).isTrue();
+      assertThat(policy.getValue()).isEqualTo(value);
+      assertThat(policy.getMode().getValue()).isEqualTo(mode.getValue());
       assertThat(policy.getInherited()).isTrue();
     });
   }

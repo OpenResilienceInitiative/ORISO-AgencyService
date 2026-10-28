@@ -174,11 +174,9 @@ components:
         permissionPolicies:
           type: object
           readOnly: true
-          description: Effective feature policies resolved from this agency's Traeger and its own overrides. Never written as agency overrides.
+          description: Effective feature policies resolved from this agency's Traeger and supported agency overrides. Account and handover policies remain Traeger-owned. Never written as agency overrides.
           additionalProperties:
             $ref: '#/components/schemas/AgencyPermissionPolicy'
-        caseHandoverEnabled:
-          type: boolean
         counsellorTopicPermission:
           type: string
           enum: [NONE, SELECT_EXISTING, CREATE]
