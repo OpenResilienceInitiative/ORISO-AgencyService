@@ -357,6 +357,18 @@ components:
           type: boolean
           example: false
           description: "AI media scan when a user is in supervision mode."
+        featureDirectInviteChatEnabled:
+          type: boolean
+          example: true
+          description: "Direkteinladung erlauben for chats: counsellors may invite a person directly by link (ADR-029 §6). Unset inherits the Traeger value. On the public agency response this is the effective value: Traeger AND Beratungsstelle; a Traeger 'off' always wins (ADR-013)."
+        featureDirectInviteAudioEnabled:
+          type: boolean
+          example: true
+          description: "Direkteinladung erlauben for audio calls: counsellors may invite a person directly by link (ADR-029 §6). Unset inherits the Traeger value. On the public agency response this is the effective value: Traeger AND Beratungsstelle; a Traeger 'off' always wins (ADR-013)."
+        featureDirectInviteVideoEnabled:
+          type: boolean
+          example: true
+          description: "Direkteinladung erlauben for video calls: counsellors may invite a person directly by link (ADR-029 §6). Unset inherits the Traeger value. On the public agency response this is the effective value: Traeger AND Beratungsstelle; a Traeger 'off' always wins (ADR-013)."
         featureToolsOICDToken:
           type: string
           example: "1234-1234-1234-1234"
