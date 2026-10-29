@@ -1466,6 +1466,18 @@ components:
           type: boolean
           example: 'false'
           description: AI media scan when a user is in supervision mode.
+        featureDirectInviteChatEnabled:
+          type: boolean
+          example: 'true'
+          description: Direkteinladung erlauben for chats (TenantService#331, ADR-029 §6).
+        featureDirectInviteAudioEnabled:
+          type: boolean
+          example: 'true'
+          description: Direkteinladung erlauben for audio calls (TenantService#331, ADR-029 §6).
+        featureDirectInviteVideoEnabled:
+          type: boolean
+          example: 'true'
+          description: Direkteinladung erlauben for video calls (TenantService#331, ADR-029 §6).
         featureToolsOICDToken:
           type: string
           example: 1234-1234-1234-1234
