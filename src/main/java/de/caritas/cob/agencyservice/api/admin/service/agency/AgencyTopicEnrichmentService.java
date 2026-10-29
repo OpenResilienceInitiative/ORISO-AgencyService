@@ -59,17 +59,29 @@ public class AgencyTopicEnrichmentService {
   public List<de.caritas.cob.agencyservice.topicservice.generated.web.model.TopicDTO>
       topicsOfTenant(Long tenantId) {
     try {
-      // Only a foreign tenant (the platform admin's view) is asked for explicitly.
-      var topics = !multitenancy
-          || tenantId == null
-          || tenantId.equals(TenantContext.getCurrentTenant())
-          ? topicService.getAllTopics()
-          : topicService.getAllTopicsOfTenant(tenantId);
-      return topics == null ? List.of() : topics;
+      return topicsOfTenantForSearch(tenantId);
     } catch (RuntimeException exception) {
       log.warn("Could not load the topics of tenant {}", tenantId, exception);
       return List.of();
     }
+  }
+
+  /** Required filtering metadata: transport failures must fail the entire search. */
+  public List<de.caritas.cob.agencyservice.topicservice.generated.web.model.TopicDTO>
+      topicsOfTenantForSearch(Long tenantId) {
+    var topics = !multitenancy || tenantId == null
+        || tenantId.equals(TenantContext.getCurrentTenant())
+        ? topicService.getAllTopics() : topicService.getAllTopicsOfTenant(tenantId);
+    if (topics == null) {
+      throw new IllegalStateException("Topic owner returned no response");
+    }
+    return topics;
+  }
+
+  /** Reuses the same complete catalog that determined matching before paging. */
+  public void enrichAgenciesWithResolvedTopics(List<Agency> agencies,
+      Map<Long, List<de.caritas.cob.agencyservice.topicservice.generated.web.model.TopicDTO>> topics) {
+    agencies.forEach(agency -> enrichAgency(agency, toTopicMap(topics.get(agency.getTenantId()))));
   }
 
   private void enrichAgency(Agency agency, Map<Long, TopicDTO> availableTopics) {
