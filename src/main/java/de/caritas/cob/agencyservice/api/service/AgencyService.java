@@ -518,12 +518,14 @@ public class AgencyService {
    * disabled-not-hidden state.
    *
    * <p>Feature flags are served as effective values: Träger AND Beratungsstelle, a Träger
-   * "off" always wins (ORISO-AgencyService#293) — see {@link EffectiveAgencySettingsResolver}.
+   * "off" and a Träger requirement always win (ORISO-AgencyService#293, ORISO-Admin#1242) — see {@link EffectiveAgencySettingsResolver}.
    */
   private Settings buildAgencySettings(Agency agency, RestrictedTenantDTO tenantData) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
     EffectiveAgencySettingsResolver.applyTo(
-        settings, tenantData != null ? tenantData.getSettings() : null);
+        settings,
+        tenantData != null ? tenantData.getSettings() : null,
+        tenantData != null ? tenantData.getPermissionPolicies() : null);
     effectivePermissionSettingsApplier.applyTo(settings, agencyAdminControlsService.getControls());
     return settings;
   }

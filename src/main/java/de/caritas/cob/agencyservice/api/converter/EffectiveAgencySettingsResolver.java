@@ -1,11 +1,14 @@
 package de.caritas.cob.agencyservice.api.converter;
 
 import de.caritas.cob.agencyservice.api.model.Settings;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -18,6 +21,7 @@ import java.util.Set;
  * per field:
  *
  * <ul>
+ *   <li>Träger requirement (policy mode ENFORCED) always wins, on or off (ORISO-Admin#1242);
  *   <li>Träger "off" always wins;
  *   <li>otherwise the agency value applies; an unset agency inherits the Träger value;
  *   <li>Träger unset (not provided, or tenant lookup failed) → agency value.
@@ -68,15 +72,24 @@ public final class EffectiveAgencySettingsResolver {
     return BINDINGS.stream().map(FlagBinding::name).toList();
   }
 
+  /** Same as the three-argument {@code applyTo}, without Träger policies. */
+  public static void applyTo(
+      Settings agencySettings,
+      de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings traegerSettings) {
+    applyTo(agencySettings, traegerSettings, null);
+  }
+
   /**
    * Overwrites every common flag of {@code agencySettings} with its effective value.
    *
    * @param agencySettings the agency's own settings; modified in place, ignored when {@code null}
    * @param traegerSettings the Träger (tenant) settings; {@code null} keeps the agency values
+   * @param traegerPolicies the Träger's resolved policies keyed by flag name; {@code null} = none
    */
   public static void applyTo(
       Settings agencySettings,
-      de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings traegerSettings) {
+      de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings traegerSettings,
+      Map<String, BooleanPermissionPolicy> traegerPolicies) {
     if (agencySettings == null) {
       return;
     }
@@ -95,8 +108,25 @@ public final class EffectiveAgencySettingsResolver {
         traegerValue = formatOnLevel(traegerValue, traegerMaster);
         agencyValue = formatOnLevel(agencyValue, agencyMaster);
       }
-      write(binding.agencySetter(), agencySettings, combine(traegerValue, agencyValue));
+      Boolean enforced = enforcedValue(traegerPolicies, binding.name(), traegerValue);
+      write(
+          binding.agencySetter(),
+          agencySettings,
+          enforced != null ? enforced : combine(traegerValue, agencyValue));
     }
+  }
+
+  /**
+   * The Träger value when the Träger made this flag a requirement, else {@code null}. The served
+   * Träger setting already carries platform overrides, so it beats the raw policy value.
+   */
+  private static Boolean enforcedValue(
+      Map<String, BooleanPermissionPolicy> policies, String flag, Boolean traegerValue) {
+    var policy = policies != null ? policies.get(flag) : null;
+    if (policy == null || policy.getMode() != PermissionPolicyMode.ENFORCED) {
+      return null;
+    }
+    return orElse(traegerValue, policy.getValue());
   }
 
   private static Boolean combine(Boolean traeger, Boolean agency) {
