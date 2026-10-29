@@ -8,9 +8,10 @@ ENV JAVA_UPPER_VERSION=eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d727
 RUN rm -f /usr/bin/pebble
 # The pinned Temurin base still ships OpenSSL 3.5.5-1ubuntu3.2; Canonical's 3.5.5-1ubuntu3.6
 # fixes CVE-2026-84782, which fails the image CVE gate. curl/libcurl4t64 need the
-# Ubuntu fix for CVE-2026-92392 for the same reason. Upgrade only these packages.
+# Ubuntu fix for CVE-2026-92392 for the same reason. libbrotli1 needs
+# 1.2.0-3ubuntu0.1 for CVE-2026-111497. Upgrade only these packages.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl openssl-provider-legacy curl libcurl4t64 \
+    && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl openssl-provider-legacy curl libcurl4t64 libbrotli1 \
     && rm -rf /var/lib/apt/lists/*
 COPY ./target/AgencyService.jar app.jar
 ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom","-Dtomcat.util.http.parser.HttpParser.requestTargetAllow=|{}","-XX:MaxRAMPercentage=75","-jar","/app.jar"]
