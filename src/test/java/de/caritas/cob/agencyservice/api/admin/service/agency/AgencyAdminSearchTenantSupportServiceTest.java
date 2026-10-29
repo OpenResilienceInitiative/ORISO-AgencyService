@@ -153,8 +153,8 @@ class AgencyAdminSearchTenantSupportServiceTest {
 
     assertThat(predicates).hasSize(4);
     verify(criteriaBuilder).or(any(Predicate.class), any(Predicate.class), any(Predicate.class));
-    verify(criteriaBuilder, times(3)).like(any(Expression.class), eq("%berlin%"), eq('!'));
-    verify(criteriaBuilder, times(3)).lower(any(Expression.class));
+    verify(criteriaBuilder, times(5)).like(any(Expression.class), eq("%berlin%"), eq('!'));
+    verify(criteriaBuilder, times(5)).function(eq("admin_search_text"), eq(String.class), any(Expression.class));
   }
 
   @Test
@@ -275,6 +275,8 @@ class AgencyAdminSearchTenantSupportServiceTest {
     Path<Object> namePath = mock(Path.class);
     Path<Object> postCodePath = mock(Path.class);
     Path<Object> cityPath = mock(Path.class);
+    Path<Object> streetPath = mock(Path.class);
+    Path<Object> idPath = mock(Path.class);
     Expression<String> lowerExpression = mock(Expression.class);
     Predicate likePredicate = mock(Predicate.class);
     Predicate keywordPredicate = mock(Predicate.class);
@@ -282,10 +284,14 @@ class AgencyAdminSearchTenantSupportServiceTest {
     when(root.get("name")).thenReturn(namePath);
     when(root.get("postCode")).thenReturn(postCodePath);
     when(root.get("city")).thenReturn(cityPath);
-    when(criteriaBuilder.lower(any(Expression.class))).thenReturn(lowerExpression);
+    when(root.get("street")).thenReturn(streetPath);
+    when(root.get("id")).thenReturn(idPath);
+    when(idPath.as(String.class)).thenReturn(lowerExpression);
+    when(criteriaBuilder.function(eq("admin_search_text"), eq(String.class), any(Expression.class)))
+        .thenReturn(lowerExpression);
     when(criteriaBuilder.like(any(Expression.class), anyString(), eq('!')))
         .thenReturn(likePredicate);
-    when(criteriaBuilder.or(likePredicate, likePredicate, likePredicate))
-        .thenReturn(keywordPredicate);
+    when(criteriaBuilder.or(any(Predicate[].class))).thenReturn(keywordPredicate);
+    when(criteriaBuilder.disjunction()).thenReturn(likePredicate);
   }
 }

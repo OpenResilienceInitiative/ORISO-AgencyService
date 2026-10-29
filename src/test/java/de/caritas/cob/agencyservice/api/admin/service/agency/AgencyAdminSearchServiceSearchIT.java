@@ -46,6 +46,9 @@ import org.springframework.test.context.jdbc.Sql;
 @Sql(scripts = "/database/AgencyDatabase.sql")
 class AgencyAdminSearchServiceSearchIT {
 
+  @MockitoBean
+  private de.caritas.cob.agencyservice.api.service.TenantService tenantService;
+
   @Autowired
   private AgencyAdminSearchService agencyAdminSearchService;
 
@@ -208,7 +211,7 @@ class AgencyAdminSearchServiceSearchIT {
         .getEmbedded();
 
     agencies.forEach(agency -> {
-      String resultSet = agency.getEmbedded().getCity()
+      String resultSet = agency.getEmbedded().getId() + agency.getEmbedded().getCity()
           + agency.getEmbedded().getName()
           + agency.getEmbedded().getPostcode();
       assertThat(resultSet, containsString("1"));
@@ -248,7 +251,7 @@ class AgencyAdminSearchServiceSearchIT {
 
   @Test
   public void buildAgencyAdminSearchResult_Should_returnExpectedMappedResponseDTO_When_searchForSpecialAgency() {
-    String keyword = "Schwangerschaftsberatungsstelle Sch";
+    String keyword = "Schwangerschaftsberatungsstelle 846";
 
     AgencyAdminFullResponseDTO firstSearchResult = this.agencyAdminSearchService
         .searchAgencies(keyword, 0, 1, new Sort().field(FieldEnum.NAME).order(OrderEnum.DESC)).getEmbedded().iterator().next();

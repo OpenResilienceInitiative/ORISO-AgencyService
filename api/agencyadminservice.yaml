@@ -33,8 +33,10 @@ paths:
         - name: q
           in: query
           description: >-
-            The query parameter to search for. Matches the agency name, postcode or city, or the
-            name of one of the agency's topics (Fachbereich), case-insensitively.
+            Every whitespace-separated word must match the agency name, ID, street, postcode, city,
+            tenant name or any linked topic name (Fachbereich). Matching ignores case and accents;
+            percent, underscore and exclamation mark are literal text. Empty means all agencies
+            in the caller's scope.
           schema:
             type: string
             example: "Freiburg"

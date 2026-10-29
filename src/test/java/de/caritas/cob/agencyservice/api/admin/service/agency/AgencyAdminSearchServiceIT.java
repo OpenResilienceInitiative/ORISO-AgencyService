@@ -47,6 +47,9 @@ import java.util.stream.Collectors;
 class AgencyAdminSearchServiceIT {
 
   private static final long FIRST_AGENCY_ID = 2L;
+  @MockitoBean
+  private de.caritas.cob.agencyservice.api.service.TenantService tenantService;
+
   @Autowired
   private AgencyAdminSearchService agencyAdminSearchService;
 

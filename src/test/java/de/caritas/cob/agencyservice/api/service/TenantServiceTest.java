@@ -41,6 +41,23 @@ class TenantServiceTest {
   }
 
   @Test
+  void batchLookupShouldUseBoundedBatchesAndPropagateFailure() {
+    when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
+    var ids = java.util.stream.LongStream.rangeClosed(1, 205).boxed().toList();
+    when(tenantControllerApi.getRestrictedTenantDataByTenantIds(any()))
+        .thenAnswer(call -> ((java.util.List<Long>) call.getArgument(0)).stream()
+            .map(id -> new RestrictedTenantDTO().id(id)).toList());
+    assertEquals(205, tenantService.getRestrictedTenantDataByTenantIds(ids).size());
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantIds(ids.subList(0, 100));
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantIds(ids.subList(100, 200));
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantIds(ids.subList(200, 205));
+    org.mockito.Mockito.doThrow(new IllegalStateException("owner unavailable"))
+        .when(tenantControllerApi).getRestrictedTenantDataByTenantIds(any());
+    assertThrows(IllegalStateException.class,
+        () -> tenantService.getRestrictedTenantDataByTenantIds(ids));
+  }
+
+  @Test
   void getRestrictedTenantDataBySubdomain_Should_ReturnTenantData_When_SubdomainProvided() {
     when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
     when(tenantControllerApi.getRestrictedTenantDataBySubdomain("app", null))
