@@ -67,7 +67,7 @@ class AgencyAdminControlsServiceTest {
             .id(7L)
             .name("Tenant");
     var expected = new AgencyAdminControls();
-    when(tenantService.getRestrictedTenantDataByTenantId(7L)).thenReturn(restricted);
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(7L)).thenReturn(restricted);
     when(policyMapper.toLegacyControls(restricted.getPermissionPolicies())).thenReturn(expected);
 
     assertThat(service.getResolvedControls(7L)).isSameAs(expected);

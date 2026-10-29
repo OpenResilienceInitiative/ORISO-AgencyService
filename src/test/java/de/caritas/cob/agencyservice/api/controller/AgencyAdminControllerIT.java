@@ -92,6 +92,9 @@ class AgencyAdminControllerIT {
         .webAppContextSetup(context)
         .apply(springSecurity())
         .build();
+    when(tenantService.getPermissionPolicies(Mockito.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredPolicies(call.getArgument(0)));
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO().settings(new Settings().featureCentralDataProtectionTemplateEnabled(false)));
     when(authenticatedUser.getTenantId()).thenReturn(1L);
@@ -111,6 +114,10 @@ class AgencyAdminControllerIT {
             .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
         .andExpect(jsonPath("_embedded.id").value(1))
+        .andExpect(jsonPath("_embedded.settings.permissionPolicies.featureVideoCallsEnabled.value")
+            .value(false))
+        .andExpect(jsonPath("_embedded.settings.permissionPolicies.featureVideoCallsEnabled.mode")
+            .value("ENFORCED"))
         .andExpect(jsonPath("_embedded.name").exists())
         .andExpect(jsonPath("_embedded.city").exists())
         .andExpect(jsonPath("_embedded.consultingType").exists())

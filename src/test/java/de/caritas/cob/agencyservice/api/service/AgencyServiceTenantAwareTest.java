@@ -17,8 +17,6 @@ import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.ExtendedConsultingTypeResponseDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
 import de.caritas.cob.agencyservice.consultingtypeservice.generated.web.model.RegistrationDTO;
-import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
-import de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings;
 import java.util.Optional;
 import org.junit.After;
 import org.junit.Before;
@@ -96,10 +94,7 @@ public class AgencyServiceTenantAwareTest {
     ExtendedConsultingTypeResponseDTO dto = new ExtendedConsultingTypeResponseDTO().registration(
         new RegistrationDTO().minPostcodeSize(5));
     when(consultingTypeManager.getConsultingTypeSettings(1)).thenReturn(dto);
-    RestrictedTenantDTO restrictedTenantDTO = new RestrictedTenantDTO().settings(
-        new Settings().topicsInRegistrationEnabled(true));
-    when(tenantService.getRestrictedTenantDataByTenantId(TENANT_ID)).thenReturn(
-        restrictedTenantDTO);
+    when(tenantService.isTopicsInRegistrationEnabled(TENANT_ID)).thenReturn(true);
 
     // when
     this.agencyService.getAgencies(Optional.of("12123"), 1, Optional.empty());
@@ -118,10 +113,7 @@ public class AgencyServiceTenantAwareTest {
     ExtendedConsultingTypeResponseDTO dto = new ExtendedConsultingTypeResponseDTO().registration(
         new RegistrationDTO().minPostcodeSize(5));
     when(consultingTypeManager.getConsultingTypeSettings(1)).thenReturn(dto);
-    RestrictedTenantDTO restrictedTenantDTO = new RestrictedTenantDTO().settings(
-        new Settings().topicsInRegistrationEnabled(true));
-    when(tenantService.getRestrictedTenantDataByTenantId(TENANT_ID)).thenReturn(
-        restrictedTenantDTO);
+    when(tenantService.isTopicsInRegistrationEnabled(TENANT_ID)).thenReturn(true);
 
     // when
     this.agencyService.getAgencies(Optional.of("12123"), 1, Optional.of(2), Optional.empty(), Optional.empty(), Optional.empty());

@@ -41,9 +41,9 @@ public class AgencyCounsellorTopicPermissionIT extends AgencyAdminServiceITBase 
 
   @org.junit.Before
   public void tenantPolicies() {
-    org.mockito.Mockito.when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.anyLong()))
-        .thenAnswer(call -> new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
-            .tenantId(call.getArgument(0)).policies(java.util.Map.of()));
+    org.mockito.Mockito.when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredPolicies(call.getArgument(0)));
   }
 
   @Test

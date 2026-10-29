@@ -101,6 +101,9 @@ class AgencyAdminControllerOneTopicPerAgencyIT {
   void setup() throws Exception {
     TenantContext.clear();
     mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+    when(tenantService.getPermissionPolicies(Mockito.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredPolicies(call.getArgument(0)));
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new RestrictedTenantDTO()
             .settings(new Settings().featureCentralDataProtectionTemplateEnabled(false)));

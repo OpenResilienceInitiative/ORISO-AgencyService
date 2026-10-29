@@ -321,6 +321,9 @@ public class AgencyService {
   }
 
   private boolean isTopicFeatureActivatedInRegistration() {
+    if (multitenancy) {
+      return tenantService.isTopicsInRegistrationEnabled(TenantContext.getCurrentTenant());
+    }
     RestrictedTenantDTO restrictedTenantDTO = getRestrictedTenantData();
     if (nonNull(restrictedTenantDTO) && nonNull(restrictedTenantDTO.getSettings())) {
       return Boolean.TRUE.equals(
@@ -437,19 +440,10 @@ public class AgencyService {
   }
 
   private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
-    if (multitenancyWithSingleDomain) {
-      // In single-domain mode, use the agency's own tenant when available.
-      // This avoids failing the whole agencies response when consulting type settings
-      // are temporarily unavailable.
-      if (agency.getTenantId() != null) {
-        return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
-      }
-      return null;
-    } else {
-
-      return agency.getTenantId() != null ? tenantService.getRestrictedTenantDataByTenantId(
-          agency.getTenantId()) : null;
+    if (agency.getTenantId() != null) {
+      return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
     }
+    return tenantService.getRestrictedTenantDataForPermissionPolicies(null);
   }
 
   /** A failed policy lookup must not expose unverified agency overrides as effective permissions. */
@@ -457,7 +451,10 @@ public class AgencyService {
     try {
       return getTenantDataRelevantForFeatureToggles(agency);
     } catch (org.springframework.web.client.RestClientException exception) {
-      log.warn("Permission policies unavailable for tenant {}", agency.getTenantId());
+      log.warn("Permission policies unavailable for tenant {}: type={} status={}",
+          agency.getTenantId(), exception.getClass().getSimpleName(),
+          exception instanceof org.springframework.web.client.RestClientResponseException response
+              ? response.getStatusCode().value() : "unavailable");
       throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
           de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }

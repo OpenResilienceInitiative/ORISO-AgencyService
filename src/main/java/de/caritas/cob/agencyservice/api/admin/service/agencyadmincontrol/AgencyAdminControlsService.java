@@ -27,20 +27,14 @@ public class AgencyAdminControlsService {
   }
 
   public AgencyAdminControls getControls(Long tenantId) {
-    if (isSingleTenantWithoutTenantId(tenantId)) {
-      return new AgencyAdminControls();
-    }
     return policyMapper.toLegacyControls(
         tenantService.getPermissionPolicies(requireTenantId(tenantId)).getPolicies());
   }
 
   public AgencyAdminControls getResolvedControls(Long tenantId) {
-    if (isSingleTenantWithoutTenantId(tenantId)) {
-      return new AgencyAdminControls();
-    }
     return policyMapper.toLegacyControls(
         tenantService
-            .getRestrictedTenantDataByTenantId(requireTenantId(tenantId))
+            .getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId))
             .getPermissionPolicies());
   }
 
@@ -61,9 +55,6 @@ public class AgencyAdminControlsService {
 
   public Settings enrichSettingsWithAgencyAdminControls(Settings settings, Long tenantId) {
     Settings enrichedSettings = settings != null ? settings : new Settings();
-    if (isSingleTenantWithoutTenantId(tenantId)) {
-      return enrichedSettings;
-    }
     var policies = tenantService.getPermissionPolicies(requireTenantId(tenantId)).getPolicies();
     enrichedSettings.setAgencyAdminControls(policyMapper.toLegacyControls(policies));
     enrichedSettings.setPermissionPolicies(EffectiveAgencySettingsResolver.resolvePolicies(enrichedSettings, policies));
@@ -89,14 +80,11 @@ public class AgencyAdminControlsService {
   }
 
   private Long requireTenantId(Long tenantId) {
-    if (tenantId == null || tenantId <= 0) {
+    if ((tenantId == null && multitenancyEnabled) || (tenantId != null && tenantId <= 0)) {
       throw new org.springframework.security.access.AccessDeniedException(
           "A concrete tenant is required for permission policies");
     }
     return tenantId;
   }
 
-  private boolean isSingleTenantWithoutTenantId(Long tenantId) {
-    return !multitenancyEnabled && (tenantId == null || tenantId <= 0);
-  }
 }

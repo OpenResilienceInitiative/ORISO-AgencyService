@@ -595,6 +595,50 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void policyLookupFailureShouldLogOnlySafeClassAndStatusThroughTheHttpHandler() {
+    var agency = Agency.builder().id(9L).name("Test agency").consultingTypeId(1).tenantId(14L).build();
+    when(agencyRepository.findByIdIn(List.of(9L))).thenReturn(List.of(agency));
+    when(tenantService.getRestrictedTenantDataByTenantId(14L)).thenThrow(
+        org.springframework.web.client.HttpServerErrorException.create(
+            org.springframework.http.HttpStatus.BAD_GATEWAY,
+            "upstream-token-secret", new org.springframework.http.HttpHeaders(),
+            "private-upstream-body".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            java.nio.charset.StandardCharsets.UTF_8));
+    var events = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    var serviceLogger = (ch.qos.logback.classic.Logger)
+        org.slf4j.LoggerFactory.getLogger(AgencyService.class);
+    var handlerLogger = (ch.qos.logback.classic.Logger)
+        org.slf4j.LoggerFactory.getLogger(LogService.class);
+    events.start();
+    serviceLogger.addAppender(events);
+    handlerLogger.addAppender(events);
+    try {
+      var failure = org.junit.Assert.assertThrows(
+          de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException.class,
+          () -> agencyService.getAgencies(List.of(9L)));
+      assertThat(failure.getCause()).isNull();
+      var response = new de.caritas.cob.agencyservice.api.ApiResponseEntityExceptionHandler()
+          .handleInternal(failure, Mockito.mock(org.springframework.web.context.request.WebRequest.class));
+      assertThat(response.getStatusCode().value()).isEqualTo(503);
+      assertThat(response.getBody()).isNull();
+      assertThat(response.getHeaders().toString()).doesNotContain("upstream", "secret");
+      assertThat(events.list).anySatisfy(event -> {
+        assertThat(event.getFormattedMessage()).contains("BadGateway", "502");
+        assertThat(event.getThrowableProxy()).isNull();
+      });
+      assertThat(events.list).allSatisfy(event -> {
+        assertThat(event.getFormattedMessage()).doesNotContain(
+            "upstream-token-secret", "private-upstream-body");
+        assertThat(event.getThrowableProxy()).isNull();
+      });
+    } finally {
+      serviceLogger.detachAppender(events);
+      handlerLogger.detachAppender(events);
+      events.stop();
+    }
+  }
+
+  @Test
   public void getAgencies_With_Ids_Should_NotLeakAgencyAdminControls_OnThePublicResponse() {
     when(agencyRepository.findByIdIn(AGENCY_IDS_LIST)).thenReturn(AGENCY_LIST);
     AgencyResponseDTO result = agencyService.getAgencies(AGENCY_IDS_LIST).get(0);
