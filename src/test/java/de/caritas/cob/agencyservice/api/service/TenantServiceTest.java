@@ -10,8 +10,12 @@ import static org.mockito.Mockito.when;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.SettingDTO;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
+import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
+import de.caritas.cob.agencyservice.tenantservice.generated.ApiClient;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
+import org.springframework.http.HttpHeaders;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +35,12 @@ class TenantServiceTest {
 
   @Mock
   ApplicationSettingsService applicationSettingsService;
+
+  @Mock SecurityHeaderSupplier securityHeaderSupplier;
+
+  @Mock TenantHeaderSupplier tenantHeaderSupplier;
+
+  @Mock ApiClient apiClient;
 
   @Mock
   TenantControllerApi tenantControllerApi;
@@ -75,6 +85,23 @@ class TenantServiceTest {
 
     assertEquals(1L, result.getId());
     verify(tenantControllerApi).getRestrictedSingleTenancyTenantData();
+  }
+
+  @Test
+  void getPermissionPolicies_shouldUseThePublicResolvedProjectionWithoutHumanAdminAuthority() {
+    var policies = java.util.Map.of("featureVideoCallsEnabled",
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
+            .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED));
+    when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
+    when(tenantControllerApi.getRestrictedTenantDataByTenantId(7L))
+        .thenReturn(new RestrictedTenantDTO(policies, null).id(7L));
+
+    var result = tenantService.getPermissionPolicies(7L);
+
+    assertEquals(7L, result.getTenantId());
+    assertEquals(policies, result.getPolicies());
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantId(7L);
+    verify(tenantControllerApi, never()).getTenantPermissionPolicies(any());
   }
 
   @Test

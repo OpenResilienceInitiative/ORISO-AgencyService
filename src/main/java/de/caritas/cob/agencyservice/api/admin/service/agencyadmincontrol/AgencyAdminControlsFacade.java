@@ -16,17 +16,25 @@ public class AgencyAdminControlsFacade {
 
   public AgencyAdminControls getAgencyAdminControls() {
     assertSuperAdmin();
-    return agencyAdminControlsService.getControls();
+    return agencyAdminControlsService.getControls(requireTenantId());
   }
 
   public AgencyAdminControls updateAgencyAdminControls(AgencyAdminControls agencyAdminControls) {
     assertSuperAdmin();
-    return agencyAdminControlsService.updateControls(agencyAdminControls);
+    return agencyAdminControlsService.updateControls(requireTenantId(), agencyAdminControls);
   }
 
   private void assertSuperAdmin() {
     if (!authenticatedUser.isTenantSuperAdmin()) {
       throw new AccessDeniedException("Only super admin can manage platform agency admin controls");
     }
+  }
+
+  private Long requireTenantId() {
+    Long tenantId = authenticatedUser.getTenantId();
+    if (tenantId == null || tenantId <= 0) {
+      throw new AccessDeniedException("A tenant admin can manage only its own tenant");
+    }
+    return tenantId;
   }
 }

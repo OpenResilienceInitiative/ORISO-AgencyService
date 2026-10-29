@@ -172,7 +172,8 @@ class AgencyAdminServiceTest {
     // (see findAgencyById_Should_useTenantUnawareRepository_*) override this
     // to null or 0L explicitly (#265).
     Mockito.lenient().when(authenticatedUser.getTenantId()).thenReturn(1L);
-    Mockito.lenient().when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
+    Mockito.lenient()
+        .when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any(), any()))
         .thenAnswer(invocation -> invocation.getArgument(0) != null
             ? invocation.getArgument(0)
             : new Settings());
@@ -338,6 +339,35 @@ class AgencyAdminServiceTest {
 
     // then
     verify(agencyIdAllocationService).claimReservedId(eq(4711L), eq(42L), any());
+  }
+
+  @Test
+  void updateAgency_Should_RejectAChangedOverrideThatContradictsItsStoredTenantsRequirement() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setTenantId(8L);
+    agency.setSettings("{}");
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    Mockito.lenient().when(agencyRepository.save(any())).thenReturn(agency);
+    var tenantService = mock(de.caritas.cob.agencyservice.api.service.TenantService.class);
+    var policy = new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
+        .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED);
+    Mockito.lenient().when(tenantService.getPermissionPolicies(8L)).thenReturn(
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
+            .tenantId(8L).policies(Map.of("featureVideoCallsOneOnOneChatsEnabled", policy)));
+    var controls = new AgencyAdminControlsService(tenantService,
+        new de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyPermissionPolicyMapper());
+    ReflectionTestUtils.setField(agencyAdminService, "agencyAdminControlsService", controls);
+    ReflectionTestUtils.setField(agencyAdminService, "agencySettingsService", new AgencySettingsService());
+
+    assertThrows(org.springframework.security.access.AccessDeniedException.class,
+        () -> agencyAdminService.updateAgency(AGENCY_ID,
+            new UpdateAgencyDTO().name(agency.getName()).description(agency.getDescription())
+                .postcode(agency.getPostCode()).city(agency.getCity()).external(false)
+                .settings(new Settings().featureVideoCallsOneOnOneChatsEnabled(true))));
+
+    verify(agencyRepository, never()).save(any());
   }
 
   @Test

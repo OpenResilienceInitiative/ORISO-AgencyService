@@ -86,6 +86,9 @@ class AgencyAdminControllerWithTopicsIT {
         .webAppContextSetup(context)
         .apply(springSecurity())
         .build();
+    when(tenantService.getPermissionPolicies(Mockito.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredPolicies(call.getArgument(0)));
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO().settings(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings().featureCentralDataProtectionTemplateEnabled(false)));
     when(authenticatedUser.getTenantId()).thenReturn(1L);

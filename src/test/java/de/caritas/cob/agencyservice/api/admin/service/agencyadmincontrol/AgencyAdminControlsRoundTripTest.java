@@ -1,78 +1,73 @@
 package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.caritas.cob.agencyservice.api.model.AgencyAdminAllowedPermissionToggles;
-import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
-import de.caritas.cob.agencyservice.api.repository.agencyadmincontrol.AgencyAdminControlEntity;
-import de.caritas.cob.agencyservice.api.repository.agencyadmincontrol.AgencyAdminControlRepository;
-import java.util.Optional;
+import de.caritas.cob.agencyservice.api.service.TenantService;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/**
- * Save-and-reload at the admin-controls seam (ORISO-AgencyService#293): the two group-chat format
- * toggles survive the JSON round trip, and toggles that were never set stay unset so they keep
- * following {@code groupChat}.
- */
+/** Typed parent policy changes are reflected by compatibility reads without a second write model. */
 class AgencyAdminControlsRoundTripTest {
 
   private AgencyAdminControlsService service;
+  private TenantService tenantService;
+  private AtomicReference<TenantPermissionPolicies> stored;
 
   @BeforeEach
   void setUp() {
-    var repository = mock(AgencyAdminControlRepository.class);
-    var stored = new AtomicReference<AgencyAdminControlEntity>();
-    when(repository.findTopByOrderByIdAsc()).thenAnswer(i -> Optional.ofNullable(stored.get()));
-    when(repository.save(any(AgencyAdminControlEntity.class)))
-        .thenAnswer(
-            invocation -> {
-              stored.set(invocation.getArgument(0));
-              return stored.get();
-            });
-    service = new AgencyAdminControlsService(repository, new AgencyAdminControlsConverter());
+    tenantService = mock(TenantService.class);
+    TenantContext.setCurrentTenant(7L);
+    stored = new AtomicReference<>(new TenantPermissionPolicies().tenantId(7L).policies(Map.of()));
+    when(tenantService.getPermissionPolicies(7L)).thenAnswer(i -> stored.get());
+    service = new AgencyAdminControlsService(tenantService, new AgencyPermissionPolicyMapper());
+  }
+
+  @AfterEach
+  void clearTenant() {
+    TenantContext.clear();
   }
 
   @Test
-  void updateControls_then_getControls_should_keepGroupChatFormatToggles() {
-    service.updateControls(
-        new AgencyAdminControls()
-            .allowedPermissionToggles(
-                new AgencyAdminAllowedPermissionToggles()
-                    .groupChat(true)
-                    .internalGroupChat(true)
-                    .selfHelpGroups(false))
-            .enforcedPermissionToggles(
-                new AgencyAdminAllowedPermissionToggles().internalGroupChat(true)));
+  void typedParentChanges_shouldKeepIndependentGroupChatFormatRequirements() {
+    stored.set(new TenantPermissionPolicies().tenantId(7L).policies(Map.of(
+        "featureGroupChatV2Enabled", policy(true, PermissionPolicyMode.SUGGESTED),
+        "featureInternalGroupChatEnabled", policy(true, PermissionPolicyMode.ENFORCED),
+        "featureSelfHelpGroupsEnabled", policy(false, PermissionPolicyMode.ENFORCED))));
 
-    AgencyAdminControls reloaded = service.getControls();
+    var reloaded = service.getControls();
 
     assertThat(reloaded.getAllowedPermissionToggles().getGroupChat()).isTrue();
     assertThat(reloaded.getAllowedPermissionToggles().getInternalGroupChat()).isTrue();
     assertThat(reloaded.getAllowedPermissionToggles().getSelfHelpGroups()).isFalse();
     assertThat(reloaded.getEnforcedPermissionToggles().getInternalGroupChat()).isTrue();
+
+    stored.set(new TenantPermissionPolicies().tenantId(7L).policies(Map.of(
+        "featureInternalGroupChatEnabled", policy(false, PermissionPolicyMode.SUGGESTED))));
+    assertThat(service.getControls().getEnforcedPermissionToggles().getInternalGroupChat()).isFalse();
+    assertThat(service.getControls().getAllowedPermissionToggles().getInternalGroupChat()).isTrue();
   }
 
   @Test
-  void updateControls_then_getControls_should_leaveUnsetFormatTogglesUnset() {
-    service.updateControls(
-        new AgencyAdminControls()
-            .allowedPermissionToggles(new AgencyAdminAllowedPermissionToggles().groupChat(false))
-            .enforcedPermissionToggles(new AgencyAdminAllowedPermissionToggles()));
+  void typedParentChanges_shouldNotLeakIntoAnotherTenantsCompatibilityRead() {
+    when(tenantService.getPermissionPolicies(8L))
+        .thenReturn(new TenantPermissionPolicies().tenantId(8L).policies(Map.of()));
+    stored.set(new TenantPermissionPolicies().tenantId(7L).policies(Map.of(
+        "featureGroupChatV2Enabled", policy(false, PermissionPolicyMode.ENFORCED))));
 
-    AgencyAdminControls reloaded = service.getControls();
+    assertThat(service.getControls(7L).getAllowedPermissionToggles().getGroupChat()).isFalse();
+    assertThat(service.getControls(8L).getAllowedPermissionToggles().getGroupChat()).isTrue();
+  }
 
-    // groupChat itself is defaulted (allowed -> true unless set, enforced -> false unless set);
-    // the format toggles are stored as given so a missing value keeps following groupChat.
-    assertThat(reloaded.getAllowedPermissionToggles().getGroupChat()).isFalse();
-    assertThat(reloaded.getAllowedPermissionToggles().getInternalGroupChat()).isNull();
-    assertThat(reloaded.getAllowedPermissionToggles().getSelfHelpGroups()).isNull();
-    assertThat(reloaded.getEnforcedPermissionToggles().getGroupChat()).isFalse();
-    assertThat(reloaded.getEnforcedPermissionToggles().getInternalGroupChat()).isNull();
-    assertThat(reloaded.getEnforcedPermissionToggles().getSelfHelpGroups()).isNull();
+  private static BooleanPermissionPolicy policy(boolean value, PermissionPolicyMode mode) {
+    return new BooleanPermissionPolicy().value(value).mode(mode);
   }
 }

@@ -37,6 +37,15 @@ public class AgencyCounsellorTopicPermissionIT extends AgencyAdminServiceITBase 
 
   @MockitoBean private TopicService topicService;
 
+  @MockitoBean private de.caritas.cob.agencyservice.api.service.TenantService tenantService;
+
+  @org.junit.Before
+  public void tenantPolicies() {
+    org.mockito.Mockito.when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredPolicies(call.getArgument(0)));
+  }
+
   @Test
   public void anAgencyFromBeforeTheSetting_reportsCreate() {
     assertThat(permissionOf(EXISTING_AGENCY), is(CounsellorTopicPermissionEnum.CREATE));

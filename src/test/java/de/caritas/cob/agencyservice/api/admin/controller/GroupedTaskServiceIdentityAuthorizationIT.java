@@ -91,6 +91,9 @@ class GroupedTaskServiceIdentityAuthorizationIT {
 
   @BeforeEach
   void setup() {
+    when(tenants.getPermissionPolicies(anyLong()))
+        .thenAnswer(call -> new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
+            .tenantId(call.getArgument(0)).policies(Map.of()));
     when(tenants.getRestrictedTenantDataByTenantId(anyLong()))
         .thenAnswer(call -> new RestrictedTenantDTO().id(call.getArgument(0)));
     when(types.getExtendedConsultingTypeResponseDTO(anyInt()))

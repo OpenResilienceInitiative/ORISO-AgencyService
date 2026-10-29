@@ -9,6 +9,9 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
+import java.util.Map;
 
 /**
  * Truth tables for the effective feature flags served on the public agency response
@@ -16,6 +19,75 @@ import org.junit.jupiter.params.provider.CsvSource;
  * uniformly for every flag both levels share.
  */
 class EffectiveAgencySettingsResolverTest {
+
+  @ParameterizedTest
+  @CsvSource(value = {
+      "ENFORCED,true,null,true,true", "ENFORCED,true,true,true,true", "ENFORCED,true,false,true,true",
+      "ENFORCED,false,null,false,true", "ENFORCED,false,true,false,true", "ENFORCED,false,false,false,true",
+      "SUGGESTED,true,null,true,true", "SUGGESTED,true,true,true,false", "SUGGESTED,true,false,false,false",
+      "SUGGESTED,false,null,false,true", "SUGGESTED,false,true,true,false", "SUGGESTED,false,false,false,false"
+  }, nullValues = "null")
+  void canonicalPolicies_shouldRespectRequirementsAndOverrideableRecommendations(
+      PermissionPolicyMode mode, boolean parent, Boolean own, boolean expected, boolean inherited) throws Exception {
+    var settings = new Settings();
+    var fields = new java.util.TreeSet<>(EXPECTED_COMMON_FLAGS);
+    var parents = new java.util.LinkedHashMap<String, BooleanPermissionPolicy>();
+    for (String field : fields) {
+      String suffix = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+      Settings.class.getMethod("set" + suffix, Boolean.class).invoke(settings, own);
+      parents.put(field, new BooleanPermissionPolicy().value(parent).mode(mode));
+    }
+    var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings, parents);
+    assertThat(resolved.keySet()).containsAll(fields);
+    for (String field : fields) {
+      var value = resolved.get(field);
+      assertThat(value.getValue()).as(field).isEqualTo(expected);
+      assertThat(value.getMode().getValue()).as(field).isEqualTo(mode.getValue());
+      assertThat(value.getInherited()).as(field).isEqualTo(inherited);
+    }
+    EffectiveAgencySettingsResolver.applyTo(settings, null, parents);
+    for (String field : fields) {
+      String suffix = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+      assertThat(Settings.class.getMethod("get" + suffix).invoke(settings)).as(field).isEqualTo(expected);
+    }
+  }
+
+  @Test
+  void canonicalSplitFormatPolicy_shouldNotBeReplacedByTheLegacyFamilyMaster() {
+    var settings = new Settings().featureGroupChatV2Enabled(false).featureInternalGroupChatEnabled(true);
+    var parents = Map.of(
+        "featureGroupChatV2Enabled", new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED),
+        "featureInternalGroupChatEnabled", new BooleanPermissionPolicy().value(true).mode(PermissionPolicyMode.SUGGESTED));
+    EffectiveAgencySettingsResolver.applyTo(settings, null, parents);
+    assertThat(settings.getFeatureGroupChatV2Enabled()).isFalse();
+    assertThat(settings.getFeatureInternalGroupChatEnabled()).isTrue();
+  }
+
+  @Test
+  void canonicalMissingSplitFormats_shouldInheritTheParentGroupPolicyOnlyAsTransitionFallback() {
+    var settings = new Settings().featureInternalGroupChatEnabled(true);
+    var policies = Map.of("featureGroupChatV2Enabled",
+        new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED));
+    var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings, policies);
+    assertThat(resolved.get("featureInternalGroupChatEnabled").getValue()).isFalse();
+    assertThat(resolved.get("featureSelfHelpGroupsEnabled").getMode().getValue()).isEqualTo("ENFORCED");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"SUGGESTED,true", "SUGGESTED,false", "ENFORCED,true", "ENFORCED,false"})
+  void tenantOwnedPolicies_shouldIgnoreDormantAgencyOverrides(PermissionPolicyMode mode, boolean value) {
+    var settings = new de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService()
+        .toSettings("{\"featureDisplayNameEditable\":false,\"featureAskerEmailEnabled\":false,\"caseHandoverEnabled\":false}");
+    var parent = new BooleanPermissionPolicy().value(value).mode(mode);
+    var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings,
+        Map.of("featureDisplayNameEditable", parent, "featureAskerEmailEnabled", parent,
+            "caseHandoverEnabled", parent));
+    resolved.values().forEach(policy -> {
+      assertThat(policy.getValue()).isEqualTo(value);
+      assertThat(policy.getMode().getValue()).isEqualTo(mode.getValue());
+      assertThat(policy.getInherited()).isTrue();
+    });
+  }
 
   private static final String NULL = "null";
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.RuntimeJsonMappingException;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.model.Settings.CounsellorTopicPermissionEnum;
 import org.apache.commons.lang3.StringUtils;
@@ -104,15 +105,13 @@ public class AgencySettingsService {
       return null;
     }
     try {
-      return objectMapper.writeValueAsString(stripAgencyAdminControls(settings));
+      ObjectNode stored = objectMapper.valueToTree(settings);
+      stored.remove("agencyAdminControls");
+      stored.remove("permissionPolicies");
+      return objectMapper.writeValueAsString(stored);
     } catch (JsonProcessingException exception) {
       throw new RuntimeJsonMappingException(exception.getMessage());
     }
   }
 
-  private Settings stripAgencyAdminControls(Settings settings) {
-    Settings settingsWithoutControls = objectMapper.convertValue(settings, Settings.class);
-    settingsWithoutControls.setAgencyAdminControls(null);
-    return settingsWithoutControls;
-  }
 }

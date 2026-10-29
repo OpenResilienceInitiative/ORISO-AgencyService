@@ -13,8 +13,10 @@ import de.caritas.cob.agencyservice.api.model.AgencyDTO;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.service.TenantHibernateInterceptor;
+import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.service.TopicService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
 import de.caritas.cob.agencyservice.topicservice.generated.web.model.TopicDTO;
 import java.lang.reflect.Field;
 import java.util.Optional;
@@ -59,6 +61,8 @@ public class AgencyAdminServiceTenantAwareIT extends AgencyAdminServiceITBase {
   @MockitoBean
   private TopicService topicService;
 
+  @MockitoBean
+  private TenantService tenantService;
   // Multi-topic writes read the one-topic switch (#1264); pin it off instead of calling CTS.
   @MockitoSpyBean
   private ApplicationSettingsService applicationSettingsService;
@@ -66,6 +70,7 @@ public class AgencyAdminServiceTenantAwareIT extends AgencyAdminServiceITBase {
   @Before
   public void beforeEach() throws NoSuchFieldException, IllegalAccessException {
     givenTopicServiceReturnsListOfTopics();
+    when(tenantService.getPermissionPolicies(1L)).thenReturn(new TenantPermissionPolicies());
     doReturn(new ApplicationSettingsDTO()
             .oneTopicPerAgencyEnabled(new FeatureToggleDTO().value(false).readOnly(false)))
         .when(applicationSettingsService).fetchApplicationSettings();

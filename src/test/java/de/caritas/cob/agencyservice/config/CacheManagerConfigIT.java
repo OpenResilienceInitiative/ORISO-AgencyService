@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 
 import de.caritas.cob.agencyservice.api.service.ApplicationSettingsService;
 import de.caritas.cob.agencyservice.api.service.TenantService;
+import de.caritas.cob.agencyservice.api.service.TenantHeaderSupplier;
+import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
@@ -67,6 +69,10 @@ class CacheManagerConfigIT {
   @MockitoBean private TenantServiceApiControllerFactory tenantServiceApiControllerFactory;
 
   @MockitoBean private ApplicationSettingsService applicationSettingsService;
+
+  @MockitoBean private SecurityHeaderSupplier securityHeaderSupplier;
+
+  @MockitoBean private TenantHeaderSupplier tenantHeaderSupplier;
 
   @Test
   void springCacheManagerSpiBean_shouldExistAndResolveEveryNamedCache() {

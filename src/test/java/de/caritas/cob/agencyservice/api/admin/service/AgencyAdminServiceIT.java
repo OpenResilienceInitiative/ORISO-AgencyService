@@ -47,6 +47,15 @@ public class AgencyAdminServiceIT extends AgencyAdminServiceITBase {
 
   @Autowired private EntityManager entityManager;
 
+  @MockitoBean private de.caritas.cob.agencyservice.api.service.TenantService tenantService;
+
+  @org.junit.Before
+  public void configuredTenantPolicies() {
+    org.mockito.Mockito.when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredPolicies(call.getArgument(0)));
+  }
+
   @Test
   public void saveAgency_Should_PersistsAgency() {
     super.saveAgency_Should_PersistsAgency();

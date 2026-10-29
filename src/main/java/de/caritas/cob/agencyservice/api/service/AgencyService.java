@@ -6,8 +6,6 @@ import static org.apache.commons.lang3.BooleanUtils.isTrue;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
-import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
-import de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
@@ -38,6 +36,8 @@ import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.function.Supplier;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -76,12 +76,8 @@ public class AgencyService {
 
   private final @NonNull AgencySettingsService agencySettingsService;
 
-  private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
-
   private final @NonNull LegalTextInheritanceResolver legalTextInheritanceResolver;
 
-  private final @NonNull AgencyEffectivePermissionSettingsApplier
-      effectivePermissionSettingsApplier;
 
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
@@ -105,9 +101,7 @@ public class AgencyService {
    * @return a list containing regarding agencies
    */
   public List<AgencyResponseDTO> getAgencies(List<Long> agencyIds) {
-    return getAgencyRepositoryForSearch().findByIdIn(agencyIds).stream()
-        .map(this::convertToAgencyResponseDTO)
-        .toList();
+    return convertToAgencyResponses(getAgencyRepositoryForSearch().findByIdIn(agencyIds));
   }
 
   /**
@@ -121,9 +115,7 @@ public class AgencyService {
     try {
       verifyConsultingTypeExists(consultingTypeId);
 
-      return agencyRepository.findByConsultingTypeId(consultingTypeId).stream()
-          .map(this::convertToAgencyResponseDTO)
-          .toList();
+      return convertToAgencyResponses(agencyRepository.findByConsultingTypeId(consultingTypeId));
 
     } catch (MissingConsultingTypeException ex) {
       throw new BadRequestException(
@@ -329,6 +321,9 @@ public class AgencyService {
   }
 
   private boolean isTopicFeatureActivatedInRegistration() {
+    if (multitenancy) {
+      return tenantService.isTopicsInRegistrationEnabled(TenantContext.getCurrentTenant());
+    }
     RestrictedTenantDTO restrictedTenantDTO = getRestrictedTenantData();
     if (nonNull(restrictedTenantDTO) && nonNull(restrictedTenantDTO.getSettings())) {
       return Boolean.TRUE.equals(
@@ -445,41 +440,35 @@ public class AgencyService {
   }
 
   private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
-    if (multitenancyWithSingleDomain) {
-      // In single-domain mode, use the agency's own tenant when available.
-      // This avoids failing the whole agencies response when consulting type settings
-      // are temporarily unavailable.
-      if (agency.getTenantId() != null) {
-        return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
-      }
-      return null;
-    } else {
-
-      return agency.getTenantId() != null ? tenantService.getRestrictedTenantDataByTenantId(
-          agency.getTenantId()) : null;
+    if (agency.getTenantId() != null) {
+      return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
     }
+    return tenantService.getRestrictedTenantDataForPermissionPolicies(null);
   }
 
-  /**
-   * Tenant (Träger) lookup for the public agency response. A TenantService failure must not break
-   * the agency response (ORISO-AgencyService#293): it is logged and treated as "no Träger data",
-   * so the agency's own values are served.
-   */
+  /** A failed policy lookup must not expose unverified agency overrides as effective permissions. */
   private RestrictedTenantDTO findTenantDataRelevantForFeatureToggles(Agency agency) {
     try {
       return getTenantDataRelevantForFeatureToggles(agency);
-    } catch (RuntimeException exception) {
-      log.warn(
-          "Tenant lookup failed for agency {} (tenantId={}); serving the agency's own settings",
-          agency.getId(),
-          agency.getTenantId(),
-          exception);
-      return null;
+    } catch (org.springframework.web.client.RestClientException exception) {
+      log.warn("Permission policies unavailable for tenant {}: type={} status={}",
+          agency.getTenantId(), exception.getClass().getSimpleName(),
+          exception instanceof org.springframework.web.client.RestClientResponseException response
+              ? response.getStatusCode().value() : "unavailable");
+      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
+          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }
   }
 
-  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency) {
-    RestrictedTenantDTO tenantData = findTenantDataRelevantForFeatureToggles(agency);
+  private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
+    Map<Long, Optional<RestrictedTenantDTO>> tenants = new HashMap<>();
+    return agencies.stream().map(agency -> convertToAgencyResponseDTO(agency,
+        tenants.computeIfAbsent(agency.getTenantId(), ignored ->
+            Optional.ofNullable(findTenantDataRelevantForFeatureToggles(agency))).orElse(null)))
+        .toList();
+  }
+
+  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, RestrictedTenantDTO tenantData) {
     String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency, tenantData);
     return new AgencyResponseDTO()
         .id(agency.getId())
@@ -508,23 +497,14 @@ public class AgencyService {
   }
 
   /**
-   * Builds the settings served on the public/registration-facing agency response. Bakes the
-   * platform admin controls into the effective feature flags (forced-off disabled, enforced-on
-   * locked on) without exposing the controls themselves — see {@link
-   * AgencyEffectivePermissionSettingsApplier}. Mirrors ORISO-TenantService's
-   * withEffectivePermissions (ADR-013 P4). The admin-facing path ({@code AgencyAdminService})
-   * still attaches the raw controls via {@link
-   * AgencyAdminControlsService#enrichSettingsWithAgencyAdminControls} so the Admin UI can render
-   * disabled-not-hidden state.
-   *
-   * <p>Feature flags are served as effective values: Träger AND Beratungsstelle, a Träger
-   * "off" always wins (ORISO-AgencyService#293) — see {@link EffectiveAgencySettingsResolver}.
+   * Public consumers receive effective typed policy values; Admin keeps raw leaf overrides and
+   * the resolved policy map separate so a dormant override survives an inherited requirement.
    */
   private Settings buildAgencySettings(Agency agency, RestrictedTenantDTO tenantData) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
     EffectiveAgencySettingsResolver.applyTo(
-        settings, tenantData != null ? tenantData.getSettings() : null);
-    effectivePermissionSettingsApplier.applyTo(settings, agencyAdminControlsService.getControls());
+        settings, tenantData != null ? tenantData.getSettings() : null,
+        tenantData != null ? tenantData.getPermissionPolicies() : null);
     return settings;
   }
 

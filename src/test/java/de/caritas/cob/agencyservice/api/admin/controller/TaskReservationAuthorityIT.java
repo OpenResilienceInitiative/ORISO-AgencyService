@@ -51,6 +51,13 @@ class TaskReservationAuthorityIT {
   @Autowired @org.springframework.beans.factory.annotation.Qualifier("agencyRepository") private de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository agencies;
 
 
+  @org.junit.jupiter.api.BeforeEach
+  void tenantPolicies() {
+    when(tenantService.getPermissionPolicies(anyLong()))
+        .thenAnswer(call -> new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
+            .tenantId(call.getArgument(0)).policies(Map.of()));
+  }
+
   @AfterEach
   void cleanup() {
     reservations.deleteAll();

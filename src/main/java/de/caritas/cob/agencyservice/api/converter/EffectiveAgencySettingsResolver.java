@@ -1,34 +1,23 @@
 package de.caritas.cob.agencyservice.api.converter;
 
 import de.caritas.cob.agencyservice.api.model.Settings;
+import de.caritas.cob.agencyservice.api.model.AgencyPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
+import java.util.Objects;
 
 /**
- * Resolves the effective feature flags a Beratungsstelle serves on the public agency response
- * (ORISO-AgencyService#293, ADR-013): a Beratungsstelle may only restrict what its Träger allows.
- *
- * <p>The same rule applies uniformly to every permission flag that exists in both the Träger
- * (TenantService) settings and the agency settings — the registry is discovered from the two
- * generated models minus a literal exclusion list ({@link #NOT_CASCADED}), never hand-written
- * per field:
- *
- * <ul>
- *   <li>Träger "off" always wins;
- *   <li>otherwise the agency value applies; an unset agency inherits the Träger value;
- *   <li>Träger unset (not provided, or tenant lookup failed) → agency value.
- * </ul>
- *
- * <p>The only special case are the two group-chat formats {@code featureInternalGroupChatEnabled}
- * and {@code featureSelfHelpGroupsEnabled}: on each level {@code featureGroupChatV2Enabled} is the
- * master switch (master off ⇒ both formats off on that level, whatever the format says) and the
- * fallback for a missing format flag. Both are applied per level before the two levels are
- * combined, so this works with TenantService versions that do not yet send the format flags
- * (ORISO-TenantService#250).
+ * Resolves agency leaf values against typed parent policies. Enforced values always win;
+ * recommendations may be overridden. The boolean-only overload supports older tenant responses.
  */
 public final class EffectiveAgencySettingsResolver {
 
@@ -59,13 +48,86 @@ public final class EffectiveAgencySettingsResolver {
   private record FlagBinding(
       String name, Method traegerGetter, Method agencyGetter, Method agencySetter) {}
 
-  private static final List<FlagBinding> BINDINGS = discoverCommonBooleanFlags();
+  private static final List<FlagBinding> BINDINGS = discoverBooleanFlags(true);
+  private static final Map<String, FlagBinding> AGENCY_BINDINGS = discoverBooleanFlags(false)
+      .stream().collect(Collectors.toUnmodifiableMap(FlagBinding::name, binding -> binding));
 
   private EffectiveAgencySettingsResolver() {}
 
   /** JSON property names of every flag this resolver covers, sorted. */
   public static List<String> flagNames() {
     return BINDINGS.stream().map(FlagBinding::name).toList();
+  }
+
+  /** Canonical policies are per feature. A recommendation may be overridden at the leaf. */
+  public static Map<String, AgencyPermissionPolicy> resolvePolicies(
+      Settings agencySettings, Map<String, BooleanPermissionPolicy> parentPolicies) {
+    Map<String, AgencyPermissionPolicy> resolved = new LinkedHashMap<>();
+    if (parentPolicies == null) {
+      return resolved;
+    }
+    withTransitionFallbacks(parentPolicies).forEach((field, parent) -> {
+      if (parent == null || parent.getValue() == null || parent.getMode() == null) {
+        throw new IllegalStateException("Incomplete tenant permission policy: " + field);
+      }
+      FlagBinding binding = AGENCY_BINDINGS.get(field);
+      Boolean ownValue = binding != null && agencySettings != null
+          ? read(binding.agencyGetter(), agencySettings) : null;
+      boolean enforced = parent.getMode() == PermissionPolicyMode.ENFORCED;
+      resolved.put(field, new AgencyPermissionPolicy()
+          .value(enforced || ownValue == null ? parent.getValue() : ownValue)
+          .mode(enforced ? AgencyPermissionPolicy.ModeEnum.ENFORCED : AgencyPermissionPolicy.ModeEnum.SUGGESTED)
+          .inherited(enforced || ownValue == null));
+    });
+    return resolved;
+  }
+
+  /** Older providers may omit split formats; an explicit child policy always takes precedence. */
+  public static Map<String, BooleanPermissionPolicy> withTransitionFallbacks(
+      Map<String, BooleanPermissionPolicy> policies) {
+    Map<String, BooleanPermissionPolicy> expanded = new LinkedHashMap<>(policies);
+    var group = policies.get(GROUP_CHAT_MASTER);
+    if (group != null) {
+      GROUP_CHAT_FORMATS.forEach(field -> expanded.putIfAbsent(field, group));
+    }
+    return expanded;
+  }
+
+  /** Only explicit changed leaf values need authorization; unchanged dormant values may be echoed. */
+  public static Map<String, Boolean> changedOverrides(Settings stored, Settings requested) {
+    Map<String, Boolean> changes = new LinkedHashMap<>();
+    if (requested == null) {
+      return changes;
+    }
+    AGENCY_BINDINGS.forEach((field, binding) -> {
+      Boolean next = read(binding.agencyGetter(), requested);
+      Boolean previous = stored == null ? null : read(binding.agencyGetter(), stored);
+      if (next != null && !Objects.equals(next, previous)) {
+        changes.put(field, next);
+      }
+    });
+    return changes;
+  }
+
+  /** Applies the same resolved values served to Admin; legacy booleans are fallback only. */
+  public static void applyTo(Settings agencySettings,
+      de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings parentSettings,
+      Map<String, BooleanPermissionPolicy> parentPolicies) {
+    if (agencySettings == null) {
+      return;
+    }
+    if (parentPolicies == null || parentPolicies.isEmpty()) {
+      applyTo(agencySettings, parentSettings);
+      return;
+    }
+    var policies = resolvePolicies(agencySettings, parentPolicies);
+    for (FlagBinding binding : AGENCY_BINDINGS.values()) {
+      var policy = policies.get(binding.name());
+      if (policy != null) {
+        write(binding.agencySetter(), agencySettings, policy.getValue());
+      }
+    }
+    agencySettings.setPermissionPolicies(policies);
   }
 
   /**
@@ -124,7 +186,7 @@ public final class EffectiveAgencySettingsResolver {
    * This mirrors the TenantService permission registry ({@code PermissionFeature}); a new shared
    * flag lands in the cascade unless it is listed there, and the coverage test pins the result.
    */
-  private static List<FlagBinding> discoverCommonBooleanFlags() {
+  private static List<FlagBinding> discoverBooleanFlags(boolean requireParentGetter) {
     Class<?> traegerClass = de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings.class;
     List<FlagBinding> bindings = new ArrayList<>();
     for (Method agencyGetter : Settings.class.getMethods()) {
@@ -134,7 +196,7 @@ public final class EffectiveAgencySettingsResolver {
       String suffix = agencyGetter.getName().substring(3);
       Method traegerGetter = findBooleanGetter(traegerClass, agencyGetter.getName());
       Method agencySetter = findSetter(Settings.class, "set" + suffix);
-      if (traegerGetter == null || agencySetter == null) {
+      if ((requireParentGetter && traegerGetter == null) || agencySetter == null) {
         continue;
       }
       String name = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);

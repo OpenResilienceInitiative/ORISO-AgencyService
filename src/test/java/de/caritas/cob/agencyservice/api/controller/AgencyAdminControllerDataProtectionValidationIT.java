@@ -96,6 +96,9 @@ class AgencyAdminControllerDataProtectionValidationIT {
         .thenReturn(new ExtendedConsultingTypeResponseDTO());
     when(authenticatedUser.getTenantId()).thenReturn(1L);
     // Central data protection ON: the branch that delegates to the validation service.
+    when(tenantService.getPermissionPolicies(Mockito.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredPolicies(call.getArgument(0)));
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new RestrictedTenantDTO()
             .settings(new Settings().featureCentralDataProtectionTemplateEnabled(true)));
