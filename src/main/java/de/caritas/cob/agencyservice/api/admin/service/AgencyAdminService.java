@@ -71,6 +71,7 @@ public class AgencyAdminService {
 
   private final @NonNull UserAdminService userAdminService;
   private final @NonNull DeleteAgencyValidator deleteAgencyValidator;
+  private final @NonNull DeletionAuditReporter deletionAuditReporter;
   private final @NonNull AgencyTopicMergeService agencyTopicMergeService;
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
   private final @NonNull AppointmentService appointmentService;
@@ -618,6 +619,8 @@ public class AgencyAdminService {
     agency.setDeleteDate(LocalDateTime.now(ZoneOffset.UTC));
     this.agencyRepository.save(agency);
     this.appointmentService.deleteAgency(agency);
+    this.deletionAuditReporter.reportAgency(
+        agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
   }
 
   /**

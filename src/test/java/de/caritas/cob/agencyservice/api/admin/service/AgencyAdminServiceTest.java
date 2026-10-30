@@ -93,6 +93,9 @@ class AgencyAdminServiceTest {
   DeleteAgencyValidator deleteAgencyValidator;
 
   @Mock
+  DeletionAuditReporter deletionAuditReporter;
+
+  @Mock
   AgencyTopicMergeService mergeService;
 
   @Mock
@@ -882,6 +885,33 @@ class AgencyAdminServiceTest {
 
     verify(this.deleteAgencyValidator).validate(agency);
     verify(this.agencyRepository).save(any());
+  }
+
+  @Test
+  void deleteAgency_Should_ReportTheMarkingToTheDeletionLog_AfterTheAgencyWasSaved() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    agencyAdminService.deleteAgency(AGENCY_ID);
+
+    var order = org.mockito.Mockito.inOrder(this.agencyRepository, this.deletionAuditReporter);
+    order.verify(this.agencyRepository).save(agency);
+    order.verify(this.deletionAuditReporter)
+        .reportAgency(
+            agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
+  }
+
+  @Test
+  void deleteAgency_Should_NotReport_WhenTheValidatorRefusesTheDeletion() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    org.mockito.Mockito.doThrow(new IllegalStateException("has consultants"))
+        .when(this.deleteAgencyValidator)
+        .validate(agency);
+
+    assertThrows(IllegalStateException.class, () -> agencyAdminService.deleteAgency(AGENCY_ID));
+
+    org.mockito.Mockito.verifyNoInteractions(this.deletionAuditReporter);
   }
 
 }
