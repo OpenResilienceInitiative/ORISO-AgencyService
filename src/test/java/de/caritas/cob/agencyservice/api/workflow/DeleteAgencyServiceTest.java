@@ -9,6 +9,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.repository.deletionaudit.DeletionAuditOutboxRepository;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +27,8 @@ class DeleteAgencyServiceTest {
   @Mock AgencyRepository agencyRepository;
 
   @Mock AgencyPurgeTransaction agencyPurgeTransaction;
+
+  @Mock DeletionAuditOutboxRepository deletionAuditOutboxRepository;
 
   @InjectMocks DeleteAgencyService deleteAgencyService;
 
@@ -107,5 +110,33 @@ class DeleteAgencyServiceTest {
                         .equals(
                             "Agency deletion workflow started, 0 agencies marked for deletion.")),
         is(true));
+  }
+
+  @Test
+  void deleteAgenciesMarkedForDeletion_Should_dropOutboxRowsUserServiceAlreadyAcknowledged() {
+    // given
+    Mockito.when(agencyRepository.findAllByDeleteDateNotNull()).thenReturn(List.of());
+
+    // when
+    deleteAgencyService.deleteAgenciesMarkedForDeletion();
+
+    // then - delivered rows live at most until the next nightly run
+    Mockito.verify(deletionAuditOutboxRepository).deleteDelivered();
+  }
+
+  @Test
+  void deleteAgenciesMarkedForDeletion_Should_stillPurge_When_outboxCleanupFails() {
+    // given
+    Agency agency = new Agency();
+    agency.setId(1L);
+    Mockito.when(deletionAuditOutboxRepository.deleteDelivered())
+        .thenThrow(new RuntimeException("db"));
+    Mockito.when(agencyRepository.findAllByDeleteDateNotNull()).thenReturn(List.of(agency));
+
+    // when
+    deleteAgencyService.deleteAgenciesMarkedForDeletion();
+
+    // then
+    Mockito.verify(agencyPurgeTransaction).purge(agency);
   }
 }

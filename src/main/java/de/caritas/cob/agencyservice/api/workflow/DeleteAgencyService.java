@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.workflow;
 
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.api.repository.deletionaudit.DeletionAuditOutboxRepository;
 import java.util.List;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,8 @@ public class DeleteAgencyService {
 
   private final @NonNull AgencyPurgeTransaction agencyPurgeTransaction;
 
+  private final @NonNull DeletionAuditOutboxRepository deletionAuditOutboxRepository;
+
   /**
    * Purges every agency marked for deletion.
    *
@@ -30,6 +33,7 @@ public class DeleteAgencyService {
    * identical in the logs.
    */
   public void deleteAgenciesMarkedForDeletion() {
+    dropAcknowledgedDeletionLogEntries();
     List<Agency> agenciesMarkedForDeletion = agencyRepository.findAllByDeleteDateNotNull();
     log.info(
         "Agency deletion workflow started, {} agencies marked for deletion.",
@@ -43,6 +47,19 @@ public class DeleteAgencyService {
       log.info("agency with id {} has been deleted.", agency.getId());
     } catch (Exception ex) {
       log.error("Error while deleting agency with id {}", agency.getId(), ex);
+    }
+  }
+
+  /**
+   * Rows UserService has acknowledged are already in its deletion log; they live until the next
+   * nightly run at most. A failure here never stops the purge.
+   */
+  private void dropAcknowledgedDeletionLogEntries() {
+    try {
+      int dropped = deletionAuditOutboxRepository.deleteDelivered();
+      log.info("Dropped {} acknowledged deletion-log outbox rows.", dropped);
+    } catch (Exception ex) {
+      log.error("Could not drop acknowledged deletion-log outbox rows", ex);
     }
   }
 }
