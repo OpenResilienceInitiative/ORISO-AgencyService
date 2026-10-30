@@ -48,6 +48,19 @@ class DeletionAuditReporterTest {
   }
 
   @Test
+  void report_Should_ForwardTheCallersOwnToken_SoUserServiceNamesTheActor() {
+    var headers = new HttpHeaders();
+    headers.setBearerAuth("admin-token");
+    headers.add("X-CSRF-TOKEN", "csrf");
+    when(securityHeaderSupplier.getKeycloakAndCsrfHttpHeaders()).thenReturn(headers);
+
+    reporter.reportAgency(268L, 4L, DeletionAuditReporter.Outcome.SCHEDULED);
+
+    verify(apiClient).addDefaultHeader("Authorization", "Bearer admin-token");
+    verify(apiClient).addDefaultHeader("X-CSRF-TOKEN", "csrf");
+  }
+
+  @Test
   void reportAgencyDeletion_Should_SendOnlyTypeIdTenantAndOutcome() {
     reporter.reportAgency(268L, 4L, DeletionAuditReporter.Outcome.SCHEDULED);
 
