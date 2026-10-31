@@ -71,6 +71,7 @@ public class AgencyAdminService {
 
   private final @NonNull UserAdminService userAdminService;
   private final @NonNull DeleteAgencyValidator deleteAgencyValidator;
+  private final @NonNull DeletionAuditReporter deletionAuditReporter;
   private final @NonNull AgencyTopicMergeService agencyTopicMergeService;
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
   private final @NonNull AppointmentService appointmentService;
@@ -617,6 +618,10 @@ public class AgencyAdminService {
     this.deleteAgencyValidator.validate(agency);
     agency.setDeleteDate(LocalDateTime.now(ZoneOffset.UTC));
     this.agencyRepository.save(agency);
+    // Reported as soon as the marking is saved: a failing appointment sync afterwards must not
+    // leave a marked agency without its log line.
+    this.deletionAuditReporter.reportAgency(
+        agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
     this.appointmentService.deleteAgency(agency);
   }
 
