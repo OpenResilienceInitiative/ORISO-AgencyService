@@ -146,6 +146,14 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, "/internal/agencies/*/matrix-service-account")
             .access(legacyOrTask("MATRIX_AGENCY_PROVISION", AuthorityValue.TECHNICAL_USER))
             .requestMatchers("/internal/agencies/**").hasAuthority(AuthorityValue.TECHNICAL_USER)
+            // OBP 2.1 #130: UserService pulls finished agency purges into its deletion log. Only
+            // the RUNTIME task actor (FIVE_ACTORS mode) may read or acknowledge; there is no
+            // legacy technical-user fallback.
+            .requestMatchers("/internal/deletion-audit-outbox",
+                "/internal/deletion-audit-outbox/**")
+            .access((authentication, context) ->
+                new org.springframework.security.authorization.AuthorizationDecision(
+                    taskServiceIdentity.allows(authentication.get(), "DELETION_AUDIT_READ")))
             .anyRequest().denyAll())
         .oauth2ResourceServer(oauth2 -> oauth2.jwt(
             jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())));
