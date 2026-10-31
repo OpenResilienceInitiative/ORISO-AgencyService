@@ -59,10 +59,10 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
     })
 class GroupedTaskServiceIdentityAuthorizationIT {
   private static final List<String> SETUP_ROLES =
-      List.of("config-wizard", "invitation-reservations", "consultant-import");
+      List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync");
   private static final List<String> MAIL_ROLES =
       List.of(
-          "smtp-sync", "system-email-delivery", "notification-dispatch", "notifications-technical");
+          "system-email-delivery", "notification-dispatch", "notifications-technical");
   private static final List<String> RUNTIME_ROLES =
       List.of(
           "runtime-policy",
@@ -273,6 +273,22 @@ class GroupedTaskServiceIdentityAuthorizationIT {
     return JSON.readTree(body).path("token").asText();
   }
 
+  private List<String> groupedAudiences(String client, String receiver) {
+    if (!"agencyservice".equals(receiver)) {
+      return List.of(receiver);
+    }
+    return switch (client) {
+      case "backend-setup" -> List.of(
+          "tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands");
+      case "backend-mail" -> List.of(
+          "tenantservice", "agencyservice", "consultingtypeservice", "userservice");
+      case "backend-runtime" -> List.of("tenantservice", "agencyservice", "appointmentservice");
+      case "backend-account-create" -> List.of("userservice", "oriso-account-lifecycle");
+      case "backend-account-admin" -> List.of("userservice", "oriso-account-lifecycle", "oriso-otp");
+      default -> List.of(receiver);
+    };
+  }
+
   private RequestPostProcessor actor(
       String subject, String client, List<String> roles, String audience) {
     return jwt()
@@ -283,7 +299,7 @@ class GroupedTaskServiceIdentityAuthorizationIT {
                     .claim("azp", client)
                     .claim("tenantId", 0L)
                     .claim("username", "grouped-fixture")
-                    .audience(List.of(audience))
+                    .audience(groupedAudiences(client, audience))
                     .expiresAt(Instant.now().plusSeconds(60))
                     .claim("realm_access", Map.of("roles", roles)))
         .authorities(token -> converter.convert(token).getAuthorities());
