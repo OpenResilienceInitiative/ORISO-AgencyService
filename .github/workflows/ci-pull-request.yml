@@ -27,6 +27,10 @@ jobs:
         push_to_ghcr: false
         image_name: oriso-agencyservice
         github_token: ${{ secrets.GITHUB_TOKEN }}
+        # Scan the PR image with the same Trivy gate as the dev/main publish, so
+        # a fixable HIGH/CRITICAL finding fails the PR instead of the build
+        # after the merge.
+        scan_before_push: true
 
   required-integration-tests:
     name: required integration tests
