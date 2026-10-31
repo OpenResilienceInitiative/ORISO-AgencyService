@@ -914,4 +914,19 @@ class AgencyAdminServiceTest {
     org.mockito.Mockito.verifyNoInteractions(this.deletionAuditReporter);
   }
 
+  @Test
+  void deleteAgency_Should_StillReport_WhenTheAppointmentSyncFails() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    org.mockito.Mockito.doThrow(new IllegalStateException("appointment service down"))
+        .when(this.appointmentService)
+        .deleteAgency(agency);
+
+    assertThrows(IllegalStateException.class, () -> agencyAdminService.deleteAgency(AGENCY_ID));
+
+    verify(this.deletionAuditReporter)
+        .reportAgency(
+            agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
+  }
+
 }
