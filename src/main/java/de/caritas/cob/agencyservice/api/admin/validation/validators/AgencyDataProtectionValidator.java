@@ -37,6 +37,16 @@ public class AgencyDataProtectionValidator implements ConcreteAgencyValidator {
       return;
     }
 
+    if (Boolean.TRUE.equals(validateAgencyDto.getOffline())) {
+      // Taking a centre offline removes it from registration; an incomplete contact must not
+      // block that. The admin echoes the stored contact with the visibility switch, so rejecting
+      // the request left the centre online with no way to pause it (ORISO-Admin#1243). Going
+      // online (offline=false) and omitted visibility keep the rule.
+      log.info("Agency {} is set offline; skipping data protection validation.",
+          validateAgencyDto.getId());
+      return;
+    }
+
     Long tenantId = resolveTenantId(validateAgencyDto);
     if (tenantId == null) {
       // No tenant to ask about featureCentralDataProtectionTemplateEnabled - a single-tenancy

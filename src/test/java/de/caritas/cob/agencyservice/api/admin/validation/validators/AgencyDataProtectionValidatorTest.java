@@ -178,6 +178,58 @@ class AgencyDataProtectionValidatorTest {
         .validate(agencyToValidate);
   }
 
+  /**
+   * ORISO-Admin#1243: taking a centre offline removes it from registration, so an incomplete
+   * data protection contact must not block it. The admin sends the stored contact back with the
+   * visibility switch; rejecting that request left the centre online with no way to pause it.
+   */
+  @ParameterizedTest
+  @CsvSource({"false", "true"})
+  void validate_Should_NotBlockTakingTheAgencyOffline_When_CentralDataProtectionEnabled(
+      boolean multitenancyWithSingleDomain) {
+    final ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .id(1L)
+        .tenantId(1L)
+        .offline(true)
+        .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
+            DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
+    ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
+        multitenancyWithSingleDomain);
+    Mockito.lenient().when(tenantService.getRestrictedTenantDataByTenantId(1L))
+        .thenReturn(new RestrictedTenantDTO().settings(
+            new Settings().featureCentralDataProtectionTemplateEnabled(true)));
+    Mockito.lenient().when(applicationSettingsService.getApplicationSettings()).thenReturn(
+        new ApplicationSettingsDTO().mainTenantSubdomainForSingleDomainMultitenancy(
+            new SettingDTO().value("app")));
+    Mockito.lenient().when(tenantService.getRestrictedTenantDataBySubdomain("app"))
+        .thenReturn(new RestrictedTenantDTO().settings(
+            new Settings().featureCentralDataProtectionTemplateEnabled(true)));
+
+    agencyDataProtectionValidator.validate(agencyToValidate);
+
+    Mockito.verify(agencyDataProtectionValidationService, Mockito.never())
+        .validate(agencyToValidate);
+  }
+
+  /** The other direction keeps the rule: a centre going online still needs the contact. */
+  @Test
+  void validate_Should_StillValidate_When_TheAgencyIsSetOnline() {
+    ValidateAgencyDTO agencyToValidate = ValidateAgencyDTO.builder()
+        .id(1L)
+        .tenantId(1L)
+        .offline(false)
+        .dataProtectionDTO(new DataProtectionDTO().dataProtectionResponsibleEntity(
+            DataProtectionResponsibleEntityEnum.DATA_PROTECTION_OFFICER)).build();
+    ReflectionTestUtils.setField(agencyDataProtectionValidator, "multitenancyWithSingleDomain",
+        false);
+    givenAgencyTenant(agencyToValidate, true);
+
+    agencyDataProtectionValidator.validate(agencyToValidate);
+
+    Mockito.verify(agencyDataProtectionValidationService, Mockito.times(1))
+        .validate(agencyToValidate);
+  }
+
   private void givenAgencyTenant(ValidateAgencyDTO agency, boolean isCentralDataProtectionEnabled) {
     Mockito.when(tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId()))
         .thenReturn(new RestrictedTenantDTO().settings(new Settings().featureCentralDataProtectionTemplateEnabled(isCentralDataProtectionEnabled)));
