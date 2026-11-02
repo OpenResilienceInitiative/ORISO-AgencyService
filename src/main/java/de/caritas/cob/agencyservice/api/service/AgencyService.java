@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.function.Supplier;
+import java.util.function.Function;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -153,9 +154,7 @@ public class AgencyService {
     var agencies = findAgencies(postCode, getConsultingTypeIdForSearch(consultingTypeId), topicId,
         age, gender, counsellingRelation);
     Collections.shuffle(agencies);
-    var agencyResponseDTOs = agencies.stream()
-        .map(this::convertToFullAgencyResponseDTO)
-        .toList();
+    var agencyResponseDTOs = convertToFullAgencyResponses(agencies);
 
     var mutableResponseDTO = Lists.newArrayList(agencyResponseDTOs);
 
@@ -169,9 +168,7 @@ public class AgencyService {
   public List<FullAgencyResponseDTO> getAgencies(String postCode, Integer topicId) {
 
     var agencies = findAgenciesForCurrentTenant(postCode, topicId);
-    return agencies.stream()
-        .map(this::convertToFullAgencyResponseDTO)
-        .toList();
+    return convertToFullAgencyResponses(agencies);
   }
 
   public List<Integer> getAgenciesTopics() {
@@ -431,7 +428,8 @@ public class AgencyService {
       try {
         getAgencyRepositoryForSearch().findByIdAndDeleteDateNull(
             Long.valueOf(whiteSpot.getWhiteSpotAgencyId()))
-            .ifPresent(agency -> agencyResponseDTOs.add(convertToFullAgencyResponseDTO(agency)));
+            .ifPresent(agency -> agencyResponseDTOs.addAll(
+                convertToFullAgencyResponses(List.of(agency))));
       } catch (NumberFormatException nfEx) {
         throw new InternalServerErrorException(LogService::logNumberFormatException,
             "Invalid white spot agency id");
@@ -460,16 +458,68 @@ public class AgencyService {
     }
   }
 
-  private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
+  /** Each request reuses successes, legitimate nulls and failures only within that request. */
+  private Function<Agency, RestrictedTenantDTO> requestTenantLookup() {
     Map<Long, Optional<RestrictedTenantDTO>> tenants = new HashMap<>();
-    return agencies.stream().map(agency -> convertToAgencyResponseDTO(agency,
-        tenants.computeIfAbsent(agency.getTenantId(), ignored ->
-            Optional.ofNullable(findTenantDataRelevantForFeatureToggles(agency))).orElse(null)))
-        .toList();
+    Map<Long, RuntimeException> failures = new HashMap<>();
+    return agency -> {
+      Long id = agency.getTenantId();
+      if (failures.containsKey(id)) {
+        throw failures.get(id);
+      }
+      try {
+        return tenants.computeIfAbsent(id, ignored ->
+            Optional.ofNullable(findTenantDataRelevantForFeatureToggles(agency))).orElse(null);
+      } catch (RuntimeException exception) {
+        failures.put(id, exception);
+        throw exception;
+      }
+    };
   }
 
-  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, RestrictedTenantDTO tenantData) {
-    String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency, tenantData);
+  /** MAIN is a separate legal source, never another tenant's feature-policy authority. */
+  private Supplier<RestrictedTenantDTO> requestMainTenantLookup() {
+    return new Supplier<>() {
+      private boolean fetched;
+      private RestrictedTenantDTO tenant;
+      private RuntimeException failure;
+
+      @Override
+      public RestrictedTenantDTO get() {
+        if (!fetched) {
+          fetched = true;
+          try {
+            tenant = tenantService.getMainTenant();
+          } catch (RuntimeException exception) {
+            failure = exception;
+          }
+        }
+        if (failure != null) {
+          throw failure;
+        }
+        return tenant;
+      }
+    };
+  }
+
+  private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
+    var ownTenant = requestTenantLookup();
+    var mainTenant = requestMainTenantLookup();
+    return agencies.stream().map(agency -> convertToAgencyResponseDTO(
+        agency, ownTenant.apply(agency), ownTenant, mainTenant)).toList();
+  }
+
+  private List<FullAgencyResponseDTO> convertToFullAgencyResponses(List<Agency> agencies) {
+    var ownTenant = requestTenantLookup();
+    var mainTenant = requestMainTenantLookup();
+    return agencies.stream().map(agency ->
+        convertToFullAgencyResponseDTO(agency, ownTenant, mainTenant)).toList();
+  }
+
+  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, RestrictedTenantDTO tenantData,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    String renderedAgencySpecificPrivacy =
+        getRenderedAgencySpecificPrivacy(agency, tenantData, ownTenant, mainTenant);
     return new AgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
@@ -491,7 +541,7 @@ public class AgencyService {
         .lng(agency.getLng())
         .departments(
             agency.getAgencyTopics().stream()
-                .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
+                .map(topic -> convertToAgencyDepartmentDTO(topic, agency, ownTenant, mainTenant))
                 .toList())
         .settings(buildAgencySettings(agency, tenantData));
   }
@@ -510,18 +560,26 @@ public class AgencyService {
 
   protected String getRenderedAgencySpecificPrivacy(
       Agency agency, RestrictedTenantDTO tenantDataHoldingFeatureToggles) {
+    return getRenderedAgencySpecificPrivacy(agency, tenantDataHoldingFeatureToggles,
+        ignored -> tenantDataHoldingFeatureToggles, tenantService::getMainTenant);
+  }
+
+  private String getRenderedAgencySpecificPrivacy(Agency agency,
+      RestrictedTenantDTO tenantDataHoldingFeatureToggles,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings settings =
         tenantDataHoldingFeatureToggles != null ? tenantDataHoldingFeatureToggles.getSettings() : null;
     if (settings != null && settings.getFeatureCentralDataProtectionTemplateEnabled() != null
         && Boolean.TRUE.equals(settings.getFeatureCentralDataProtectionTemplateEnabled())) {
       return centralDataProtectionTemplateService.renderPrivacyTemplateWithRenderedPlaceholderValues(
-          agency);
+          agency, ownTenant, mainTenant);
     } else {
       return null;
     }
   }
 
-  private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency) {
+  private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return new FullAgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
@@ -538,7 +596,7 @@ public class AgencyService {
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
         .departments(
             agency.getAgencyTopics().stream()
-                .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
+                .map(topic -> convertToAgencyDepartmentDTO(topic, agency, ownTenant, mainTenant))
                 .toList())
         .agencyLogo(agency.getAgencyLogo())
         .street(agency.getStreet())
@@ -571,11 +629,12 @@ public class AgencyService {
    * OpenAPI specs say which one they are.
    */
   private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic,
-      Agency agency) {
+      Agency agency, Function<Agency, RestrictedTenantDTO> ownTenant,
+      Supplier<RestrictedTenantDTO> mainTenant) {
     return new AgencyDepartmentDTO()
         .topicId(agencyTopic.getTopicId())
-        .hasPublishedDpp(hasPublishedDpp(agencyTopic))
-        .hasPublishedImprint(hasPublishedImprint(agencyTopic))
+        .hasPublishedDpp(hasPublishedDpp(agencyTopic, ownTenant, mainTenant))
+        .hasPublishedImprint(hasPublishedImprint(agencyTopic, ownTenant, mainTenant))
         .openingHours(resolve(agencyTopic.getOpeningHours(), agency.getOpeningHours()))
         .phoneExtension(agencyTopic.getPhoneExtension())
         .floorLocation(resolve(agencyTopic.getFloorLocation(), agency.getFloorBuilding()));
@@ -604,13 +663,15 @@ public class AgencyService {
    * <p>This is deliberately <b>not</b> {@link DepartmentLegalPublicationState}, which #259 uses for
    * the admin read. See {@link #convertToAgencyDepartmentDTO} for why the two differ.
    */
-  private boolean hasPublishedDpp(AgencyTopic agencyTopic) {
-    return legalTextInheritanceResolver.resolveDpp(agencyTopic).isPresent();
+  private boolean hasPublishedDpp(AgencyTopic agencyTopic,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return legalTextInheritanceResolver.resolveDpp(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   /** Same fix for the imprint half — an inherited imprint is reachable and must be reported so. */
-  private boolean hasPublishedImprint(AgencyTopic agencyTopic) {
-    return legalTextInheritanceResolver.resolveImprint(agencyTopic).isPresent();
+  private boolean hasPublishedImprint(AgencyTopic agencyTopic,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return legalTextInheritanceResolver.resolveImprint(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

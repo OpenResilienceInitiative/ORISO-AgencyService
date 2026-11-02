@@ -10,6 +10,8 @@ import de.caritas.cob.agencyservice.tenantservice.generated.web.model.DataProtec
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.FeatureToggleDTO;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import jakarta.annotation.Nullable;
 import lombok.NonNull;
@@ -44,7 +46,17 @@ public class CentralDataProtectionTemplateService {
   }
 
   public String renderPrivacyTemplateWithRenderedPlaceholderValues(Agency agency) {
-    RestrictedTenantDTO restrictedTenantDataByTenantId = retrieveProperTenant(agency);
+    return renderPrivacyTemplateWithRenderedPlaceholderValues(agency,
+        value -> tenantService.getRestrictedTenantDataByTenantId(value.getTenantId()),
+        tenantService::getMainTenant);
+  }
+
+  /** Reuses a public conversion request's verified tenants without changing legal source priority. */
+  public String renderPrivacyTemplateWithRenderedPlaceholderValues(Agency agency,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    RestrictedTenantDTO restrictedTenantDataByTenantId =
+        multitenancyWithSingleDomain && !isTenantLevelLegalContentOverrideAllowed()
+            ? mainTenant.get() : ownTenant.apply(agency);
     if (restrictedTenantDataByTenantId != null
         && restrictedTenantDataByTenantId.getContent() != null) {
       return renderPrivacyTemplateWithRenderedPlaceholderValues(agency,
@@ -69,24 +81,6 @@ public class CentralDataProtectionTemplateService {
     } catch (Exception e) {
       log.error("Error while rendering data protection template: {}", e.getMessage());
       return null;
-    }
-  }
-
-  private de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO retrieveProperTenant(
-      Agency agency) {
-    if (multitenancyWithSingleDomain) {
-      return getAgencyTenantOrFallbackToMainTenantIfTenantPrivacyOverrideNotAllowed(agency);
-    } else {
-      return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
-    }
-  }
-
-  private de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO getAgencyTenantOrFallbackToMainTenantIfTenantPrivacyOverrideNotAllowed(
-      Agency agency) {
-    if (isTenantLevelLegalContentOverrideAllowed()) {
-      return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
-    } else {
-      return tenantService.getMainTenant();
     }
   }
 

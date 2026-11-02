@@ -117,10 +117,10 @@ public class AgencyServiceTest {
   @org.junit.Before
   public void stubLegalResolutionAsEmpty() {
     org.mockito.Mockito.lenient()
-        .when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.any()))
+        .when(legalTextInheritanceResolver.resolveDpp(any(), any(), any()))
         .thenReturn(ResolvedLegalText.none());
     org.mockito.Mockito.lenient()
-        .when(legalTextInheritanceResolver.resolveImprint(org.mockito.ArgumentMatchers.any()))
+        .when(legalTextInheritanceResolver.resolveImprint(any(), any(), any()))
         .thenReturn(ResolvedLegalText.none());
   }
 
@@ -277,9 +277,9 @@ public class AgencyServiceTest {
     AgencyTopic withoutLegal = AgencyTopic.builder().agency(agency).topicId(2L).build();
     ReflectionTestUtils.setField(agency, "agencyTopics", List.of(withLegal, withoutLegal));
 
-    when(legalTextInheritanceResolver.resolveDpp(withLegal))
+    when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
-    when(legalTextInheritanceResolver.resolveImprint(withLegal))
+    when(legalTextInheritanceResolver.resolveImprint(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
@@ -314,7 +314,7 @@ public class AgencyServiceTest {
     AgencyTopic departmentWithoutOwnText = AgencyTopic.builder().agency(agency).topicId(1L).build();
     ReflectionTestUtils.setField(agency, "agencyTopics", List.of(departmentWithoutOwnText));
 
-    when(legalTextInheritanceResolver.resolveDpp(departmentWithoutOwnText))
+    when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.eq(departmentWithoutOwnText), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.AGENCY));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
