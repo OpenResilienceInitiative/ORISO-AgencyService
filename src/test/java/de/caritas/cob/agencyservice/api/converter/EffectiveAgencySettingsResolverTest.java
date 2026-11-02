@@ -77,11 +77,16 @@ class EffectiveAgencySettingsResolverTest {
   @CsvSource({"SUGGESTED,true", "SUGGESTED,false", "ENFORCED,true", "ENFORCED,false"})
   void tenantOwnedPolicies_shouldIgnoreDormantAgencyOverrides(PermissionPolicyMode mode, boolean value) {
     var settings = new de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService()
-        .toSettings("{\"featureDisplayNameEditable\":false,\"featureAskerEmailEnabled\":false,\"caseHandoverEnabled\":false}");
+        .toSettings("{\"featureDisplayNameEditable\":false,\"featureAskerEmailEnabled\":false,\"caseHandoverEnabled\":false,\"featureAskerEmailCollectionAgencyCounsellingEnabled\":false,\"featureAskerEmailCollectionLiveChatEnabled\":false,\"featureAskerEmailCollectionSelfHelpEnabled\":false}");
     var parent = new BooleanPermissionPolicy().value(value).mode(mode);
     var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings,
         Map.of("featureDisplayNameEditable", parent, "featureAskerEmailEnabled", parent,
-            "caseHandoverEnabled", parent));
+            "caseHandoverEnabled", parent,
+            "featureAskerEmailCollectionAgencyCounsellingEnabled", parent,
+            "featureAskerEmailCollectionLiveChatEnabled", parent,
+            "featureAskerEmailCollectionSelfHelpEnabled", parent));
+    assertThat(resolved).containsKeys("featureAskerEmailCollectionAgencyCounsellingEnabled",
+        "featureAskerEmailCollectionLiveChatEnabled", "featureAskerEmailCollectionSelfHelpEnabled");
     resolved.values().forEach(policy -> {
       assertThat(policy.getValue()).isEqualTo(value);
       assertThat(policy.getMode().getValue()).isEqualTo(mode.getValue());

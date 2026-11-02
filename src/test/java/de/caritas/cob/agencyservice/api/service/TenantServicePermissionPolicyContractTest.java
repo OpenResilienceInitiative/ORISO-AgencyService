@@ -37,4 +37,28 @@ class TenantServicePermissionPolicyContractTest {
     assertThat((Map<String, Object>) reasonProperties.get("clientConsentRequired"))
         .containsEntry("deprecated", true);
   }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void collectionPolicies_shouldBeDistinctTenantDefaultsWithoutAgencyOverrides() throws IOException {
+    Map<String, Object> specification =
+        new Yaml().load(Files.readString(Path.of("services/tenantservice.yaml")));
+    var schemas = (Map<String, Object>) ((Map<String, Object>) specification.get("components")).get("schemas");
+    var properties = (Map<String, Object>) ((Map<String, Object>) schemas.get("Settings")).get("properties");
+    var featureKeys = (List<String>) ((Map<String, Object>) schemas.get("PermissionFeatureKey")).get("enum");
+    var keys = List.of("featureAskerEmailCollectionAgencyCounsellingEnabled",
+        "featureAskerEmailCollectionLiveChatEnabled", "featureAskerEmailCollectionSelfHelpEnabled");
+    for (String key : keys) {
+      assertThat(featureKeys).contains(key);
+      assertThat((Map<String, Object>) properties.get(key))
+          .containsEntry("type", "boolean").containsEntry("default", true);
+    }
+    assertThat((Map<String, Object>) properties.get("featureAskerEmailLiveChatEnabled"))
+        .containsEntry("default", false);
+    Map<String, Object> agencySpec =
+        new Yaml().load(Files.readString(Path.of("api/components/agency-settings.yaml")));
+    var agencySchemas = (Map<String, Object>) ((Map<String, Object>) agencySpec.get("components")).get("schemas");
+    var agencyProperties = (Map<String, Object>) ((Map<String, Object>) agencySchemas.get("Settings")).get("properties");
+    assertThat(agencyProperties).doesNotContainKeys(keys.toArray(String[]::new));
+  }
 }
