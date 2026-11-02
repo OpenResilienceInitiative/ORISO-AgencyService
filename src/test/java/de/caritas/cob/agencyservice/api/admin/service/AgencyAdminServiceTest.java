@@ -356,9 +356,9 @@ class AgencyAdminServiceTest {
     var tenantService = mock(de.caritas.cob.agencyservice.api.service.TenantService.class);
     var policy = new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
         .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED);
-    Mockito.lenient().when(tenantService.getPermissionPolicies(8L)).thenReturn(
-        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
-            .tenantId(8L).policies(Map.of("featureVideoCallsOneOnOneChatsEnabled", policy)));
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L)).thenReturn(
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO(
+            Map.of("featureVideoCallsOneOnOneChatsEnabled", policy), null).id(8L));
     var controls = new AgencyAdminControlsService(tenantService,
         new de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyPermissionPolicyMapper());
     ReflectionTestUtils.setField(agencyAdminService, "agencyAdminControlsService", controls);
@@ -371,6 +371,8 @@ class AgencyAdminServiceTest {
                 .settings(new Settings().featureVideoCallsOneOnOneChatsEnabled(true))));
 
     verify(agencyRepository, never()).save(any());
+    verify(tenantService).getRestrictedTenantDataForPermissionPolicies(8L);
+    Mockito.verifyNoMoreInteractions(tenantService);
   }
 
   @Test

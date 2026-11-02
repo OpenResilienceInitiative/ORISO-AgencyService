@@ -243,6 +243,99 @@ class TenantPolicySingleModeHttpTest {
     return agencies;
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "featureDirectInviteChatEnabled", "featureDirectInviteAudioEnabled", "featureDirectInviteVideoEnabled"
+  })
+  void directInviteWriteMayAlignWithTheServedEnforcedOffProjection(String field) {
+    expectDirectInvite(field);
+    assertThatCode(() -> controls.assertSettingsUpdateAllowed(flag(field, true), flag(field, false), 7L))
+        .doesNotThrowAnyException();
+    server.verify();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "featureDirectInviteChatEnabled", "featureDirectInviteAudioEnabled", "featureDirectInviteVideoEnabled"
+  })
+  void directInviteWriteCannotEnableAgainstTheServedEnforcedOffProjection(String field) {
+    expectDirectInvite(field);
+    assertThatThrownBy(() -> controls.assertSettingsUpdateAllowed(flag(field, false), flag(field, true), 7L))
+        .isInstanceOf(AccessDeniedException.class);
+    server.verify();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "featureDirectInviteChatEnabled", "featureDirectInviteAudioEnabled", "featureDirectInviteVideoEnabled"
+  })
+  void unchangedDormantDirectInviteChoiceNeedsNoPolicyRequest(String field) {
+    assertThatCode(() -> controls.assertSettingsUpdateAllowed(flag(field, true), flag(field, true), 7L))
+        .doesNotThrowAnyException();
+    server.verify();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+      "ENFORCED,true,true,true", "ENFORCED,true,false,false",
+      "ENFORCED,false,true,false", "ENFORCED,false,false,true",
+      "SUGGESTED,true,true,true", "SUGGESTED,true,false,true",
+      "SUGGESTED,false,true,true", "SUGGESTED,false,false,true"
+  })
+  void ordinaryPolicyWritesKeepAllFourStatesIndependentOfLegacyFlatHints(
+      String mode, boolean parent, boolean requested, boolean allowed) {
+    server.expect(requestTo("http://tenant.test/tenant/public/id/7")).andRespond(withSuccess("""
+        {"id":7,"settings":{"featureThreadsEnabled":false},"permissionPolicies":{
+        "featureThreadsEnabled":{"value":%s,"mode":"%s"}}}
+        """.formatted(parent, mode), MediaType.APPLICATION_JSON));
+    if (allowed) {
+      assertThatCode(() -> controls.assertSettingsUpdateAllowed(new Settings(), flag("featureThreadsEnabled", requested), 7L))
+          .doesNotThrowAnyException();
+    } else {
+      assertThatThrownBy(() -> controls.assertSettingsUpdateAllowed(new Settings(), flag("featureThreadsEnabled", requested), 7L))
+          .isInstanceOf(AccessDeniedException.class);
+    }
+    server.verify();
+  }
+
+  @Test
+  void aChangedWriteCannotUseMissingOrForeignAuthority() {
+    for (String body : new String[] {
+        "{\"id\":7,\"settings\":{}}",
+        "{\"id\":99,\"settings\":{},\"permissionPolicies\":{}}"}) {
+      server.expect(requestTo("http://tenant.test/tenant/public/id/7"))
+          .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+      assertThatThrownBy(() -> controls.assertSettingsUpdateAllowed(
+          new Settings(), flag("featureDirectInviteVideoEnabled", false), 7L))
+          .isInstanceOf(ServiceUnavailableException.class).hasNoCause();
+      server.verify();
+      server.reset();
+    }
+  }
+
+  @Test
+  void aChangedWriteDoesNotHideAnIncompleteCanonicalPolicy() {
+    server.expect(requestTo("http://tenant.test/tenant/public/id/7")).andRespond(withSuccess("""
+        {"id":7,"settings":{"featureDirectInviteVideoEnabled":false},"permissionPolicies":{
+        "featureDirectInviteVideoEnabled":{"value":true}}}
+        """, MediaType.APPLICATION_JSON));
+    assertThatThrownBy(() -> controls.assertSettingsUpdateAllowed(
+        new Settings(), flag("featureDirectInviteVideoEnabled", false), 7L))
+        .isInstanceOf(IllegalStateException.class);
+    server.verify();
+  }
+
+  private Settings flag(String field, boolean value) {
+    return new com.fasterxml.jackson.databind.ObjectMapper().convertValue(java.util.Map.of(field, value), Settings.class);
+  }
+
+  private void expectDirectInvite(String field) {
+    server.expect(requestTo("http://tenant.test/tenant/public/id/7")).andRespond(withSuccess("""
+        {"id":7,"settings":{"%s":false},"permissionPolicies":{
+        "%s":{"value":true,"mode":"ENFORCED"}}}
+        """.formatted(field, field), MediaType.APPLICATION_JSON));
+  }
+
   private String projection(String mode, boolean value) {
     return """
         {"id":7,"settings":{},"permissionPolicies":{

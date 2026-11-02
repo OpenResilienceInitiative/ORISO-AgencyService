@@ -1,10 +1,10 @@
 package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
+import de.caritas.cob.agencyservice.api.model.AgencyPermissionPolicy;
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
-import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
 import org.springframework.security.access.AccessDeniedException;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import lombok.NonNull;
@@ -71,14 +71,20 @@ public class AgencyAdminControlsService {
     if (changes.isEmpty()) {
       return;
     }
-    var policies = EffectiveAgencySettingsResolver.withTransitionFallbacks(
-        tenantService.getPermissionPolicies(requireTenantId(tenantId)).getPolicies());
+    var tenant = tenantService.getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId));
+    if (tenant == null || tenant.getPermissionPolicies() == null) {
+      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
+          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+    }
+    // Authorize the same enforced value exposed in Admin/public reads, including direct-link caps.
+    var policies = EffectiveAgencySettingsResolver.resolvePolicies(
+        null, tenant.getSettings(), tenant.getPermissionPolicies());
     changes.forEach((field, value) -> {
       var policy = policies == null ? null : policies.get(field);
       if (policy == null || policy.getValue() == null || policy.getMode() == null) {
         throw new IllegalStateException("Tenant permission policy is unavailable: " + field);
       }
-      if (policy.getMode() == PermissionPolicyMode.ENFORCED && !value.equals(policy.getValue())) {
+      if (policy.getMode() == AgencyPermissionPolicy.ModeEnum.ENFORCED && !value.equals(policy.getValue())) {
         throw new AccessDeniedException("The tenant requires a different value for " + field);
       }
     });
