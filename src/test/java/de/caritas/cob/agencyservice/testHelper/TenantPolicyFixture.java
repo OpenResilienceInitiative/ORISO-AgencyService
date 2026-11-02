@@ -18,4 +18,18 @@ public final class TenantPolicyFixture {
         "featureVideoCallsEnabled", new BooleanPermissionPolicy()
             .value(false).mode(PermissionPolicyMode.ENFORCED)));
   }
+
+  public static de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO
+      configuredProjection(Long storedTenantId) {
+    var policies = configuredPolicies(storedTenantId);
+    return projection(policies.getTenantId(), policies.getPolicies());
+  }
+
+  public static de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO
+      projection(Long tenantId, Map<String, BooleanPermissionPolicy> policies) {
+    return new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO(policies, null)
+        .id(tenantId).settings(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings()
+            .featureVideoCallsEnabled(false));
+  }
+
 }

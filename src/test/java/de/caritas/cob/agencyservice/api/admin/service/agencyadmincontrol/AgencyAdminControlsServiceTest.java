@@ -33,7 +33,8 @@ class AgencyAdminControlsServiceTest {
     var parent = new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED);
     var policies = new TenantPermissionPolicies().tenantId(8L)
         .policies(Map.of("featureVideoCallsOneOnOneChatsEnabled", parent));
-    when(tenantService.getPermissionPolicies(8L)).thenReturn(policies);
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L))
+        .thenReturn(new RestrictedTenantDTO(policies.getPolicies(), null).id(8L));
     var actualService = new AgencyAdminControlsService(tenantService, new AgencyPermissionPolicyMapper());
     var settings = new Settings().featureVideoCallsOneOnOneChatsEnabled(true);
 
@@ -91,10 +92,38 @@ class AgencyAdminControlsServiceTest {
     var settings = new Settings().featureStatisticsEnabled(true);
     var controls = new AgencyAdminControls();
     var policies = new TenantPermissionPolicies().tenantId(8L).policies(Map.of());
-    when(tenantService.getPermissionPolicies(8L)).thenReturn(policies);
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L))
+        .thenReturn(new RestrictedTenantDTO(policies.getPolicies(), null).id(8L));
     when(policyMapper.toLegacyControls(policies.getPolicies())).thenReturn(controls);
 
     assertThat(service.enrichSettingsWithAgencyAdminControls(settings, 8L)).isSameAs(settings);
     assertThat(settings.getAgencyAdminControls()).isSameAs(controls);
   }
+
+  @Test
+  void directInviteEffectiveMetadataUsesOneFreshProjectionWithoutReplacingDormantRawChoice() {
+    var policies = Map.of("featureDirectInviteVideoEnabled",
+        new BooleanPermissionPolicy().value(true).mode(PermissionPolicyMode.ENFORCED));
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L)).thenReturn(
+        new RestrictedTenantDTO(policies, null).id(8L).settings(
+            new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings()
+                .featureDirectInviteVideoEnabled(false)));
+    var raw = new Settings().featureDirectInviteVideoEnabled(true);
+    var actualService = new AgencyAdminControlsService(tenantService, new AgencyPermissionPolicyMapper());
+    var result = actualService.enrichSettingsWithAgencyAdminControls(raw, 8L);
+    assertThat(result).isSameAs(raw);
+    assertThat(raw.getFeatureDirectInviteVideoEnabled()).isTrue();
+    assertThat(result.getPermissionPolicies().get("featureDirectInviteVideoEnabled").getValue()).isFalse();
+    assertThat(result.getPermissionPolicies().get("featureDirectInviteVideoEnabled").getMode().getValue())
+        .isEqualTo("ENFORCED");
+    verify(tenantService).getRestrictedTenantDataForPermissionPolicies(8L);
+    org.mockito.Mockito.verifyNoMoreInteractions(tenantService);
+  }
+
+  @Test
+  void missingFullPolicyProjectionRetainsThePreviousUnavailableRefusal() {
+    assertThatThrownBy(() -> service.enrichSettingsWithAgencyAdminControls(new Settings(), 8L))
+        .isInstanceOf(de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException.class);
+  }
+
 }

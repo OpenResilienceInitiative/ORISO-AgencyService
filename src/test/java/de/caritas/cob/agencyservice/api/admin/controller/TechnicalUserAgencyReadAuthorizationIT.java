@@ -74,6 +74,9 @@ class TechnicalUserAgencyReadAuthorizationIT {
     when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.anyLong()))
         .thenAnswer(call -> new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
             .tenantId(call.getArgument(0)).policies(Map.of()));
+    org.mockito.Mockito.when(tenantService.getRestrictedTenantDataForPermissionPolicies(org.mockito.ArgumentMatchers.anyLong()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .projection(call.getArgument(0), java.util.Map.of()));
   }
 
   private void tokenWithRealmRoles(String... roles) {

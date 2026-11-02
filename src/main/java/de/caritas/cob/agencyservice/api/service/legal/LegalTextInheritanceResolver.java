@@ -1,5 +1,8 @@
 package de.caritas.cob.agencyservice.api.service.legal;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
@@ -60,6 +63,9 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @RequiredArgsConstructor
 public class LegalTextInheritanceResolver {
+
+  private static final ObjectMapper JSON_READER = new ObjectMapper();
+  private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {};
 
   private final @NonNull LegalTextVersionRepository legalTextVersionRepository;
   private final @NonNull TenantService tenantService;
@@ -139,7 +145,7 @@ public class LegalTextInheritanceResolver {
       return null;
     }
     var content = kind == LegalTextKind.DPP ? agency.getContentDpp() : agency.getContentImprint();
-    if (isBlank(content)) {
+    if (hasNoWording(content)) {
       return null;
     }
     return new ResolvedLegalText(
@@ -252,7 +258,37 @@ public class LegalTextInheritanceResolver {
   }
 
   private boolean isPublished(String content, PublicationStatus status) {
-    return PublicationStatus.PUBLISHED == status && !isBlank(content);
+    return PublicationStatus.PUBLISHED == status && !hasNoWording(content);
+  }
+
+  /**
+   * True when a stored language→HTML map carries no visible wording: {@code null}, {@code "{}"},
+   * {@code {"de":""}} or {@code {"de":"<p>&nbsp;</p>"}}. Emptying a text is stored as an empty
+   * language entry (see {@code AgencyAdminService}), so a non-blank column is not proof of wording.
+   * Such a level has no text of its own and the level above keeps applying (ORISO-Admin#132). A
+   * value that is not a JSON map is left alone and counts as wording.
+   */
+  private boolean hasNoWording(String storedJson) {
+    if (isBlank(storedJson)) {
+      return true;
+    }
+    try {
+      var map = JSON_READER.readValue(storedJson, STRING_MAP);
+      return map == null
+          || map.entrySet().stream()
+              .filter(entry -> entry.getKey() != null && !entry.getKey().contains("__"))
+              .allMatch(entry -> isVisiblyEmpty(entry.getValue()));
+    } catch (JsonProcessingException | RuntimeException e) {
+      return false;
+    }
+  }
+
+  private boolean isVisiblyEmpty(String html) {
+    return html == null
+        || html.replaceAll("<[^>]*>", "")
+            .replaceAll("(?i)&(?:nbsp|#160|#xa0);", " ")
+            .replaceAll("[\\u00A0\\u200B]", "")
+            .isBlank();
   }
 
   private boolean isBlank(String value) {

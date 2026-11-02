@@ -56,6 +56,9 @@ class TaskReservationAuthorityIT {
     when(tenantService.getPermissionPolicies(anyLong()))
         .thenAnswer(call -> new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
             .tenantId(call.getArgument(0)).policies(Map.of()));
+    org.mockito.Mockito.when(tenantService.getRestrictedTenantDataForPermissionPolicies(anyLong()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .projection(call.getArgument(0), java.util.Map.of()));
   }
 
   @AfterEach

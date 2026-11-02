@@ -55,9 +55,14 @@ public class AgencyAdminControlsService {
 
   public Settings enrichSettingsWithAgencyAdminControls(Settings settings, Long tenantId) {
     Settings enrichedSettings = settings != null ? settings : new Settings();
-    var policies = tenantService.getPermissionPolicies(requireTenantId(tenantId)).getPolicies();
+    var tenant = tenantService.getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId));
+    if (tenant == null || tenant.getPermissionPolicies() == null) {
+      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
+          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+    }
+    var policies = tenant.getPermissionPolicies();
     enrichedSettings.setAgencyAdminControls(policyMapper.toLegacyControls(policies));
-    enrichedSettings.setPermissionPolicies(EffectiveAgencySettingsResolver.resolvePolicies(enrichedSettings, policies));
+    enrichedSettings.setPermissionPolicies(EffectiveAgencySettingsResolver.resolvePolicies(enrichedSettings, tenant.getSettings(), policies));
     return enrichedSettings;
   }
 

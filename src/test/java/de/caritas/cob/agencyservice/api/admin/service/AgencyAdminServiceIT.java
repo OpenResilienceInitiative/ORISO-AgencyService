@@ -54,6 +54,9 @@ public class AgencyAdminServiceIT extends AgencyAdminServiceITBase {
     org.mockito.Mockito.when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.any()))
         .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
             .configuredPolicies(call.getArgument(0)));
+    org.mockito.Mockito.when(tenantService.getRestrictedTenantDataForPermissionPolicies(org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredProjection(call.getArgument(0)));
   }
 
   @Test

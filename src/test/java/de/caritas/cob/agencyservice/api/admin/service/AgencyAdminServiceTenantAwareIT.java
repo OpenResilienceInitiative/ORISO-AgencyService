@@ -71,6 +71,9 @@ public class AgencyAdminServiceTenantAwareIT extends AgencyAdminServiceITBase {
   public void beforeEach() throws NoSuchFieldException, IllegalAccessException {
     givenTopicServiceReturnsListOfTopics();
     when(tenantService.getPermissionPolicies(1L)).thenReturn(new TenantPermissionPolicies());
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(1L))
+        .thenReturn(de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .projection(1L, java.util.Map.of()));
     doReturn(new ApplicationSettingsDTO()
             .oneTopicPerAgencyEnabled(new FeatureToggleDTO().value(false).readOnly(false)))
         .when(applicationSettingsService).fetchApplicationSettings();

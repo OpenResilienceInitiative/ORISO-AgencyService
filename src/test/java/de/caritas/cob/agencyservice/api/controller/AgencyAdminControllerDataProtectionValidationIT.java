@@ -99,6 +99,9 @@ class AgencyAdminControllerDataProtectionValidationIT {
     when(tenantService.getPermissionPolicies(Mockito.any()))
         .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
             .configuredPolicies(call.getArgument(0)));
+    org.mockito.Mockito.when(tenantService.getRestrictedTenantDataForPermissionPolicies(Mockito.any()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .configuredProjection(call.getArgument(0)));
     when(tenantService.getRestrictedTenantDataByTenantId(Mockito.any()))
         .thenReturn(new RestrictedTenantDTO()
             .settings(new Settings().featureCentralDataProtectionTemplateEnabled(true)));

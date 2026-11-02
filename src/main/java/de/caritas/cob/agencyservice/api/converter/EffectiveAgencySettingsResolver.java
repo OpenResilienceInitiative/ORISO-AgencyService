@@ -17,11 +17,15 @@ import java.util.Objects;
 
 /**
  * Resolves agency leaf values against typed parent policies. Enforced values always win;
- * recommendations may be overridden. The boolean-only overload supports older tenant responses.
+ * recommendations may be overridden. Direct-link flags retain the restrict-only served-tenant
+ * cap from #349 (ADR-029 §6). The boolean-only overload supports older tenant responses.
  */
 public final class EffectiveAgencySettingsResolver {
 
   private static final String GROUP_CHAT_MASTER = "featureGroupChatV2Enabled";
+  // Direct-link permission retains the restrict-only, served-platform-cap contract of #349.
+  private static final Set<String> DIRECT_INVITE_FLAGS = Set.of(
+      "featureDirectInviteChatEnabled", "featureDirectInviteAudioEnabled", "featureDirectInviteVideoEnabled");
 
   /**
    * Shared flags deliberately NOT cascaded (decision for #293). The eight operational tenant-level
@@ -62,6 +66,13 @@ public final class EffectiveAgencySettingsResolver {
   /** Canonical policies are per feature. A recommendation may be overridden at the leaf. */
   public static Map<String, AgencyPermissionPolicy> resolvePolicies(
       Settings agencySettings, Map<String, BooleanPermissionPolicy> parentPolicies) {
+    return resolvePolicies(agencySettings, null, parentPolicies);
+  }
+
+  public static Map<String, AgencyPermissionPolicy> resolvePolicies(
+      Settings agencySettings,
+      de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings parentSettings,
+      Map<String, BooleanPermissionPolicy> parentPolicies) {
     Map<String, AgencyPermissionPolicy> resolved = new LinkedHashMap<>();
     if (parentPolicies == null) {
       return resolved;
@@ -74,8 +85,15 @@ public final class EffectiveAgencySettingsResolver {
       Boolean ownValue = binding != null && agencySettings != null
           ? read(binding.agencyGetter(), agencySettings) : null;
       boolean enforced = parent.getMode() == PermissionPolicyMode.ENFORCED;
+      Boolean value = enforced || ownValue == null ? parent.getValue() : ownValue;
+      if (DIRECT_INVITE_FLAGS.contains(field)) {
+        Boolean served = parentSettings != null && binding != null
+            ? read(binding.traegerGetter(), parentSettings) : null;
+        Boolean parentValue = orElse(served, parent.getValue());
+        value = enforced ? parentValue : combine(parentValue, ownValue);
+      }
       resolved.put(field, new AgencyPermissionPolicy()
-          .value(enforced || ownValue == null ? parent.getValue() : ownValue)
+          .value(value)
           .mode(enforced ? AgencyPermissionPolicy.ModeEnum.ENFORCED : AgencyPermissionPolicy.ModeEnum.SUGGESTED)
           .inherited(enforced || ownValue == null));
     });
@@ -120,7 +138,10 @@ public final class EffectiveAgencySettingsResolver {
       applyTo(agencySettings, parentSettings);
       return;
     }
-    var policies = resolvePolicies(agencySettings, parentPolicies);
+    // Resolve before the legacy projection mutates raw leaf choices. Missing policy fields
+    // still use the served tenant's legacy cap; modern ordinary policies override those hints.
+    var policies = resolvePolicies(agencySettings, parentSettings, parentPolicies);
+    applyTo(agencySettings, parentSettings);
     for (FlagBinding binding : AGENCY_BINDINGS.values()) {
       var policy = policies.get(binding.name());
       if (policy != null) {

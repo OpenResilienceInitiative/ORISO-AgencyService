@@ -22,3 +22,17 @@ An inherited requirement is enforced even when an older agency row has no tenant
 `TenantPolicySingleModeHttpTest` exercises the actual generated tenant HTTP client and Spring
 cache proxy. `AgencyServiceTest.policyLookupFailureShouldLogOnlySafeClassAndStatusThroughTheHttpHandler`
 checks both the diagnostic and the real exception handler for disclosure.
+
+## Reconciliation with current Dev direct-link permissions
+
+For ordinary canonical features, SUGGESTED permits an agency choice and ENFORCED wins in
+both directions. Account privacy and handover remain tenant-owned with no raw agency override.
+The three direct-invite flags retain the separate Dev contract from AgencyService PR349 and
+ADR-029 §6: a served tenant OFF caps the agency, while an ENFORCED served tenant value wins.
+Their effective policy values match the public flags; the existing parent mode is preserved.
+
+Resolve modern values from the original raw agency settings before projecting legacy Boolean
+caps for fields without a modern policy. Both Admin metadata and public settings use the same
+fresh tenant projection; Admin retains raw dormant choices. No second controls lookup is needed:
+those controls are derived from the same policy map. The bundled provider schema and workflow
+pin include the new direct-invite fields as well as the three inherited-only collection keys.
