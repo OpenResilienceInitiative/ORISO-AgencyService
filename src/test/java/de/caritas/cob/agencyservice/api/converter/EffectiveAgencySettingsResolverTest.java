@@ -33,7 +33,9 @@ class EffectiveAgencySettingsResolverTest {
           "featureAnonymousChatEnabled", "featureAudioCallsAnonymousChatsEnabled",
           "featureAudioCallsEnabled", "featureAudioCallsGroupChatsEnabled",
           "featureAudioCallsOneOnOneChatsEnabled", "featureAudioCallsSupervisionChatsEnabled",
-          "featureCallsEnabled", "featureGroupChatV2Enabled", "featureInternalGroupChatEnabled",
+          "featureCallsEnabled", "featureDirectInviteAudioEnabled",
+          "featureDirectInviteChatEnabled", "featureDirectInviteVideoEnabled",
+          "featureGroupChatV2Enabled", "featureInternalGroupChatEnabled",
           "featureMediaAiScanAnonymousChatsEnabled", "featureMediaAiScanEnabled",
           "featureMediaAiScanGroupChatsEnabled", "featureMediaAiScanOneOnOneChatsEnabled",
           "featureMediaAiScanSupervisionChatsEnabled",
@@ -222,6 +224,31 @@ class EffectiveAgencySettingsResolverTest {
     "featureAnonymousChatEnabled, null, null, null",
   })
   void applyTo_should_letAgencyOnlyRestrictTheTraeger(
+      String flag, String traeger, String agency, String expected) {
+    var traegerSettings = newTraeger();
+    var agencySettings = new Settings();
+    set(traegerSettings, flag, bool(traeger));
+    set(agencySettings, flag, bool(agency));
+
+    EffectiveAgencySettingsResolver.applyTo(agencySettings, traegerSettings);
+
+    assertThat(get(agencySettings, flag)).isEqualTo(bool(expected));
+  }
+
+  // "Direkteinladung erlauben" per chat type (TenantService#331, ADR-029 §6).
+  @ParameterizedTest(name = "{0}: Träger {1} + agency {2} -> {3}")
+  @CsvSource({
+    "featureDirectInviteChatEnabled, false, true, false",
+    "featureDirectInviteChatEnabled, true, false, false",
+    "featureDirectInviteChatEnabled, true, null, true",
+    "featureDirectInviteAudioEnabled, false, true, false",
+    "featureDirectInviteAudioEnabled, true, false, false",
+    "featureDirectInviteAudioEnabled, true, null, true",
+    "featureDirectInviteVideoEnabled, false, true, false",
+    "featureDirectInviteVideoEnabled, true, false, false",
+    "featureDirectInviteVideoEnabled, true, null, true",
+  })
+  void applyTo_should_cascadeDirectInvitePermissionPerChatType(
       String flag, String traeger, String agency, String expected) {
     var traegerSettings = newTraeger();
     var agencySettings = new Settings();
