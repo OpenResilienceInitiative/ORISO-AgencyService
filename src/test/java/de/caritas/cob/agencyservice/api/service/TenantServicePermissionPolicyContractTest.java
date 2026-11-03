@@ -40,7 +40,7 @@ class TenantServicePermissionPolicyContractTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void collectionPolicies_shouldBeOptionalTenantBooleansWithoutAgencyOverrides() throws IOException {
+  void accountPolicies_shouldBeOptionalTenantBooleansWithoutAgencyOverrides() throws IOException {
     Map<String, Object> specification =
         new Yaml().load(Files.readString(Path.of("services/tenantservice.yaml")));
     var schemas = (Map<String, Object>) ((Map<String, Object>) specification.get("components")).get("schemas");
@@ -49,7 +49,12 @@ class TenantServicePermissionPolicyContractTest {
     var required = (List<String>) settingsSchema.getOrDefault("required", List.of());
     var featureKeys = (List<String>) ((Map<String, Object>) schemas.get("PermissionFeatureKey")).get("enum");
     var keys = List.of("featureAskerEmailCollectionAgencyCounsellingEnabled",
-        "featureAskerEmailCollectionLiveChatEnabled", "featureAskerEmailCollectionSelfHelpEnabled");
+        "featureAskerEmailCollectionSelfHelpEnabled",
+        "featureDisplayNameEditableAgencyCounsellingEnabled",
+        "featureDisplayNameEditableLiveChatEnabled",
+        "featureDisplayNameEditableSelfHelpEnabled");
+    assertThat(featureKeys).doesNotContain("featureAskerEmailCollectionLiveChatEnabled");
+    assertThat(properties).doesNotContainKey("featureAskerEmailCollectionLiveChatEnabled");
     for (String key : keys) {
       assertThat(featureKeys).contains(key);
       assertThat((Map<String, Object>) properties.get(key))
@@ -59,7 +64,9 @@ class TenantServicePermissionPolicyContractTest {
     // Defaults belong to the Tenant domain, not a client-side input initializer.
     var generated = new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings();
     assertThat(generated.getFeatureAskerEmailCollectionAgencyCounsellingEnabled()).isNull();
-    assertThat(generated.getFeatureAskerEmailCollectionLiveChatEnabled()).isNull();
+    assertThat(generated.getFeatureDisplayNameEditableAgencyCounsellingEnabled()).isNull();
+    assertThat(generated.getFeatureDisplayNameEditableLiveChatEnabled()).isNull();
+    assertThat(generated.getFeatureDisplayNameEditableSelfHelpEnabled()).isNull();
     assertThat(generated.getFeatureAskerEmailCollectionSelfHelpEnabled()).isNull();
     assertThat((Map<String, Object>) properties.get("featureAskerEmailLiveChatEnabled"))
         .containsEntry("default", false);

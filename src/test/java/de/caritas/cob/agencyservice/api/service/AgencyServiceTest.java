@@ -426,6 +426,40 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getAgencies_shouldOmitTenantlessLegacyRowsInMultiTenancy() {
+    ReflectionTestUtils.setField(agencyService, "multitenancy", true);
+    var legacy = Agency.builder().id(91L).name("Legacy without tenant")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    var assigned = Agency.builder().id(92L).name("Assigned centre").tenantId(14L)
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    ensureAgencyTopics(assigned);
+    when(agencyRepository.findByIdIn(List.of(91L, 92L))).thenReturn(List.of(legacy, assigned));
+    when(tenantService.getRestrictedTenantDataByTenantId(14L))
+        .thenReturn(new RestrictedTenantDTO().id(14L));
+
+    assertEquals(List.of(92L), agencyService.getAgencies(List.of(91L, 92L)).stream()
+        .map(AgencyResponseDTO::getId).toList());
+    verify(tenantService, org.mockito.Mockito.never()).getRestrictedTenantDataForPermissionPolicies(null);
+  }
+
+  @Test
+  public void getAgencies_shouldKeepHealthyCentresWhenOnePolicyReadFails() {
+    var unavailable = Agency.builder().id(91L).name("Unavailable policy").tenantId(13L)
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    var available = Agency.builder().id(92L).name("Available policy").tenantId(14L)
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    ensureAgencyTopics(available);
+    when(agencyRepository.findByIdIn(List.of(91L, 92L))).thenReturn(List.of(unavailable, available));
+    when(tenantService.getRestrictedTenantDataByTenantId(13L))
+        .thenThrow(new org.springframework.web.client.RestClientException("unavailable"));
+    when(tenantService.getRestrictedTenantDataByTenantId(14L))
+        .thenReturn(new RestrictedTenantDTO().id(14L));
+
+    assertEquals(List.of(92L), agencyService.getAgencies(List.of(91L, 92L)).stream()
+        .map(AgencyResponseDTO::getId).toList());
+  }
+
+  @Test
   public void getAgencies_Should_ReadEachTenantsPolicyOncePerRequestAndRefreshOnTheNextRequest() {
     var first = Agency.builder().id(91L).name("Synthetic first").tenantId(14L)
         .consultingTypeId(CONSULTING_TYPE_SUCHT).build();

@@ -8,6 +8,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsServi
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
@@ -33,6 +34,8 @@ import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService
 import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -453,7 +456,7 @@ public class AgencyService {
           agency.getTenantId(), exception.getClass().getSimpleName(),
           exception instanceof org.springframework.web.client.RestClientResponseException response
               ? response.getStatusCode().value() : "unavailable");
-      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
+      throw new ServiceUnavailableException(
           de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }
   }
@@ -505,8 +508,23 @@ public class AgencyService {
   private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
     var ownTenant = requestTenantLookup();
     var mainTenant = requestMainTenantLookup();
-    return agencies.stream().map(agency -> convertToAgencyResponseDTO(
-        agency, ownTenant.apply(agency), ownTenant, mainTenant)).toList();
+    List<AgencyResponseDTO> available = new ArrayList<>();
+    ServiceUnavailableException failedPolicy = null;
+    for (Agency agency : agencies) {
+      if (!hasPublicPolicyAuthority(agency)) {
+        continue;
+      }
+      try {
+        available.add(convertToAgencyResponseDTO(
+            agency, ownTenant.apply(agency), ownTenant, mainTenant));
+      } catch (ServiceUnavailableException exception) {
+        failedPolicy = exception;
+      }
+    }
+    if (available.isEmpty() && failedPolicy != null) {
+      throw failedPolicy;
+    }
+    return List.copyOf(available);
   }
 
   private List<FullAgencyResponseDTO> convertToFullAgencyResponses(List<Agency> agencies) {
@@ -514,6 +532,10 @@ public class AgencyService {
     var mainTenant = requestMainTenantLookup();
     return agencies.stream().map(agency ->
         convertToFullAgencyResponseDTO(agency, ownTenant, mainTenant)).toList();
+  }
+
+  private boolean hasPublicPolicyAuthority(Agency agency) {
+    return !multitenancy || (agency.getTenantId() != null && agency.getTenantId() > 0);
   }
 
   private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, RestrictedTenantDTO tenantData,
