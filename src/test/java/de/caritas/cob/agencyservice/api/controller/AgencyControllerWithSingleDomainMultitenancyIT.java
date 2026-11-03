@@ -94,7 +94,8 @@ class AgencyControllerWithSingleDomainMultitenancyIT {
         .mainTenantSubdomainForSingleDomainMultitenancy(new SettingDTO().value("app")));
     when(tenantControllerApi.getRestrictedTenantDataBySubdomain("app", null)).thenReturn(new RestrictedTenantDTO().id(0L));
     when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
-    when(tenantControllerApi.getRestrictedTenantDataByTenantId(Mockito.anyLong())).thenReturn(new RestrictedTenantDTO().id(0L));
+    when(tenantControllerApi.getRestrictedTenantDataByTenantId(Mockito.anyLong()))
+        .thenAnswer(call -> new RestrictedTenantDTO().id(call.getArgument(0)));
   }
 
   @Test
@@ -132,7 +133,9 @@ class AgencyControllerWithSingleDomainMultitenancyIT {
 
   @Test
   void getAgencies_Should_ReturnOk_GetAgencyById_When_DifferentTenantAgencyIsRequested() throws Exception {
-    when(tenantControllerApi.getRestrictedTenantDataByTenantId(Mockito.anyLong())).thenReturn(new RestrictedTenantDTO().id(10L));
+    // The actor is tenant 10; the projection must identify the requested agency's stored tenant.
+    when(tenantControllerApi.getRestrictedTenantDataByTenantId(Mockito.anyLong()))
+        .thenAnswer(call -> new RestrictedTenantDTO().id(call.getArgument(0)));
     when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
     mvc.perform(
 

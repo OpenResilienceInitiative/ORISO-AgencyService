@@ -3,12 +3,18 @@ package de.caritas.cob.agencyservice.api.converter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.caritas.cob.agencyservice.api.model.Settings;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
 import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
+import java.util.Map;
 
 /**
  * Truth tables for the effective feature flags served on the public agency response
@@ -16,6 +22,88 @@ import org.junit.jupiter.params.provider.CsvSource;
  * uniformly for every flag both levels share.
  */
 class EffectiveAgencySettingsResolverTest {
+
+  @ParameterizedTest
+  @CsvSource(value = {
+      "ENFORCED,true,null,true,true", "ENFORCED,true,true,true,true", "ENFORCED,true,false,true,true",
+      "ENFORCED,false,null,false,true", "ENFORCED,false,true,false,true", "ENFORCED,false,false,false,true",
+      "SUGGESTED,true,null,true,true", "SUGGESTED,true,true,true,false", "SUGGESTED,true,false,false,false",
+      "SUGGESTED,false,null,false,true", "SUGGESTED,false,true,true,false", "SUGGESTED,false,false,false,false"
+  }, nullValues = "null")
+  void canonicalPolicies_shouldRespectRequirementsAndOverrideableRecommendations(
+      PermissionPolicyMode mode, boolean parent, Boolean own, boolean expected, boolean inherited) throws Exception {
+    var settings = new Settings();
+    var fields = new java.util.TreeSet<>(EXPECTED_COMMON_FLAGS);
+    // Dev #349 preserves a restrict-only direct-link cap; its separate full matrix is below.
+    fields.removeAll(Set.of("featureDirectInviteChatEnabled", "featureDirectInviteAudioEnabled",
+        "featureDirectInviteVideoEnabled"));
+    var parents = new java.util.LinkedHashMap<String, BooleanPermissionPolicy>();
+    for (String field : fields) {
+      String suffix = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+      Settings.class.getMethod("set" + suffix, Boolean.class).invoke(settings, own);
+      parents.put(field, new BooleanPermissionPolicy().value(parent).mode(mode));
+    }
+    var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings, parents);
+    assertThat(resolved.keySet()).containsAll(fields);
+    for (String field : fields) {
+      var value = resolved.get(field);
+      assertThat(value.getValue()).as(field).isEqualTo(expected);
+      assertThat(value.getMode().getValue()).as(field).isEqualTo(mode.getValue());
+      assertThat(value.getInherited()).as(field).isEqualTo(inherited);
+    }
+    EffectiveAgencySettingsResolver.applyTo(settings, null, parents);
+    for (String field : fields) {
+      String suffix = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+      assertThat(Settings.class.getMethod("get" + suffix).invoke(settings)).as(field).isEqualTo(expected);
+    }
+  }
+
+  @Test
+  void canonicalSplitFormatPolicy_shouldNotBeReplacedByTheLegacyFamilyMaster() {
+    var settings = new Settings().featureGroupChatV2Enabled(false).featureInternalGroupChatEnabled(true);
+    var parents = Map.of(
+        "featureGroupChatV2Enabled", new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED),
+        "featureInternalGroupChatEnabled", new BooleanPermissionPolicy().value(true).mode(PermissionPolicyMode.SUGGESTED));
+    EffectiveAgencySettingsResolver.applyTo(settings, null, parents);
+    assertThat(settings.getFeatureGroupChatV2Enabled()).isFalse();
+    assertThat(settings.getFeatureInternalGroupChatEnabled()).isTrue();
+  }
+
+  @Test
+  void canonicalMissingSplitFormats_shouldInheritTheParentGroupPolicyOnlyAsTransitionFallback() {
+    var settings = new Settings().featureInternalGroupChatEnabled(true);
+    var policies = Map.of("featureGroupChatV2Enabled",
+        new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED));
+    var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings, policies);
+    assertThat(resolved.get("featureInternalGroupChatEnabled").getValue()).isFalse();
+    assertThat(resolved.get("featureSelfHelpGroupsEnabled").getMode().getValue()).isEqualTo("ENFORCED");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"SUGGESTED,true", "SUGGESTED,false", "ENFORCED,true", "ENFORCED,false"})
+  void tenantOwnedPolicies_shouldIgnoreDormantAgencyOverrides(PermissionPolicyMode mode, boolean value) {
+    var settings = new de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService()
+        .toSettings("{\"featureDisplayNameEditable\":false,\"featureAskerEmailEnabled\":false,\"caseHandoverEnabled\":false,\"featureAskerEmailCollectionAgencyCounsellingEnabled\":false,\"featureDisplayNameEditableAgencyCounsellingEnabled\":false,\"featureDisplayNameEditableLiveChatEnabled\":false,\"featureDisplayNameEditableSelfHelpEnabled\":false,\"featureAskerEmailCollectionSelfHelpEnabled\":false}");
+    var parent = new BooleanPermissionPolicy().value(value).mode(mode);
+    var resolved = EffectiveAgencySettingsResolver.resolvePolicies(settings,
+        Map.of("featureDisplayNameEditable", parent, "featureAskerEmailEnabled", parent,
+            "caseHandoverEnabled", parent,
+            "featureAskerEmailCollectionAgencyCounsellingEnabled", parent,
+            "featureDisplayNameEditableAgencyCounsellingEnabled", parent,
+            "featureDisplayNameEditableLiveChatEnabled", parent,
+            "featureDisplayNameEditableSelfHelpEnabled", parent,
+            "featureAskerEmailCollectionSelfHelpEnabled", parent));
+    assertThat(resolved).containsKeys("featureAskerEmailCollectionAgencyCounsellingEnabled",
+        "featureAskerEmailCollectionSelfHelpEnabled",
+        "featureDisplayNameEditableAgencyCounsellingEnabled",
+        "featureDisplayNameEditableLiveChatEnabled",
+        "featureDisplayNameEditableSelfHelpEnabled");
+    resolved.values().forEach(policy -> {
+      assertThat(policy.getValue()).isEqualTo(value);
+      assertThat(policy.getMode().getValue()).isEqualTo(mode.getValue());
+      assertThat(policy.getInherited()).isTrue();
+    });
+  }
 
   private static final String NULL = "null";
 
@@ -33,7 +121,9 @@ class EffectiveAgencySettingsResolverTest {
           "featureAnonymousChatEnabled", "featureAudioCallsAnonymousChatsEnabled",
           "featureAudioCallsEnabled", "featureAudioCallsGroupChatsEnabled",
           "featureAudioCallsOneOnOneChatsEnabled", "featureAudioCallsSupervisionChatsEnabled",
-          "featureCallsEnabled", "featureGroupChatV2Enabled", "featureInternalGroupChatEnabled",
+          "featureCallsEnabled", "featureDirectInviteAudioEnabled",
+          "featureDirectInviteChatEnabled", "featureDirectInviteVideoEnabled",
+          "featureGroupChatV2Enabled", "featureInternalGroupChatEnabled",
           "featureMediaAiScanAnonymousChatsEnabled", "featureMediaAiScanEnabled",
           "featureMediaAiScanGroupChatsEnabled", "featureMediaAiScanOneOnOneChatsEnabled",
           "featureMediaAiScanSupervisionChatsEnabled",
@@ -233,6 +323,156 @@ class EffectiveAgencySettingsResolverTest {
     assertThat(get(agencySettings, flag)).isEqualTo(bool(expected));
   }
 
+  // "Direkteinladung erlauben" per chat type (TenantService#331, ADR-029 §6).
+  @ParameterizedTest(name = "{0}: Träger {1} + agency {2} -> {3}")
+  @CsvSource({
+    "featureDirectInviteChatEnabled, false, true, false",
+    "featureDirectInviteChatEnabled, true, false, false",
+    "featureDirectInviteChatEnabled, true, null, true",
+    "featureDirectInviteAudioEnabled, false, true, false",
+    "featureDirectInviteAudioEnabled, true, false, false",
+    "featureDirectInviteAudioEnabled, true, null, true",
+    "featureDirectInviteVideoEnabled, false, true, false",
+    "featureDirectInviteVideoEnabled, true, false, false",
+    "featureDirectInviteVideoEnabled, true, null, true",
+  })
+  void applyTo_should_cascadeDirectInvitePermissionPerChatType(
+      String flag, String traeger, String agency, String expected) {
+    var traegerSettings = newTraeger();
+    var agencySettings = new Settings();
+    set(traegerSettings, flag, bool(traeger));
+    set(agencySettings, flag, bool(agency));
+
+    EffectiveAgencySettingsResolver.applyTo(agencySettings, traegerSettings);
+
+    assertThat(get(agencySettings, flag)).isEqualTo(bool(expected));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Träger requirement (policy mode ENFORCED) wins in both directions (ORISO-Admin#1242).
+  // Full table per direct-invite flag: Träger value x Träger mode x agency value.
+  // ---------------------------------------------------------------------------------------------
+
+  @ParameterizedTest(name = "{0}: Träger={1} ({2}), agency={3} -> {4}")
+  @CsvSource({
+    "featureDirectInviteChatEnabled, true, ENFORCED, true, true",
+    "featureDirectInviteChatEnabled, true, ENFORCED, false, true",
+    "featureDirectInviteChatEnabled, true, ENFORCED, null, true",
+    "featureDirectInviteChatEnabled, false, ENFORCED, true, false",
+    "featureDirectInviteChatEnabled, false, ENFORCED, false, false",
+    "featureDirectInviteChatEnabled, false, ENFORCED, null, false",
+    "featureDirectInviteChatEnabled, true, SUGGESTED, true, true",
+    "featureDirectInviteChatEnabled, true, SUGGESTED, false, false",
+    "featureDirectInviteChatEnabled, true, SUGGESTED, null, true",
+    "featureDirectInviteChatEnabled, false, SUGGESTED, true, false",
+    "featureDirectInviteChatEnabled, false, SUGGESTED, false, false",
+    "featureDirectInviteChatEnabled, false, SUGGESTED, null, false",
+    "featureDirectInviteChatEnabled, true, NONE, false, false",
+    "featureDirectInviteChatEnabled, false, NONE, true, false",
+    "featureDirectInviteAudioEnabled, true, ENFORCED, true, true",
+    "featureDirectInviteAudioEnabled, true, ENFORCED, false, true",
+    "featureDirectInviteAudioEnabled, true, ENFORCED, null, true",
+    "featureDirectInviteAudioEnabled, false, ENFORCED, true, false",
+    "featureDirectInviteAudioEnabled, false, ENFORCED, false, false",
+    "featureDirectInviteAudioEnabled, false, ENFORCED, null, false",
+    "featureDirectInviteAudioEnabled, true, SUGGESTED, true, true",
+    "featureDirectInviteAudioEnabled, true, SUGGESTED, false, false",
+    "featureDirectInviteAudioEnabled, true, SUGGESTED, null, true",
+    "featureDirectInviteAudioEnabled, false, SUGGESTED, true, false",
+    "featureDirectInviteAudioEnabled, false, SUGGESTED, false, false",
+    "featureDirectInviteAudioEnabled, false, SUGGESTED, null, false",
+    "featureDirectInviteAudioEnabled, true, NONE, false, false",
+    "featureDirectInviteAudioEnabled, false, NONE, true, false",
+    "featureDirectInviteVideoEnabled, true, ENFORCED, true, true",
+    "featureDirectInviteVideoEnabled, true, ENFORCED, false, true",
+    "featureDirectInviteVideoEnabled, true, ENFORCED, null, true",
+    "featureDirectInviteVideoEnabled, false, ENFORCED, true, false",
+    "featureDirectInviteVideoEnabled, false, ENFORCED, false, false",
+    "featureDirectInviteVideoEnabled, false, ENFORCED, null, false",
+    "featureDirectInviteVideoEnabled, true, SUGGESTED, true, true",
+    "featureDirectInviteVideoEnabled, true, SUGGESTED, false, false",
+    "featureDirectInviteVideoEnabled, true, SUGGESTED, null, true",
+    "featureDirectInviteVideoEnabled, false, SUGGESTED, true, false",
+    "featureDirectInviteVideoEnabled, false, SUGGESTED, false, false",
+    "featureDirectInviteVideoEnabled, false, SUGGESTED, null, false",
+    "featureDirectInviteVideoEnabled, true, NONE, false, false",
+    "featureDirectInviteVideoEnabled, false, NONE, true, false",
+  })
+  void applyTo_should_letATraegerRequirementWinInBothDirections(
+      String flag, String traeger, String mode, String agency, String expected) {
+    var traegerSettings = newTraeger();
+    var agencySettings = new Settings();
+    set(traegerSettings, flag, bool(traeger));
+    set(agencySettings, flag, bool(agency));
+    Map<String, BooleanPermissionPolicy> policies =
+        "NONE".equals(mode) ? Map.of() : Map.of(flag, policy(bool(traeger), mode));
+
+    EffectiveAgencySettingsResolver.applyTo(agencySettings, traegerSettings, policies);
+
+    assertThat(get(agencySettings, flag)).isEqualTo(bool(expected));
+  }
+
+  @Test
+  void applyTo_should_letATraegerRequirementWinForEveryRegisteredFlag() {
+    for (String flag : EffectiveAgencySettingsResolver.flagNames()) {
+      for (boolean value : new boolean[] {true, false}) {
+        var traegerSettings = newTraeger();
+        var agencySettings = new Settings();
+        set(traegerSettings, flag, value);
+        set(agencySettings, flag, !value);
+        if (flagIsGroupChatFormat(flag)) {
+          traegerSettings.setFeatureGroupChatV2Enabled(true);
+        }
+
+        EffectiveAgencySettingsResolver.applyTo(
+            agencySettings, traegerSettings, Map.of(flag, policy(value, "ENFORCED")));
+
+        assertThat(get(agencySettings, flag))
+            .as("%s: Träger requirement %s must win", flag, value)
+            .isEqualTo(value);
+      }
+    }
+  }
+
+  @Test
+  void applyTo_should_preferTheServedTraegerSetting_overTheRawPolicyValue() {
+    // TenantService applies the platform prohibition to the setting after the policy, so the
+    // setting can be off while the Träger policy still says ENFORCED on.
+    var traegerSettings = newTraeger().featureDirectInviteVideoEnabled(false);
+    var agencySettings = new Settings().featureDirectInviteVideoEnabled(true);
+
+    EffectiveAgencySettingsResolver.applyTo(
+        agencySettings,
+        traegerSettings,
+        Map.of("featureDirectInviteVideoEnabled", policy(true, "ENFORCED")));
+
+    assertThat(agencySettings.getFeatureDirectInviteVideoEnabled()).isFalse();
+  }
+
+  @Test
+  void applyTo_should_fallBackToThePolicyValue_whenTheTraegerSettingIsUnset() {
+    var agencySettings = new Settings().featureDirectInviteChatEnabled(false);
+
+    EffectiveAgencySettingsResolver.applyTo(
+        agencySettings,
+        newTraeger(),
+        Map.of("featureDirectInviteChatEnabled", policy(true, "ENFORCED")));
+
+    assertThat(agencySettings.getFeatureDirectInviteChatEnabled()).isTrue();
+  }
+
+  @Test
+  void applyTo_should_ignorePoliciesForExcludedFlags() {
+    var agencySettings = new Settings().featureTopicsEnabled(false);
+
+    EffectiveAgencySettingsResolver.applyTo(
+        agencySettings,
+        newTraeger().featureTopicsEnabled(true),
+        Map.of("featureTopicsEnabled", policy(true, "ENFORCED")));
+
+    assertThat(agencySettings.getFeatureTopicsEnabled()).isFalse();
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Group-chat special case: featureGroupChatV2Enabled is master and fallback per level.
   // Both formats are set to the same value on a level; both are asserted.
@@ -336,6 +576,14 @@ class EffectiveAgencySettingsResolverTest {
     return new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings();
   }
 
+  private static BooleanPermissionPolicy policy(Boolean value, String mode) {
+    return new BooleanPermissionPolicy().value(value).mode(PermissionPolicyMode.valueOf(mode));
+  }
+
+  private static boolean flagIsGroupChatFormat(String flag) {
+    return Set.of("featureInternalGroupChatEnabled", "featureSelfHelpGroupsEnabled").contains(flag);
+  }
+
   private static Boolean bool(String value) {
     return NULL.equals(value) ? null : Boolean.valueOf(value);
   }
@@ -367,4 +615,49 @@ class EffectiveAgencySettingsResolverTest {
       throw new IllegalStateException(flag, exception);
     }
   }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "featureDirectInviteChatEnabled", "featureDirectInviteAudioEnabled", "featureDirectInviteVideoEnabled"
+  })
+  void modernOrdinaryRecommendationRemainsOverridableWhileDirectInvitesKeepTheTenantCap(String direct) {
+    var parent = newTraeger().featureThreadsEnabled(false);
+    var agency = new Settings().featureThreadsEnabled(true);
+    set(parent, direct, false);
+    set(agency, direct, true);
+    EffectiveAgencySettingsResolver.applyTo(agency, parent, Map.of(
+        "featureThreadsEnabled", policy(false, "SUGGESTED"), direct, policy(false, "SUGGESTED")));
+    assertThat(agency.getFeatureThreadsEnabled()).isTrue();
+    assertThat(agency.getPermissionPolicies().get("featureThreadsEnabled").getValue()).isTrue();
+    assertThat(get(agency, direct)).isFalse();
+    assertThat(agency.getPermissionPolicies().get(direct).getValue()).isFalse();
+    assertThat(agency.getPermissionPolicies().get(direct).getMode().getValue()).isEqualTo("SUGGESTED");
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "featureDirectInviteChatEnabled", "featureDirectInviteAudioEnabled", "featureDirectInviteVideoEnabled"
+  })
+  void servedDirectInvitePlatformCapAlsoControlsTheReportedEffectivePolicy(String direct) {
+    var parent = newTraeger();
+    var agency = new Settings();
+    set(parent, direct, false);
+    set(agency, direct, true);
+    EffectiveAgencySettingsResolver.applyTo(agency, parent, Map.of(direct, policy(true, "ENFORCED")));
+    assertThat(get(agency, direct)).isFalse();
+    assertThat(agency.getPermissionPolicies().get(direct).getValue()).isFalse();
+    assertThat(agency.getPermissionPolicies().get(direct).getMode().getValue()).isEqualTo("ENFORCED");
+  }
+
+  @Test
+  void partialCanonicalPoliciesRetainTheLegacyCapForUnmentionedFields() {
+    var parent = newTraeger().featureThreadsEnabled(false).featureAudioCallsEnabled(false);
+    var agency = new Settings().featureThreadsEnabled(true).featureAudioCallsEnabled(true);
+    EffectiveAgencySettingsResolver.applyTo(agency, parent,
+        Map.of("featureThreadsEnabled", policy(false, "SUGGESTED")));
+    assertThat(agency.getFeatureThreadsEnabled()).isTrue();
+    assertThat(agency.getPermissionPolicies().get("featureThreadsEnabled").getValue()).isTrue();
+    assertThat(agency.getFeatureAudioCallsEnabled()).isFalse();
+  }
+
 }

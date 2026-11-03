@@ -21,13 +21,19 @@ enum TaskServiceActor {
       Set.of("system-email-delivery", "notification-dispatch", "notifications-technical"),
       Set.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice")),
   RUNTIME(
-      Set.of("RUNTIME_POLICY", "MATRIX_AGENCY", "APPOINTMENT_SYNC", "APPOINTMENT_CLEANUP"),
+      Set.of(
+          "RUNTIME_POLICY",
+          "MATRIX_AGENCY",
+          "APPOINTMENT_SYNC",
+          "APPOINTMENT_CLEANUP",
+          "DELETION_AUDIT_READ"),
       Set.of(
           "runtime-policy",
           "matrix-agency",
           "matrix-agency-provision",
           "appointment-sync",
-          "appointment-participant-cleanup"),
+          "appointment-participant-cleanup",
+          "deletion-audit-read"),
       Set.of("tenantservice", "agencyservice", "appointmentservice"));
 
   private final Set<String> purposes;

@@ -3,6 +3,8 @@ package de.caritas.cob.agencyservice.api.workflow;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agencypostcoderange.AgencyPostcodeRangeRepository;
+import de.caritas.cob.agencyservice.api.repository.deletionaudit.DeletionAuditOutboxEntry;
+import de.caritas.cob.agencyservice.api.repository.deletionaudit.DeletionAuditOutboxRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -35,9 +37,12 @@ public class AgencyPurgeTransaction {
 
   private final @NonNull AgencyRepository agencyRepository;
   private final @NonNull AgencyPostcodeRangeRepository agencyPostcodeRangeRepository;
+  private final @NonNull DeletionAuditOutboxRepository deletionAuditOutboxRepository;
 
   /**
-   * Deletes the agency together with the dependencies that JPA does not cascade.
+   * Deletes the agency together with the dependencies that JPA does not cascade, and queues the
+   * deletion-log entry in the same transaction (OBP 2.1 #130): the entry exists exactly when the
+   * purge committed. UserService pulls it from {@code /internal/deletion-audit-outbox}.
    *
    * @param agency the {@link Agency} to purge
    */
@@ -45,5 +50,7 @@ public class AgencyPurgeTransaction {
   public void purge(Agency agency) {
     agencyPostcodeRangeRepository.deleteAllByAgencyId(agency.getId());
     agencyRepository.delete(agency);
+    deletionAuditOutboxRepository.save(
+        DeletionAuditOutboxEntry.executed(agency.getId(), agency.getTenantId()));
   }
 }
