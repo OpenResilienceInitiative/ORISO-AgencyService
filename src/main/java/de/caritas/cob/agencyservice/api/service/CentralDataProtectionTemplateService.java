@@ -47,7 +47,10 @@ public class CentralDataProtectionTemplateService {
 
   public String renderPrivacyTemplateWithRenderedPlaceholderValues(Agency agency) {
     return renderPrivacyTemplateWithRenderedPlaceholderValues(agency,
-        value -> tenantService.getRestrictedTenantDataByTenantId(value.getTenantId()),
+        // A legacy agency without a tenant renders from the single tenant, as before.
+        value -> value.getTenantId() != null
+            ? tenantService.getRestrictedTenantDataByTenantId(value.getTenantId())
+            : tenantService.getRestrictedTenantDataForSingleTenant(),
         tenantService::getMainTenant);
   }
 
