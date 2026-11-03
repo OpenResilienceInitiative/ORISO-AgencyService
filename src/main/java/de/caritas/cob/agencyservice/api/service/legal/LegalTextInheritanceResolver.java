@@ -16,6 +16,7 @@ import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,6 +83,13 @@ public class LegalTextInheritanceResolver {
     return resolve(department, LegalTextKind.DPP);
   }
 
+  /** Same ADR-021 ladder using the caller's request-local verified tenant lookups. */
+  public ResolvedLegalText resolveDpp(AgencyTopic department,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return resolve(department, LegalTextKind.DPP,
+        agency -> loadGoverningTenant(agency, ownTenant, mainTenant));
+  }
+
   /**
    * Resolves the imprint in force for a department. The consent field is always {@code null} here:
    * an imprint is an information duty, never a consent gate (ADR-021 decision 7).
@@ -90,7 +98,19 @@ public class LegalTextInheritanceResolver {
     return resolve(department, LegalTextKind.IMPRINT);
   }
 
+  /** Same ADR-021 ladder using the caller's request-local verified tenant lookups. */
+  public ResolvedLegalText resolveImprint(AgencyTopic department,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return resolve(department, LegalTextKind.IMPRINT,
+        agency -> loadGoverningTenant(agency, ownTenant, mainTenant));
+  }
+
   private ResolvedLegalText resolve(AgencyTopic department, LegalTextKind kind) {
+    return resolve(department, kind, this::loadGoverningTenant);
+  }
+
+  private ResolvedLegalText resolve(AgencyTopic department, LegalTextKind kind,
+      Function<Agency, RestrictedTenantDTO> governingTenant) {
     if (department == null) {
       return ResolvedLegalText.none();
     }
@@ -103,7 +123,7 @@ public class LegalTextInheritanceResolver {
     if (fromAgency != null) {
       return fromAgency;
     }
-    return fromTenantChain(agency, kind);
+    return fromTenantChain(agency, kind, governingTenant);
   }
 
   /**
@@ -164,8 +184,9 @@ public class LegalTextInheritanceResolver {
    * different shapes depending on which rung answered would push the multilingual pick back onto
    * the client — the very split this decision removes.
    */
-  private ResolvedLegalText fromTenantChain(Agency agency, LegalTextKind kind) {
-    RestrictedTenantDTO tenant = loadGoverningTenant(agency);
+  private ResolvedLegalText fromTenantChain(Agency agency, LegalTextKind kind,
+      Function<Agency, RestrictedTenantDTO> governingTenant) {
+    RestrictedTenantDTO tenant = governingTenant.apply(agency);
     if (tenant == null || tenant.getContent() == null) {
       return ResolvedLegalText.none();
     }
@@ -199,17 +220,19 @@ public class LegalTextInheritanceResolver {
    * Mirrors {@code CentralDataProtectionTemplateService} deliberately.
    */
   private RestrictedTenantDTO loadGoverningTenant(Agency agency) {
-    return callTenantService(
-        ignored -> {
-          if (multitenancyWithSingleDomain && !isTenantLevelLegalContentOverrideAllowed()) {
-            return tenantService.getMainTenant();
-          }
-          if (agency != null && agency.getTenantId() != null) {
-            return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
-          }
-          return tenantService.getRestrictedTenantDataForSingleTenant();
-        },
-        agency);
+    return loadGoverningTenant(agency, value -> {
+      if (value != null && value.getTenantId() != null) {
+        return tenantService.getRestrictedTenantDataByTenantId(value.getTenantId());
+      }
+      return tenantService.getRestrictedTenantDataForSingleTenant();
+    }, tenantService::getMainTenant);
+  }
+
+  private RestrictedTenantDTO loadGoverningTenant(Agency agency,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return callTenantService(value ->
+        multitenancyWithSingleDomain && !isTenantLevelLegalContentOverrideAllowed()
+            ? mainTenant.get() : ownTenant.apply(value), agency);
   }
 
   /**
@@ -224,7 +247,7 @@ public class LegalTextInheritanceResolver {
       log.warn(
           "Could not resolve the Träger/platform legal text for agency {}: {}",
           agency == null ? null : agency.getId(),
-          e.getMessage());
+          e.getClass().getSimpleName());
       return null;
     }
   }
