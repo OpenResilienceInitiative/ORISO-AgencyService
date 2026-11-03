@@ -8,6 +8,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsServi
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
@@ -44,6 +45,8 @@ import java.util.HashMap;
 import java.util.function.Supplier;
 import java.util.function.Function;
 import lombok.NonNull;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -451,13 +454,12 @@ public class AgencyService {
   private RestrictedTenantDTO findTenantDataRelevantForFeatureToggles(Agency agency) {
     try {
       return getTenantDataRelevantForFeatureToggles(agency);
-    } catch (org.springframework.web.client.RestClientException exception) {
+    } catch (RestClientException exception) {
       log.warn("Permission policies unavailable for tenant {}: type={} status={}",
           agency.getTenantId(), exception.getClass().getSimpleName(),
-          exception instanceof org.springframework.web.client.RestClientResponseException response
+          exception instanceof RestClientResponseException response
               ? response.getStatusCode().value() : "unavailable");
-      throw new ServiceUnavailableException(
-          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+      throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }
   }
 

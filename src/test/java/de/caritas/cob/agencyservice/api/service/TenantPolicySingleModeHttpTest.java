@@ -321,7 +321,7 @@ class TenantPolicySingleModeHttpTest {
         """, MediaType.APPLICATION_JSON));
     assertThatThrownBy(() -> controls.assertSettingsUpdateAllowed(
         new Settings(), flag("featureDirectInviteVideoEnabled", false), 7L))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(ServiceUnavailableException.class).hasNoCause();
     server.verify();
   }
 

@@ -32,7 +32,8 @@ public class AgencyAdminControlsFacade {
 
   private Long requireTenantId() {
     Long tenantId = authenticatedUser.getTenantId();
-    if (tenantId == null || tenantId <= 0) {
+    // A missing tenant is legitimate in single-tenant mode; the service rejects it otherwise.
+    if (tenantId != null && tenantId <= 0) {
       throw new AccessDeniedException("A tenant admin can manage only its own tenant");
     }
     return tenantId;

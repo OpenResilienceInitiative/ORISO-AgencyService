@@ -42,6 +42,16 @@ class AgencyAdminControlsFacadeTest {
   }
 
   @Test
+  void getAgencyAdminControls_Should_LeaveAMissingTenantToTheService_When_SingleTenantMode() {
+    when(authenticatedUser.isTenantSuperAdmin()).thenReturn(true);
+    when(authenticatedUser.getTenantId()).thenReturn(null);
+    AgencyAdminControls expected = new AgencyAdminControls();
+    when(agencyAdminControlsService.getControls(null)).thenReturn(expected);
+
+    assertThat(agencyAdminControlsFacade.getAgencyAdminControls()).isEqualTo(expected);
+  }
+
+  @Test
   void getAgencyAdminControls_Should_ThrowAccessDeniedException_When_UserIsNotSuperAdmin() {
     when(authenticatedUser.isTenantSuperAdmin()).thenReturn(false);
 

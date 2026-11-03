@@ -1,15 +1,18 @@
 package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 
+import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
 import de.caritas.cob.agencyservice.api.model.AgencyPermissionPolicy;
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
-import org.springframework.security.access.AccessDeniedException;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -45,7 +48,7 @@ public class AgencyAdminControlsService {
   public AgencyAdminControls updateControls(
       Long tenantId, AgencyAdminControls agencyAdminControls) {
     requireTenantId(tenantId);
-    throw new de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException(
+    throw new BadRequestException(
         "Legacy controls are read-only; use /tenantadmin/{id}/permission-policies");
   }
 
@@ -57,8 +60,7 @@ public class AgencyAdminControlsService {
     Settings enrichedSettings = settings != null ? settings : new Settings();
     var tenant = tenantService.getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId));
     if (tenant == null || tenant.getPermissionPolicies() == null) {
-      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
-          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+      throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }
     var policies = tenant.getPermissionPolicies();
     enrichedSettings.setAgencyAdminControls(policyMapper.toLegacyControls(policies));
@@ -73,8 +75,7 @@ public class AgencyAdminControlsService {
     }
     var tenant = tenantService.getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId));
     if (tenant == null || tenant.getPermissionPolicies() == null) {
-      throw new de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException(
-          de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+      throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }
     // Authorize the same enforced value exposed in Admin/public reads, including direct-link caps.
     var policies = EffectiveAgencySettingsResolver.resolvePolicies(
@@ -82,7 +83,7 @@ public class AgencyAdminControlsService {
     changes.forEach((field, value) -> {
       var policy = policies == null ? null : policies.get(field);
       if (policy == null || policy.getValue() == null || policy.getMode() == null) {
-        throw new IllegalStateException("Tenant permission policy is unavailable: " + field);
+        throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
       }
       if (policy.getMode() == AgencyPermissionPolicy.ModeEnum.ENFORCED && !value.equals(policy.getValue())) {
         throw new AccessDeniedException("The tenant requires a different value for " + field);
@@ -92,7 +93,7 @@ public class AgencyAdminControlsService {
 
   private Long requireTenantId(Long tenantId) {
     if ((tenantId == null && multitenancyEnabled) || (tenantId != null && tenantId <= 0)) {
-      throw new org.springframework.security.access.AccessDeniedException(
+      throw new AccessDeniedException(
           "A concrete tenant is required for permission policies");
     }
     return tenantId;

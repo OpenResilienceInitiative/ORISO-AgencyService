@@ -2,6 +2,8 @@ package de.caritas.cob.agencyservice.api.converter;
 
 import de.caritas.cob.agencyservice.api.model.Settings;
 import de.caritas.cob.agencyservice.api.model.AgencyPermissionPolicy;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode;
 import java.lang.reflect.InvocationTargetException;
@@ -79,7 +81,7 @@ public final class EffectiveAgencySettingsResolver {
     }
     withTransitionFallbacks(parentPolicies).forEach((field, parent) -> {
       if (parent == null || parent.getValue() == null || parent.getMode() == null) {
-        throw new IllegalStateException("Incomplete tenant permission policy: " + field);
+        throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
       }
       FlagBinding binding = AGENCY_BINDINGS.get(field);
       Boolean ownValue = binding != null && agencySettings != null
