@@ -167,19 +167,6 @@ class RealTaskTokenAuthorizationIT {
   void setup() {
     when(tenantService.getRestrictedTenantDataByTenantId(anyLong()))
         .thenAnswer(call -> new RestrictedTenantDTO().id(call.getArgument(0)));
-    when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.anyLong()))
-        .thenAnswer(
-            call ->
-                new de.caritas.cob.agencyservice.tenantservice.generated.web.model
-                        .TenantPermissionPolicies()
-                    .tenantId(call.getArgument(0))
-                    .policies(java.util.Map.of()));
-    when(tenantService.getRestrictedTenantDataForPermissionPolicies(
-            org.mockito.ArgumentMatchers.anyLong()))
-        .thenAnswer(
-            call ->
-                de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture.projection(
-                    call.getArgument(0), java.util.Map.of()));
   }
 
   @AfterEach

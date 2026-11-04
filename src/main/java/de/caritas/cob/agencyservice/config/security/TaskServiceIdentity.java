@@ -121,9 +121,6 @@ public class TaskServiceIdentity {
         || !subject.equals(jwt.getSubject())
         || !client.equals(jwt.getClaimAsString("azp"))
         || !jwt.getAudience().contains(audience)
-        || (grouped
-            && !new HashSet<>(jwt.getAudience())
-                .equals(TaskServiceActor.forPurpose(task).audiences()))
         || jwt.getExpiresAt() == null
         || !jwt.getExpiresAt().isAfter(Instant.now())) {
       return false;

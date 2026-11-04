@@ -71,7 +71,7 @@ class TaskServiceIdentityTest {
               identity.allows(
                   groupedCaller(
                       List.of(
-                          "config-wizard", "invitation-reservations", "consultant-import", "smtp-sync", grant)),
+                          "config-wizard", "invitation-reservations", "consultant-import", grant)),
                   "CONFIG_WIZARD"))
           .isFalse();
     }
@@ -103,7 +103,7 @@ class TaskServiceIdentityTest {
   void groupedActorCannotInheritDefaultClientRoles() {
     var identity = new TaskServiceIdentity(groupedBindings("CONFIG_WIZARD"));
     var actor =
-        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync"));
+        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import"));
     var jwt =
         Jwt.withTokenValue("fixture")
             .headers(headers -> headers.putAll(actor.getToken().getHeaders()))
@@ -136,46 +136,10 @@ class TaskServiceIdentityTest {
   void groupedActorCannotActivateAnUndeclaredReceiverPurpose() {
     var identity = new TaskServiceIdentity(groupedBindings("CONFIG_WIZARD"));
     var caller =
-        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync"));
+        groupedCaller(List.of("config-wizard", "invitation-reservations", "consultant-import"));
 
     assertThat(identity.allows(caller, "CONFIG_WIZARD")).isTrue();
     assertThat(identity.allows(caller, "INVITE_RESERVATIONS")).isFalse();
-  }
-
-  @Test
-  void groupedSetupRejectsAnExtraAudienceOutsideItsCanonicalReceiverSet() {
-    var identity =
-        new TaskServiceIdentity(
-            groupedBindings("CONFIG_WIZARD")
-                .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice"));
-    assertThat(identity.allows(groupedSetupAudience(
-        List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands")),
-        "CONFIG_WIZARD")).isTrue();
-    assertThat(identity.allows(groupedSetupAudience(
-        List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "other-service")),
-        "CONFIG_WIZARD")).isFalse();
-  }
-
-  @Test
-  void groupedSetupRejectsAPartialCanonicalSetEvenWithItsOwnReceiverAudience() {
-    var identity =
-        new TaskServiceIdentity(
-            groupedBindings("CONFIG_WIZARD")
-                .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice"));
-    assertThat(identity.allows(groupedSetupAudience(
-        List.of("agencyservice", "consultingtypeservice", "userservice")),
-        "CONFIG_WIZARD")).isFalse();
-  }
-
-  private JwtAuthenticationToken groupedSetupAudience(List<String> audiences) {
-    var original = groupedCaller(
-        List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync"));
-    var jwt = Jwt.withTokenValue("fixture")
-        .headers(headers -> headers.putAll(original.getToken().getHeaders()))
-        .claims(claims -> claims.putAll(original.getToken().getClaims()))
-        .audience(audiences)
-        .build();
-    return new JwtAuthenticationToken(jwt, List.of());
   }
 
   private static final List<String> RUNTIME_ROLES =
@@ -219,7 +183,7 @@ class TaskServiceIdentityTest {
   void legacyModeNeverAuthorizesTheDeletionAuditOutbox() {
     var environment =
         new MockEnvironment()
-            .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice")
+            .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
             .withProperty("IDENTITY_DELETION_AUDIT_READ_CLIENT_ID", "backend-runtime")
             .withProperty("IDENTITY_DELETION_AUDIT_READ_SERVICE_SUBJECT", "runtime-subject");
     var identity = new TaskServiceIdentity(environment);
@@ -242,7 +206,7 @@ class TaskServiceIdentityTest {
     return new MockEnvironment()
         .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
         .withProperty("TASK_IDENTITY_REQUIRED_TASKS", purposes)
-        .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice")
+        .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
         .withProperty("IDENTITY_RUNTIME_CLIENT_ID", "backend-runtime")
         .withProperty("IDENTITY_RUNTIME_SERVICE_SUBJECT", "runtime-subject");
   }
@@ -253,10 +217,7 @@ class TaskServiceIdentityTest {
             .header("alg", "none")
             .subject("runtime-subject")
             .claim("azp", "backend-runtime")
-            .audience(
-                "receiver".equals(audience)
-                    ? List.of("tenantservice", "agencyservice", "appointmentservice")
-                    : List.of(audience))
+            .audience(List.of(audience))
             .expiresAt(Instant.now().plusSeconds(60))
             .claim("realm_access", Map.of("roles", roles))
             .build(),
@@ -267,7 +228,7 @@ class TaskServiceIdentityTest {
     return new MockEnvironment()
         .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
         .withProperty("TASK_IDENTITY_REQUIRED_TASKS", purposes)
-        .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice")
+        .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
         .withProperty("IDENTITY_SETUP_CLIENT_ID", "backend-setup")
         .withProperty("IDENTITY_SETUP_SERVICE_SUBJECT", "setup-subject");
   }
@@ -278,7 +239,7 @@ class TaskServiceIdentityTest {
             .header("alg", "none")
             .subject("setup-subject")
             .claim("azp", "backend-setup")
-            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands"))
+            .audience(List.of("receiver"))
             .expiresAt(Instant.now().plusSeconds(60))
             .claim("realm_access", Map.of("roles", roles))
             .build(),
@@ -292,7 +253,7 @@ class TaskServiceIdentityTest {
             new MockEnvironment()
                 .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
                 .withProperty("TASK_IDENTITY_REQUIRED_TASKS", "CONFIG_WIZARD,INVITE_RESERVATIONS")
-                .withProperty("TASK_IDENTITY_AUDIENCE", "agencyservice")
+                .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
                 .withProperty("IDENTITY_SETUP_CLIENT_ID", "backend-setup")
                 .withProperty("IDENTITY_SETUP_SERVICE_SUBJECT", "setup-subject"));
     var actor =
@@ -300,13 +261,13 @@ class TaskServiceIdentityTest {
             .header("alg", "none")
             .subject("setup-subject")
             .claim("azp", "backend-setup")
-            .audience(List.of("tenantservice", "agencyservice", "consultingtypeservice", "userservice", "oriso-task-commands"))
+            .audience(List.of("receiver"))
             .expiresAt(Instant.now().plusSeconds(60))
             .claim(
                 "realm_access",
                 Map.of(
                     "roles",
-                    List.of("config-wizard", "invitation-reservations", "consultant-import", "smtp-sync")))
+                    List.of("config-wizard", "invitation-reservations", "consultant-import")))
             .build();
     var caller = new JwtAuthenticationToken(actor, List.of());
 
