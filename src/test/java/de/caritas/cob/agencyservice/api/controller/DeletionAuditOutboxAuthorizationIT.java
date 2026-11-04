@@ -157,7 +157,10 @@ class DeletionAuditOutboxAuthorizationIT {
                     .claim("azp", client)
                     .claim("tenantId", 0L)
                     .claim("username", "outbox-fixture")
-                    .audience(List.of(audience))
+                    .audience(
+                        "agencyservice".equals(audience)
+                            ? List.of("tenantservice", "agencyservice", "appointmentservice")
+                            : List.of(audience))
                     .expiresAt(Instant.now().plusSeconds(60))
                     .claim("realm_access", Map.of("roles", roles)))
         .authorities(token -> converter.convert(token).getAuthorities());
