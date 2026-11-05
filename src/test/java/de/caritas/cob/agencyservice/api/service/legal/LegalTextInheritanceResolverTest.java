@@ -187,6 +187,42 @@ class LegalTextInheritanceResolverTest {
     assertThat(resolved.versionId()).isEqualTo(300L);
   }
 
+  // ------------------------------------------- ORISO-Admin#132: follow the Träger text
+
+  @Test
+  void resolveDpp_Should_followTheTraegerText_When_theAgencyTextWasEmptiedToAnEmptyLanguageEntry() {
+    // An admin empties a text by sending {"de": ""} (AgencyAdminService), so the stored column is a
+    // non-blank JSON string without any wording. That is "no own text", not "own text of nothing":
+    // the Träger text keeps applying.
+    singleDomainMultitenancy(true);
+    tenantMayOverridePlatformText(true);
+    when(tenantService.getRestrictedTenantDataByTenantId(3L))
+        .thenReturn(tenantWith("<p>Träger-DSE</p>"));
+
+    var resolved = resolver.resolveDpp(department(agency("{\"de\":\"\"}", null, null)));
+
+    assertThat(resolved.sourceLevel()).isEqualTo(LegalTextSourceLevel.TENANT);
+    assertThat(resolved.content()).contains("Träger-DSE");
+  }
+
+  @Test
+  void resolveImprint_Should_followTheTraegerText_When_theAgencyTextHasNoVisibleWording() {
+    singleDomainMultitenancy(true);
+    tenantMayOverridePlatformText(true);
+    when(tenantService.getRestrictedTenantDataByTenantId(3L))
+        .thenReturn(
+            new RestrictedTenantDTO()
+                .id(3L)
+                .content(
+                    new Content().impressumLanguages(Map.of("de", "<p>Träger-Impressum</p>"))));
+
+    var resolved =
+        resolver.resolveImprint(department(agency(null, "{\"de\":\"<p>&nbsp;</p>\"}", null)));
+
+    assertThat(resolved.sourceLevel()).isEqualTo(LegalTextSourceLevel.TENANT);
+    assertThat(resolved.content()).contains("Träger-Impressum");
+  }
+
   // ---------------------------------------------------------------- levels 2 and 1
 
   @Test

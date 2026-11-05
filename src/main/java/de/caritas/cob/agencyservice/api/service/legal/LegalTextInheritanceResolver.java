@@ -1,5 +1,8 @@
 package de.caritas.cob.agencyservice.api.service.legal;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.caritas.cob.agencyservice.api.repository.agency.Agency;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.PublicationStatus;
@@ -13,6 +16,7 @@ import de.caritas.cob.agencyservice.api.util.JsonConverter;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +65,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LegalTextInheritanceResolver {
 
+  private static final ObjectMapper JSON_READER = new ObjectMapper();
+  private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {};
+
   private final @NonNull LegalTextVersionRepository legalTextVersionRepository;
   private final @NonNull TenantService tenantService;
   private final @NonNull ApplicationSettingsService applicationSettingsService;
@@ -76,6 +83,13 @@ public class LegalTextInheritanceResolver {
     return resolve(department, LegalTextKind.DPP);
   }
 
+  /** Same ADR-021 ladder using the caller's request-local verified tenant lookups. */
+  public ResolvedLegalText resolveDpp(AgencyTopic department,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return resolve(department, LegalTextKind.DPP,
+        agency -> loadGoverningTenant(agency, ownTenant, mainTenant));
+  }
+
   /**
    * Resolves the imprint in force for a department. The consent field is always {@code null} here:
    * an imprint is an information duty, never a consent gate (ADR-021 decision 7).
@@ -84,7 +98,19 @@ public class LegalTextInheritanceResolver {
     return resolve(department, LegalTextKind.IMPRINT);
   }
 
+  /** Same ADR-021 ladder using the caller's request-local verified tenant lookups. */
+  public ResolvedLegalText resolveImprint(AgencyTopic department,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return resolve(department, LegalTextKind.IMPRINT,
+        agency -> loadGoverningTenant(agency, ownTenant, mainTenant));
+  }
+
   private ResolvedLegalText resolve(AgencyTopic department, LegalTextKind kind) {
+    return resolve(department, kind, this::loadGoverningTenant);
+  }
+
+  private ResolvedLegalText resolve(AgencyTopic department, LegalTextKind kind,
+      Function<Agency, RestrictedTenantDTO> governingTenant) {
     if (department == null) {
       return ResolvedLegalText.none();
     }
@@ -97,7 +123,7 @@ public class LegalTextInheritanceResolver {
     if (fromAgency != null) {
       return fromAgency;
     }
-    return fromTenantChain(agency, kind);
+    return fromTenantChain(agency, kind, governingTenant);
   }
 
   /**
@@ -139,7 +165,7 @@ public class LegalTextInheritanceResolver {
       return null;
     }
     var content = kind == LegalTextKind.DPP ? agency.getContentDpp() : agency.getContentImprint();
-    if (isBlank(content)) {
+    if (hasNoWording(content)) {
       return null;
     }
     return new ResolvedLegalText(
@@ -158,8 +184,9 @@ public class LegalTextInheritanceResolver {
    * different shapes depending on which rung answered would push the multilingual pick back onto
    * the client — the very split this decision removes.
    */
-  private ResolvedLegalText fromTenantChain(Agency agency, LegalTextKind kind) {
-    RestrictedTenantDTO tenant = loadGoverningTenant(agency);
+  private ResolvedLegalText fromTenantChain(Agency agency, LegalTextKind kind,
+      Function<Agency, RestrictedTenantDTO> governingTenant) {
+    RestrictedTenantDTO tenant = governingTenant.apply(agency);
     if (tenant == null || tenant.getContent() == null) {
       return ResolvedLegalText.none();
     }
@@ -193,17 +220,19 @@ public class LegalTextInheritanceResolver {
    * Mirrors {@code CentralDataProtectionTemplateService} deliberately.
    */
   private RestrictedTenantDTO loadGoverningTenant(Agency agency) {
-    return callTenantService(
-        ignored -> {
-          if (multitenancyWithSingleDomain && !isTenantLevelLegalContentOverrideAllowed()) {
-            return tenantService.getMainTenant();
-          }
-          if (agency != null && agency.getTenantId() != null) {
-            return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
-          }
-          return tenantService.getRestrictedTenantDataForSingleTenant();
-        },
-        agency);
+    return loadGoverningTenant(agency, value -> {
+      if (value != null && value.getTenantId() != null) {
+        return tenantService.getRestrictedTenantDataByTenantId(value.getTenantId());
+      }
+      return tenantService.getRestrictedTenantDataForSingleTenant();
+    }, tenantService::getMainTenant);
+  }
+
+  private RestrictedTenantDTO loadGoverningTenant(Agency agency,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return callTenantService(value ->
+        multitenancyWithSingleDomain && !isTenantLevelLegalContentOverrideAllowed()
+            ? mainTenant.get() : ownTenant.apply(value), agency);
   }
 
   /**
@@ -218,7 +247,7 @@ public class LegalTextInheritanceResolver {
       log.warn(
           "Could not resolve the Träger/platform legal text for agency {}: {}",
           agency == null ? null : agency.getId(),
-          e.getMessage());
+          e.getClass().getSimpleName());
       return null;
     }
   }
@@ -252,7 +281,37 @@ public class LegalTextInheritanceResolver {
   }
 
   private boolean isPublished(String content, PublicationStatus status) {
-    return PublicationStatus.PUBLISHED == status && !isBlank(content);
+    return PublicationStatus.PUBLISHED == status && !hasNoWording(content);
+  }
+
+  /**
+   * True when a stored language→HTML map carries no visible wording: {@code null}, {@code "{}"},
+   * {@code {"de":""}} or {@code {"de":"<p>&nbsp;</p>"}}. Emptying a text is stored as an empty
+   * language entry (see {@code AgencyAdminService}), so a non-blank column is not proof of wording.
+   * Such a level has no text of its own and the level above keeps applying (ORISO-Admin#132). A
+   * value that is not a JSON map is left alone and counts as wording.
+   */
+  private boolean hasNoWording(String storedJson) {
+    if (isBlank(storedJson)) {
+      return true;
+    }
+    try {
+      var map = JSON_READER.readValue(storedJson, STRING_MAP);
+      return map == null
+          || map.entrySet().stream()
+              .filter(entry -> entry.getKey() != null && !entry.getKey().contains("__"))
+              .allMatch(entry -> isVisiblyEmpty(entry.getValue()));
+    } catch (JsonProcessingException | RuntimeException e) {
+      return false;
+    }
+  }
+
+  private boolean isVisiblyEmpty(String html) {
+    return html == null
+        || html.replaceAll("<[^>]*>", "")
+            .replaceAll("(?i)&(?:nbsp|#160|#xa0);", " ")
+            .replaceAll("[\\u00A0\\u200B]", "")
+            .isBlank();
   }
 
   private boolean isBlank(String value) {

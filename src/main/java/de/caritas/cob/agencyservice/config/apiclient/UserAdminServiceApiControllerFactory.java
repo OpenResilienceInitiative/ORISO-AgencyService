@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.AdminUserControllerApi;
+import de.caritas.cob.agencyservice.useradminservice.generated.web.DeletionAuditLogsControllerApi;
 
 @Component
 public class UserAdminServiceApiControllerFactory {
@@ -18,5 +19,10 @@ public class UserAdminServiceApiControllerFactory {
   public AdminUserControllerApi createControllerApi() {
     var apiClient = new UserAdminApiClient(restTemplate).setBasePath(this.userAdminServiceApiUrl);
     return new AdminUserControllerApi(apiClient);
+  }
+
+  public DeletionAuditLogsControllerApi createDeletionAuditApi() {
+    var apiClient = new UserAdminApiClient(restTemplate).setBasePath(this.userAdminServiceApiUrl);
+    return new DeletionAuditLogsControllerApi(apiClient);
   }
 }
