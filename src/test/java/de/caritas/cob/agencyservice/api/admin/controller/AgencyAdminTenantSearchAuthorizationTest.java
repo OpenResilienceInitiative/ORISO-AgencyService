@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
 import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
+import de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
@@ -58,6 +60,7 @@ class AgencyAdminTenantSearchAuthorizationTest {
   private static final String SEARCH_PATH = "/agencyadmin/agencies";
 
   @Autowired private MockMvc mvc;
+  @Autowired private JdbcTemplate jdbcTemplate;
   @MockitoBean private JwtDecoder jwtDecoder;
   @MockitoBean private TenantService tenantService;
   @MockitoBean private TopicEnrichmentService topicEnrichmentService;
@@ -67,6 +70,8 @@ class AgencyAdminTenantSearchAuthorizationTest {
   void tenantMetadata() {
     when(tenantService.getRestrictedTenantDataByTenantId(1L))
         .thenReturn(new RestrictedTenantDTO().id(1L).name("Träger Köln"));
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(1L))
+        .thenReturn(TenantPolicyFixture.projection(1L, Map.of()));
   }
 
   @Test
@@ -131,6 +136,51 @@ class AgencyAdminTenantSearchAuthorizationTest {
         .andExpect(jsonPath("_embedded[0]._embedded.id").value(9002))
         .andExpect(jsonPath("_embedded[0]._embedded.tenantId").value(1));
     verify(userAdminService, atLeastOnce()).getAdminUserAgencyIds(SUBJECT);
+  }
+
+  @Test
+  void detail_Should_RequireAgencyAssignmentForRestrictedAdmin() throws Exception {
+    tokenFor(1L, "restricted-agency-admin");
+    when(userAdminService.getAdminUserAgencyIds(SUBJECT)).thenReturn(List.of(9002L));
+
+    mvc.perform(get(SEARCH_PATH + "/9002").header("Authorization", "Bearer tenant-token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("_embedded.id").value(9002));
+
+    mvc.perform(get(SEARCH_PATH + "/9001").header("Authorization", "Bearer tenant-token"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("_embedded").doesNotExist());
+  }
+
+  @Test
+  void postcodeRanges_Should_RequireAgencyAssignmentForRestrictedAdmin() throws Exception {
+    tokenFor(1L, "restricted-agency-admin");
+    when(userAdminService.getAdminUserAgencyIds(SUBJECT)).thenReturn(List.of(9002L));
+    jdbcTemplate.update("""
+        INSERT INTO AGENCY_POSTCODE_RANGE (ID, TENANT_ID, AGENCY_ID, POSTCODE_FROM, POSTCODE_TO)
+        VALUES (99001, 1, 9001, '51061', '51061'), (99002, 1, 9002, '51063', '51063')
+        """);
+
+    mvc.perform(get("/agencyadmin/postcoderanges/9002").header("Authorization", "Bearer tenant-token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("_embedded.postcodeRanges").value("51063;"));
+
+    mvc.perform(get("/agencyadmin/postcoderanges/9001").header("Authorization", "Bearer tenant-token"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("_embedded").doesNotExist());
+  }
+
+  @Test
+  void detail_Should_PreserveBroaderRole_When_AdminHasBothAgencyRoles() throws Exception {
+    tokenFor(1L, "agency-admin", "restricted-agency-admin");
+
+    mvc.perform(get(SEARCH_PATH + "/9001").header("Authorization", "Bearer tenant-token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("_embedded.id").value(9001));
+
+    mvc.perform(get("/agencyadmin/postcoderanges/9001").header("Authorization", "Bearer tenant-token"))
+        .andExpect(status().isOk());
+    verifyNoInteractions(userAdminService);
   }
 
   @Test

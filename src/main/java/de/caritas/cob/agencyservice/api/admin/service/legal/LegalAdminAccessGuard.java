@@ -37,7 +37,7 @@ public class LegalAdminAccessGuard {
       var adminAgencyIds = userAdminService.getAdminUserAgencyIds(authenticatedUser.requireUserId());
       if (adminAgencyIds == null || !adminAgencyIds.contains(agencyId)) {
         log.warn(
-            "Admin user {} may not read the legal texts of agency {}",
+            "Admin user {} may not access agency {}",
             authenticatedUser.getUserId(),
             agencyId);
         throw new AgencyAccessDeniedException();

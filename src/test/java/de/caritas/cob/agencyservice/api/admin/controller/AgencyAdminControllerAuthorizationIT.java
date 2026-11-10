@@ -102,6 +102,7 @@ public class AgencyAdminControllerAuthorizationIT {
         Jwt.withTokenValue("test-token")
             .header("alg", "none")
             .claim("sub", "agency-admin")
+            .claim("username", "agency-admin")
             .claim("realm_access", Map.of("roles", List.of("agency-admin")))
             .build();
     when(jwtDecoder.decode(any(String.class))).thenReturn(agencyAdminJwt);

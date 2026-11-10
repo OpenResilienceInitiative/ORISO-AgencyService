@@ -15,6 +15,7 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintSer
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftView;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalProposalFacade;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalAdminAccessGuard;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalDraftArchiveDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptRequestDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptionDTO;
@@ -100,6 +101,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull LegalTextVersionAdminService legalTextVersionAdminService;
   private final @NonNull AgencyLegalDraftService agencyLegalDraftService;
   private final @NonNull AgencyLegalProposalFacade agencyLegalProposalFacade;
+  private final @NonNull LegalAdminAccessGuard legalAdminAccessGuard;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   /**
@@ -121,6 +123,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyAdminFullResponseDTO> getAgency(@PathVariable Long agencyId) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     return ResponseEntity.ok(this.agencyAdminService.findAgency(agencyId));
   }
 
@@ -307,6 +310,7 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> getAgencyPostcodeRanges(
       @PathVariable Long agencyId) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     var postcodeRangesForAgency = this.agencyPostcodeRangeAdminService
         .findPostcodeRangesForAgency(agencyId);
     return ResponseEntity.ok(postcodeRangesForAgency);

@@ -55,6 +55,8 @@ class AgencyAdminControllerLegalTextTest {
       agencyLegalProposalFacade;
 
 
+  @Mock private de.caritas.cob.agencyservice.api.admin.service.legal.LegalAdminAccessGuard
+      legalAdminAccessGuard;
   @InjectMocks private AgencyAdminController controller;
 
   private LegalTextAdminView view(long id, long usage) {

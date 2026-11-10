@@ -50,6 +50,8 @@ class AgencyAdminControllerDepartmentDppTest {
       agencyLegalProposalFacade;
 
 
+  @Mock private de.caritas.cob.agencyservice.api.admin.service.legal.LegalAdminAccessGuard
+      legalAdminAccessGuard;
   @InjectMocks private AgencyAdminController controller;
 
   @Test
