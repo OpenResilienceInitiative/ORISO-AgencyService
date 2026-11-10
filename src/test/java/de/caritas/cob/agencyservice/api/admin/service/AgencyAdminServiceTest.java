@@ -96,6 +96,9 @@ class AgencyAdminServiceTest {
   DeleteAgencyValidator deleteAgencyValidator;
 
   @Mock
+  DeletionAuditReporter deletionAuditReporter;
+
+  @Mock
   AgencyTopicMergeService mergeService;
 
   @Mock
@@ -176,7 +179,8 @@ class AgencyAdminServiceTest {
     // (see findAgencyById_Should_useTenantUnawareRepository_*) override this
     // to null or 0L explicitly (#265).
     Mockito.lenient().when(authenticatedUser.getTenantId()).thenReturn(1L);
-    Mockito.lenient().when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any()))
+    Mockito.lenient()
+        .when(agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(any(), any()))
         .thenAnswer(invocation -> invocation.getArgument(0) != null
             ? invocation.getArgument(0)
             : new Settings());
@@ -342,6 +346,37 @@ class AgencyAdminServiceTest {
 
     // then
     verify(agencyIdAllocationService).claimReservedId(eq(4711L), eq(42L), any());
+  }
+
+  @Test
+  void updateAgency_Should_RejectAChangedOverrideThatContradictsItsStoredTenantsRequirement() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setTenantId(8L);
+    agency.setSettings("{}");
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    Mockito.lenient().when(agencyRepository.save(any())).thenReturn(agency);
+    var tenantService = mock(de.caritas.cob.agencyservice.api.service.TenantService.class);
+    var policy = new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
+        .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED);
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L)).thenReturn(
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO(
+            Map.of("featureVideoCallsOneOnOneChatsEnabled", policy), null).id(8L));
+    var controls = new AgencyAdminControlsService(tenantService,
+        new de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyPermissionPolicyMapper());
+    ReflectionTestUtils.setField(agencyAdminService, "agencyAdminControlsService", controls);
+    ReflectionTestUtils.setField(agencyAdminService, "agencySettingsService", new AgencySettingsService());
+
+    assertThrows(org.springframework.security.access.AccessDeniedException.class,
+        () -> agencyAdminService.updateAgency(AGENCY_ID,
+            new UpdateAgencyDTO().name(agency.getName()).description(agency.getDescription())
+                .postcode(agency.getPostCode()).city(agency.getCity()).external(false)
+                .settings(new Settings().featureVideoCallsOneOnOneChatsEnabled(true))));
+
+    verify(agencyRepository, never()).save(any());
+    verify(tenantService).getRestrictedTenantDataForPermissionPolicies(8L);
+    Mockito.verifyNoMoreInteractions(tenantService);
   }
 
   @Test
@@ -886,6 +921,48 @@ class AgencyAdminServiceTest {
 
     verify(this.deleteAgencyValidator).validate(agency);
     verify(this.agencyRepository).save(any());
+  }
+
+  @Test
+  void deleteAgency_Should_ReportTheMarkingToTheDeletionLog_AfterTheAgencyWasSaved() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    agencyAdminService.deleteAgency(AGENCY_ID);
+
+    var order = org.mockito.Mockito.inOrder(this.agencyRepository, this.deletionAuditReporter);
+    order.verify(this.agencyRepository).save(agency);
+    order.verify(this.deletionAuditReporter)
+        .reportAgency(
+            agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
+  }
+
+  @Test
+  void deleteAgency_Should_NotReport_WhenTheValidatorRefusesTheDeletion() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    org.mockito.Mockito.doThrow(new IllegalStateException("has consultants"))
+        .when(this.deleteAgencyValidator)
+        .validate(agency);
+
+    assertThrows(IllegalStateException.class, () -> agencyAdminService.deleteAgency(AGENCY_ID));
+
+    org.mockito.Mockito.verifyNoInteractions(this.deletionAuditReporter);
+  }
+
+  @Test
+  void deleteAgency_Should_StillReport_WhenTheAppointmentSyncFails() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    org.mockito.Mockito.doThrow(new IllegalStateException("appointment service down"))
+        .when(this.appointmentService)
+        .deleteAgency(agency);
+
+    assertThrows(IllegalStateException.class, () -> agencyAdminService.deleteAgency(AGENCY_ID));
+
+    verify(this.deletionAuditReporter)
+        .reportAgency(
+            agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
   }
 
 }

@@ -10,8 +10,12 @@ import static org.mockito.Mockito.when;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.ApplicationSettingsDTO;
 import de.caritas.cob.agencyservice.applicationsettingsservice.generated.web.model.SettingDTO;
 import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerFactory;
+import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
+import de.caritas.cob.agencyservice.tenantservice.generated.ApiClient;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
+import org.springframework.http.HttpHeaders;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,12 +36,35 @@ class TenantServiceTest {
   @Mock
   ApplicationSettingsService applicationSettingsService;
 
+  @Mock SecurityHeaderSupplier securityHeaderSupplier;
+
+  @Mock TenantHeaderSupplier tenantHeaderSupplier;
+
+  @Mock ApiClient apiClient;
+
   @Mock
   TenantControllerApi tenantControllerApi;
 
   @AfterEach
   void tearDown() {
     ReflectionTestUtils.setField(tenantService, "multitenancyWithSingleDomain", false);
+  }
+
+  @Test
+  void batchLookupShouldUseBoundedBatchesAndPropagateFailure() {
+    when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
+    var ids = java.util.stream.LongStream.rangeClosed(1, 205).boxed().toList();
+    when(tenantControllerApi.getRestrictedTenantDataByTenantIds(any()))
+        .thenAnswer(call -> ((java.util.List<Long>) call.getArgument(0)).stream()
+            .map(id -> new RestrictedTenantDTO().id(id)).toList());
+    assertEquals(205, tenantService.getRestrictedTenantDataByTenantIds(ids).size());
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantIds(ids.subList(0, 100));
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantIds(ids.subList(100, 200));
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantIds(ids.subList(200, 205));
+    org.mockito.Mockito.doThrow(new IllegalStateException("owner unavailable"))
+        .when(tenantControllerApi).getRestrictedTenantDataByTenantIds(any());
+    assertThrows(IllegalStateException.class,
+        () -> tenantService.getRestrictedTenantDataByTenantIds(ids));
   }
 
   @Test
@@ -75,6 +102,23 @@ class TenantServiceTest {
 
     assertEquals(1L, result.getId());
     verify(tenantControllerApi).getRestrictedSingleTenancyTenantData();
+  }
+
+  @Test
+  void getPermissionPolicies_shouldUseThePublicResolvedProjectionWithoutHumanAdminAuthority() {
+    var policies = java.util.Map.of("featureVideoCallsEnabled",
+        new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
+            .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED));
+    when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
+    when(tenantControllerApi.getRestrictedTenantDataByTenantId(7L))
+        .thenReturn(new RestrictedTenantDTO(policies, null).id(7L));
+
+    var result = tenantService.getPermissionPolicies(7L);
+
+    assertEquals(7L, result.getTenantId());
+    assertEquals(policies, result.getPolicies());
+    verify(tenantControllerApi).getRestrictedTenantDataByTenantId(7L);
+    verify(tenantControllerApi, never()).getTenantPermissionPolicies(any());
   }
 
   @Test

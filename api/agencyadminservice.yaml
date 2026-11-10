@@ -33,8 +33,10 @@ paths:
         - name: q
           in: query
           description: >-
-            The query parameter to search for. Matches the agency name, postcode or city, or the
-            name of one of the agency's topics (Fachbereich), case-insensitively.
+            Every whitespace-separated word must match the agency name, ID, street, postcode, city,
+            tenant name or any linked topic name (Fachbereich). Matching ignores case and accents;
+            percent, underscore and exclamation mark are literal text. Empty means all agencies
+            in the caller's scope.
           schema:
             type: string
             example: "Freiburg"
@@ -1496,7 +1498,9 @@ paths:
     put:
       tags:
         - admin-agency-controller
-      summary: 'Updates platform-level agency admin controls [Authorization: Super admin]'
+      summary: 'Legacy agency controls are read-only [Authorization: Super admin]'
+      deprecated: true
+      description: 'Use the typed TenantService permission-policies endpoint for policy changes.'
       operationId: updateAgencyAdminControls
       requestBody:
         content:
@@ -1504,6 +1508,8 @@ paths:
             schema:
               $ref: '#/components/schemas/AgencyAdminControls'
       responses:
+        400:
+          description: BAD REQUEST - legacy writes are disabled; use typed tenant permission policies
         200:
           description: Successful operation
           content:

@@ -4,6 +4,8 @@ import de.caritas.cob.agencyservice.AgencyServiceApplication;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.manager.consultingtype.ConsultingTypeManager;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
+import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,13 @@ public class AgencyServiceIT extends AgencyServiceITBase {
    */
   @MockitoBean
   private TenantService tenantService;
+
+  /** Public search reads the Träger status from the tenant data; unknown never means active. */
+  @Before
+  public void stubActiveTenants() {
+    org.mockito.Mockito.when(tenantService.getRestrictedTenantDataByTenantId(
+        org.mockito.ArgumentMatchers.anyLong())).thenReturn(new RestrictedTenantDTO().active(true));
+  }
 
   @Test
   public void getAgencies_Should_returnMatchingAgencies_When_postcodeAndConsultingTypeIsGiven()

@@ -77,6 +77,7 @@ public class AgencyAdminService {
 
   private final @NonNull UserAdminService userAdminService;
   private final @NonNull DeleteAgencyValidator deleteAgencyValidator;
+  private final @NonNull DeletionAuditReporter deletionAuditReporter;
   private final @NonNull AgencyTopicMergeService agencyTopicMergeService;
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
   private final @NonNull AppointmentService appointmentService;
@@ -134,7 +135,8 @@ public class AgencyAdminService {
     if (response.getEmbedded() != null) {
       var settings = agencySettingsService.toSettings(agency.getSettings());
       response.getEmbedded().setSettings(
-          agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(settings));
+          agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(
+              settings, agency.getTenantId()));
     }
   }
 
@@ -363,7 +365,8 @@ public class AgencyAdminService {
     // Validation/OSIV may have loaded this entity before another request changed its status.
     // Acquire a fresh snapshot before merging metadata; a lock alone leaves managed fields stale.
     entityManager.refresh(agency, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
-    applySettingsUpdate(updateAgencyDTO);
+    agencyAdminControlsService.assertSettingsUpdateAllowed(
+        agencySettingsService.toSettings(agency.getSettings()), updateAgencyDTO.getSettings(), agency.getTenantId());
     // Read the stored wording before the merge overwrites it: what makes an agency-level save a
     // publish is that the wording CHANGED, and afterwards there is nothing left to compare against.
     final var storedDpp = agency.getContentDpp();
@@ -415,14 +418,6 @@ public class AgencyAdminService {
           agency.getTenantId(),
           agency.getContentImprint(),
           null);
-    }
-  }
-
-  private void applySettingsUpdate(UpdateAgencyDTO updateAgencyDTO) {
-    if (updateAgencyDTO.getSettings() != null
-        && updateAgencyDTO.getSettings().getAgencyAdminControls() != null) {
-      agencyAdminControlsService.updateControls(
-          updateAgencyDTO.getSettings().getAgencyAdminControls());
     }
   }
 
@@ -637,6 +632,10 @@ public class AgencyAdminService {
     this.deleteAgencyValidator.validate(agency);
     agency.setDeleteDate(LocalDateTime.now(ZoneOffset.UTC));
     this.agencyRepository.save(agency);
+    // Reported as soon as the marking is saved: a failing appointment sync afterwards must not
+    // leave a marked agency without its log line.
+    this.deletionAuditReporter.reportAgency(
+        agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
     this.appointmentService.deleteAgency(agency);
   }
 

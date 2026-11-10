@@ -6,10 +6,10 @@ import static org.apache.commons.lang3.BooleanUtils.isTrue;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
-import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
-import de.caritas.cob.agencyservice.api.converter.AgencyEffectivePermissionSettingsApplier;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.InternalServerErrorException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
@@ -35,13 +35,18 @@ import de.caritas.cob.agencyservice.api.service.matrix.MatrixProvisioningService
 import de.caritas.cob.agencyservice.api.service.matrix.AgencyMatrixPasswordCipher;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.function.Function;
 import lombok.NonNull;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,12 +83,8 @@ public class AgencyService {
 
   private final @NonNull AgencySettingsService agencySettingsService;
 
-  private final @NonNull AgencyAdminControlsService agencyAdminControlsService;
-
   private final @NonNull LegalTextInheritanceResolver legalTextInheritanceResolver;
 
-  private final @NonNull AgencyEffectivePermissionSettingsApplier
-      effectivePermissionSettingsApplier;
 
   @Value("${feature.topics.enabled}")
   private boolean topicsFeatureEnabled;
@@ -159,15 +160,15 @@ public class AgencyService {
     var agencies = findAgencies(postCode, getConsultingTypeIdForSearch(consultingTypeId), topicId,
         age, gender, counsellingRelation);
     Collections.shuffle(agencies);
-    Map<Long, Boolean> tenantInactive = new HashMap<>();
-    var agencyResponseDTOs = operationalAgencies(agencies, tenantInactive).stream()
-        .map(this::convertToFullAgencyResponseDTO)
-        .toList();
+    var ownTenant = requestTenantLookup();
+    var mainTenant = requestMainTenantLookup();
+    var agencyResponseDTOs = convertToFullAgencyResponses(
+        operationalAgencies(agencies, ownTenant), ownTenant, mainTenant);
 
     var mutableResponseDTO = Lists.newArrayList(agencyResponseDTOs);
 
     if (agencyResponseDTOs.isEmpty()) {
-      addWhiteSpotAgency(consultingTypeSettings, mutableResponseDTO, tenantInactive);
+      addWhiteSpotAgency(consultingTypeSettings, mutableResponseDTO, ownTenant, mainTenant);
     }
 
     return mutableResponseDTO;
@@ -176,9 +177,10 @@ public class AgencyService {
   public List<FullAgencyResponseDTO> getAgencies(String postCode, Integer topicId) {
 
     var agencies = findAgenciesForCurrentTenant(postCode, topicId);
-    return operationalAgencies(agencies).stream()
-        .map(this::convertToFullAgencyResponseDTO)
-        .toList();
+    var ownTenant = requestTenantLookup();
+    var mainTenant = requestMainTenantLookup();
+    return convertToFullAgencyResponses(
+        operationalAgencies(agencies, ownTenant), ownTenant, mainTenant);
   }
 
   public List<Integer> getAgenciesTopics() {
@@ -335,6 +337,9 @@ public class AgencyService {
   }
 
   private boolean isTopicFeatureActivatedInRegistration() {
+    if (multitenancy) {
+      return tenantService.isTopicsInRegistrationEnabled(TenantContext.getCurrentTenant());
+    }
     RestrictedTenantDTO restrictedTenantDTO = getRestrictedTenantData();
     if (nonNull(restrictedTenantDTO) && nonNull(restrictedTenantDTO.getSettings())) {
       return Boolean.TRUE.equals(
@@ -434,7 +439,8 @@ public class AgencyService {
   }
 
   private void addWhiteSpotAgency(ExtendedConsultingTypeResponseDTO consultingTypeSettings,
-      List<FullAgencyResponseDTO> agencyResponseDTOs, Map<Long, Boolean> tenantInactive) {
+      List<FullAgencyResponseDTO> agencyResponseDTOs,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
 
     var whiteSpot = consultingTypeSettings.getWhiteSpot();
     if (nonNull(whiteSpot) && nonNull(whiteSpot.getWhiteSpotAgencyId()) && isTrue(
@@ -442,10 +448,9 @@ public class AgencyService {
       try {
         getAgencyRepositoryForSearch().findByIdAndDeleteDateNull(
             Long.valueOf(whiteSpot.getWhiteSpotAgencyId()))
-            .filter(agency -> !agency.isOffline()
-                && !tenantInactive.computeIfAbsent(
-                    agency.getTenantId(), tenantService::isTenantInactive))
-            .ifPresent(agency -> agencyResponseDTOs.add(convertToFullAgencyResponseDTO(agency)));
+            .filter(agency -> !agency.isOffline() && !isTenantInactive(agency, ownTenant))
+            .ifPresent(agency -> agencyResponseDTOs.add(
+                convertToFullAgencyResponseDTO(agency, ownTenant, mainTenant)));
       } catch (NumberFormatException nfEx) {
         throw new InternalServerErrorException(LogService::logNumberFormatException,
             "Invalid white spot agency id");
@@ -453,64 +458,133 @@ public class AgencyService {
     }
   }
 
-  private List<Agency> operationalAgencies(List<Agency> agencies) {
-    return operationalAgencies(agencies, new HashMap<>());
-  }
-
   private List<Agency> operationalAgencies(
-      List<Agency> agencies, Map<Long, Boolean> tenantInactive) {
+      List<Agency> agencies, Function<Agency, RestrictedTenantDTO> ownTenant) {
     return agencies.stream()
         .filter(agency -> !agency.isOffline())
-        .filter(agency -> !tenantInactive.computeIfAbsent(
-            agency.getTenantId(), tenantService::isTenantInactive))
+        .filter(agency -> !isTenantInactive(agency, ownTenant))
         .toList();
-  }
-
-  private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
-    if (multitenancyWithSingleDomain) {
-      // In single-domain mode, use the agency's own tenant when available.
-      // This avoids failing the whole agencies response when consulting type settings
-      // are temporarily unavailable.
-      if (agency.getTenantId() != null) {
-        return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
-      }
-      return null;
-    } else {
-
-      return agency.getTenantId() != null ? tenantService.getRestrictedTenantDataByTenantId(
-          agency.getTenantId()) : null;
-    }
   }
 
   /**
-   * Tenant (Träger) lookup for the public agency response. A TenantService failure must not break
-   * the agency response (ORISO-AgencyService#293): it is logged and treated as "no Träger data",
-   * so the agency's own values are served.
+   * Träger operational status comes from the same fresh, per-request tenant read that supplies
+   * feature and legal authority. Unknown status never implies active: a failed read surfaces as
+   * the lookup's own failure, and a read without tenant data is missing authority.
    */
+  private boolean isTenantInactive(Agency agency, Function<Agency, RestrictedTenantDTO> ownTenant) {
+    if (agency.getTenantId() == null) {
+      return false;
+    }
+    var tenant = ownTenant.apply(agency);
+    if (tenant == null) {
+      throw new TenantService.MissingOperationalTenantException();
+    }
+    return Boolean.FALSE.equals(tenant.getActive());
+  }
+
+  private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
+    if (agency.getTenantId() != null) {
+      return tenantService.getRestrictedTenantDataByTenantId(agency.getTenantId());
+    }
+    return tenantService.getRestrictedTenantDataForPermissionPolicies(null);
+  }
+
+  /** A failed policy lookup must not expose unverified agency overrides as effective permissions. */
   private RestrictedTenantDTO findTenantDataRelevantForFeatureToggles(Agency agency) {
     try {
       return getTenantDataRelevantForFeatureToggles(agency);
-    } catch (RuntimeException exception) {
-      log.warn(
-          "Tenant lookup failed for agency {} (tenantId={}); serving the agency's own settings",
-          agency.getId(),
-          agency.getTenantId(),
-          exception);
-      return null;
+    } catch (RestClientException exception) {
+      log.warn("Permission policies unavailable for tenant {}: type={} status={}",
+          agency.getTenantId(), exception.getClass().getSimpleName(),
+          exception instanceof RestClientResponseException response
+              ? response.getStatusCode().value() : "unavailable");
+      throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }
   }
 
-  private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
-    Map<Long, Boolean> tenantInactive = new HashMap<>();
-    return agencies.stream()
-        .map(agency -> convertToAgencyResponseDTO(agency, agency.isOffline()
-            || tenantInactive.computeIfAbsent(agency.getTenantId(), tenantService::isTenantInactive)))
-        .toList();
+  /** Each request reuses successes, legitimate nulls and failures only within that request. */
+  private Function<Agency, RestrictedTenantDTO> requestTenantLookup() {
+    Map<Long, Optional<RestrictedTenantDTO>> tenants = new HashMap<>();
+    Map<Long, RuntimeException> failures = new HashMap<>();
+    return agency -> {
+      Long id = agency.getTenantId();
+      if (failures.containsKey(id)) {
+        throw failures.get(id);
+      }
+      try {
+        return tenants.computeIfAbsent(id, ignored ->
+            Optional.ofNullable(findTenantDataRelevantForFeatureToggles(agency))).orElse(null);
+      } catch (RuntimeException exception) {
+        failures.put(id, exception);
+        throw exception;
+      }
+    };
   }
 
-  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, boolean offline) {
-    RestrictedTenantDTO tenantData = findTenantDataRelevantForFeatureToggles(agency);
-    String renderedAgencySpecificPrivacy = getRenderedAgencySpecificPrivacy(agency, tenantData);
+  /** MAIN is a separate legal source, never another tenant's feature-policy authority. */
+  private Supplier<RestrictedTenantDTO> requestMainTenantLookup() {
+    return new Supplier<>() {
+      private boolean fetched;
+      private RestrictedTenantDTO tenant;
+      private RuntimeException failure;
+
+      @Override
+      public RestrictedTenantDTO get() {
+        if (!fetched) {
+          fetched = true;
+          try {
+            tenant = tenantService.getMainTenant();
+          } catch (RuntimeException exception) {
+            failure = exception;
+          }
+        }
+        if (failure != null) {
+          throw failure;
+        }
+        return tenant;
+      }
+    };
+  }
+
+  private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
+    var ownTenant = requestTenantLookup();
+    var mainTenant = requestMainTenantLookup();
+    List<AgencyResponseDTO> available = new ArrayList<>();
+    ServiceUnavailableException failedPolicy = null;
+    for (Agency agency : agencies) {
+      if (!hasPublicPolicyAuthority(agency)) {
+        continue;
+      }
+      try {
+        var tenantData = ownTenant.apply(agency);
+        boolean offline = agency.isOffline() || isTenantInactive(agency, ownTenant);
+        available.add(convertToAgencyResponseDTO(
+            agency, offline, tenantData, ownTenant, mainTenant));
+      } catch (ServiceUnavailableException exception) {
+        failedPolicy = exception;
+      }
+    }
+    if (available.isEmpty() && failedPolicy != null) {
+      throw failedPolicy;
+    }
+    return List.copyOf(available);
+  }
+
+  private List<FullAgencyResponseDTO> convertToFullAgencyResponses(List<Agency> agencies,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return agencies.stream().map(agency ->
+        convertToFullAgencyResponseDTO(agency, ownTenant, mainTenant)).toList();
+  }
+
+  private boolean hasPublicPolicyAuthority(Agency agency) {
+    return !multitenancy || (agency.getTenantId() != null && agency.getTenantId() > 0);
+  }
+
+  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, boolean offline,
+      RestrictedTenantDTO tenantData,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    String renderedAgencySpecificPrivacy =
+        getRenderedAgencySpecificPrivacy(agency, tenantData, ownTenant, mainTenant);
     return new AgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
@@ -532,46 +606,45 @@ public class AgencyService {
         .lng(agency.getLng())
         .departments(
             agency.getAgencyTopics().stream()
-                .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
+                .map(topic -> convertToAgencyDepartmentDTO(topic, agency, ownTenant, mainTenant))
                 .toList())
         .settings(buildAgencySettings(agency, tenantData));
   }
 
   /**
-   * Builds the settings served on the public/registration-facing agency response. Bakes the
-   * platform admin controls into the effective feature flags (forced-off disabled, enforced-on
-   * locked on) without exposing the controls themselves — see {@link
-   * AgencyEffectivePermissionSettingsApplier}. Mirrors ORISO-TenantService's
-   * withEffectivePermissions (ADR-013 P4). The admin-facing path ({@code AgencyAdminService})
-   * still attaches the raw controls via {@link
-   * AgencyAdminControlsService#enrichSettingsWithAgencyAdminControls} so the Admin UI can render
-   * disabled-not-hidden state.
-   *
-   * <p>Feature flags are served as effective values: Träger AND Beratungsstelle, a Träger
-   * "off" always wins (ORISO-AgencyService#293) — see {@link EffectiveAgencySettingsResolver}.
+   * Public consumers receive effective typed policy values; Admin keeps raw leaf overrides and
+   * the resolved policy map separate so a dormant override survives an inherited requirement.
    */
   private Settings buildAgencySettings(Agency agency, RestrictedTenantDTO tenantData) {
     var settings = agencySettingsService.toSettings(agency.getSettings());
     EffectiveAgencySettingsResolver.applyTo(
-        settings, tenantData != null ? tenantData.getSettings() : null);
-    effectivePermissionSettingsApplier.applyTo(settings, agencyAdminControlsService.getControls());
+        settings, tenantData != null ? tenantData.getSettings() : null,
+        tenantData != null ? tenantData.getPermissionPolicies() : null);
     return settings;
   }
 
   protected String getRenderedAgencySpecificPrivacy(
       Agency agency, RestrictedTenantDTO tenantDataHoldingFeatureToggles) {
+    return getRenderedAgencySpecificPrivacy(agency, tenantDataHoldingFeatureToggles,
+        ignored -> tenantDataHoldingFeatureToggles, tenantService::getMainTenant);
+  }
+
+  private String getRenderedAgencySpecificPrivacy(Agency agency,
+      RestrictedTenantDTO tenantDataHoldingFeatureToggles,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings settings =
         tenantDataHoldingFeatureToggles != null ? tenantDataHoldingFeatureToggles.getSettings() : null;
     if (settings != null && settings.getFeatureCentralDataProtectionTemplateEnabled() != null
         && Boolean.TRUE.equals(settings.getFeatureCentralDataProtectionTemplateEnabled())) {
       return centralDataProtectionTemplateService.renderPrivacyTemplateWithRenderedPlaceholderValues(
-          agency);
+          agency, ownTenant, mainTenant);
     } else {
       return null;
     }
   }
 
-  private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency) {
+  private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return new FullAgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
@@ -588,7 +661,7 @@ public class AgencyService {
         .topicIds(agency.getAgencyTopics().stream().map(AgencyTopic::getTopicId).toList())
         .departments(
             agency.getAgencyTopics().stream()
-                .map(topic -> convertToAgencyDepartmentDTO(topic, agency))
+                .map(topic -> convertToAgencyDepartmentDTO(topic, agency, ownTenant, mainTenant))
                 .toList())
         .agencyLogo(agency.getAgencyLogo())
         .street(agency.getStreet())
@@ -621,11 +694,12 @@ public class AgencyService {
    * OpenAPI specs say which one they are.
    */
   private AgencyDepartmentDTO convertToAgencyDepartmentDTO(AgencyTopic agencyTopic,
-      Agency agency) {
+      Agency agency, Function<Agency, RestrictedTenantDTO> ownTenant,
+      Supplier<RestrictedTenantDTO> mainTenant) {
     return new AgencyDepartmentDTO()
         .topicId(agencyTopic.getTopicId())
-        .hasPublishedDpp(hasPublishedDpp(agencyTopic))
-        .hasPublishedImprint(hasPublishedImprint(agencyTopic))
+        .hasPublishedDpp(hasPublishedDpp(agencyTopic, ownTenant, mainTenant))
+        .hasPublishedImprint(hasPublishedImprint(agencyTopic, ownTenant, mainTenant))
         .openingHours(resolve(agencyTopic.getOpeningHours(), agency.getOpeningHours()))
         .phoneExtension(agencyTopic.getPhoneExtension())
         .floorLocation(resolve(agencyTopic.getFloorLocation(), agency.getFloorBuilding()));
@@ -654,13 +728,15 @@ public class AgencyService {
    * <p>This is deliberately <b>not</b> {@link DepartmentLegalPublicationState}, which #259 uses for
    * the admin read. See {@link #convertToAgencyDepartmentDTO} for why the two differ.
    */
-  private boolean hasPublishedDpp(AgencyTopic agencyTopic) {
-    return legalTextInheritanceResolver.resolveDpp(agencyTopic).isPresent();
+  private boolean hasPublishedDpp(AgencyTopic agencyTopic,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return legalTextInheritanceResolver.resolveDpp(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   /** Same fix for the imprint half — an inherited imprint is reachable and must be reported so. */
-  private boolean hasPublishedImprint(AgencyTopic agencyTopic) {
-    return legalTextInheritanceResolver.resolveImprint(agencyTopic).isPresent();
+  private boolean hasPublishedImprint(AgencyTopic agencyTopic,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
+    return legalTextInheritanceResolver.resolveImprint(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

@@ -1,80 +1,102 @@
 package de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.RuntimeJsonMappingException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.BadRequestException;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
+import de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminControls;
+import de.caritas.cob.agencyservice.api.model.AgencyPermissionPolicy;
 import de.caritas.cob.agencyservice.api.model.Settings;
-import de.caritas.cob.agencyservice.api.repository.agencyadmincontrol.AgencyAdminControlEntity;
-import de.caritas.cob.agencyservice.api.repository.agencyadmincontrol.AgencyAdminControlRepository;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.Optional;
+import de.caritas.cob.agencyservice.api.service.TenantService;
+import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class AgencyAdminControlsService {
 
-  private final @NonNull AgencyAdminControlRepository agencyAdminControlRepository;
-  private final @NonNull AgencyAdminControlsConverter agencyAdminControlsConverter;
+  private final @NonNull TenantService tenantService;
+  private final @NonNull AgencyPermissionPolicyMapper policyMapper;
+
+  @Value("${multitenancy.enabled}")
+  private boolean multitenancyEnabled = true;
 
   public AgencyAdminControls getControls() {
-    return agencyAdminControlsConverter.toAgencyAdminControls(getControlsSettings());
+    return getControls(requireTenantId(TenantContext.getCurrentTenant()));
+  }
+
+  public AgencyAdminControls getControls(Long tenantId) {
+    return policyMapper.toLegacyControls(
+        tenantService.getPermissionPolicies(requireTenantId(tenantId)).getPolicies());
+  }
+
+  public AgencyAdminControls getResolvedControls(Long tenantId) {
+    return policyMapper.toLegacyControls(
+        tenantService
+            .getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId))
+            .getPermissionPolicies());
   }
 
   public AgencyAdminControls updateControls(AgencyAdminControls agencyAdminControls) {
-    AgencyAdminControlsSettings controlsSettings =
-        agencyAdminControlsConverter.toAgencyAdminControlsSettings(agencyAdminControls);
-    saveControlsSettings(controlsSettings);
-    return agencyAdminControlsConverter.toAgencyAdminControls(controlsSettings);
+    return updateControls(requireTenantId(TenantContext.getCurrentTenant()), agencyAdminControls);
+  }
+
+  public AgencyAdminControls updateControls(
+      Long tenantId, AgencyAdminControls agencyAdminControls) {
+    requireTenantId(tenantId);
+    throw new BadRequestException(
+        "Legacy controls are read-only; use /tenantadmin/{id}/permission-policies");
   }
 
   public Settings enrichSettingsWithAgencyAdminControls(Settings settings) {
+    return enrichSettingsWithAgencyAdminControls(settings, requireTenantId(TenantContext.getCurrentTenant()));
+  }
+
+  public Settings enrichSettingsWithAgencyAdminControls(Settings settings, Long tenantId) {
     Settings enrichedSettings = settings != null ? settings : new Settings();
-    enrichedSettings.setAgencyAdminControls(getControls());
+    var tenant = tenantService.getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId));
+    if (tenant == null || tenant.getPermissionPolicies() == null) {
+      throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+    }
+    var policies = tenant.getPermissionPolicies();
+    enrichedSettings.setAgencyAdminControls(policyMapper.toLegacyControls(policies));
+    enrichedSettings.setPermissionPolicies(EffectiveAgencySettingsResolver.resolvePolicies(enrichedSettings, tenant.getSettings(), policies));
     return enrichedSettings;
   }
 
-  private AgencyAdminControlsSettings getControlsSettings() {
-    return findExistingControls()
-        .map(entity -> parseControlsSettings(entity.getControls()))
-        .orElseGet(agencyAdminControlsConverter::createDefaultControlsSettings);
-  }
-
-  private void saveControlsSettings(AgencyAdminControlsSettings controlsSettings) {
-    AgencyAdminControlEntity entity =
-        findExistingControls().orElseGet(AgencyAdminControlEntity::new);
-    entity.setControls(serializeControlsSettings(controlsSettings));
-    entity.setUpdateDate(LocalDateTime.now(ZoneOffset.UTC));
-    agencyAdminControlRepository.save(entity);
-  }
-
-  private Optional<AgencyAdminControlEntity> findExistingControls() {
-    return agencyAdminControlRepository.findTopByOrderByIdAsc();
-  }
-
-  private AgencyAdminControlsSettings parseControlsSettings(String controlsJson) {
-    if (StringUtils.isBlank(controlsJson) || "{}".equals(controlsJson.trim())) {
-      return agencyAdminControlsConverter.createDefaultControlsSettings();
+  public void assertSettingsUpdateAllowed(Settings stored, Settings requested, Long tenantId) {
+    var changes = EffectiveAgencySettingsResolver.changedOverrides(stored, requested);
+    if (changes.isEmpty()) {
+      return;
     }
-    try {
-      AgencyAdminControlsSettings settings =
-          new ObjectMapper().readValue(controlsJson, AgencyAdminControlsSettings.class);
-      return settings != null ? settings : agencyAdminControlsConverter.createDefaultControlsSettings();
-    } catch (JsonProcessingException exception) {
-      throw new RuntimeJsonMappingException(exception.getMessage());
+    var tenant = tenantService.getRestrictedTenantDataForPermissionPolicies(requireTenantId(tenantId));
+    if (tenant == null || tenant.getPermissionPolicies() == null) {
+      throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
     }
+    // Authorize the same enforced value exposed in Admin/public reads, including direct-link caps.
+    var policies = EffectiveAgencySettingsResolver.resolvePolicies(
+        null, tenant.getSettings(), tenant.getPermissionPolicies());
+    changes.forEach((field, value) -> {
+      var policy = policies == null ? null : policies.get(field);
+      if (policy == null || policy.getValue() == null || policy.getMode() == null) {
+        throw new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+      }
+      if (policy.getMode() == AgencyPermissionPolicy.ModeEnum.ENFORCED && !value.equals(policy.getValue())) {
+        throw new AccessDeniedException("The tenant requires a different value for " + field);
+      }
+    });
   }
 
-  private String serializeControlsSettings(AgencyAdminControlsSettings controlsSettings) {
-    try {
-      return new ObjectMapper().writeValueAsString(controlsSettings);
-    } catch (JsonProcessingException exception) {
-      throw new RuntimeJsonMappingException(exception.getMessage());
+  private Long requireTenantId(Long tenantId) {
+    if ((tenantId == null && multitenancyEnabled) || (tenantId != null && tenantId <= 0)) {
+      throw new AccessDeniedException(
+          "A concrete tenant is required for permission policies");
     }
+    return tenantId;
   }
+
 }

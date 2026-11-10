@@ -156,9 +156,27 @@ components:
         enforcedPermissionToggles:
           $ref: '#/components/schemas/AgencyAdminAllowedPermissionToggles'
 
+    AgencyPermissionPolicy:
+      type: object
+      required: [value, mode, inherited]
+      properties:
+        value:
+          type: boolean
+        mode:
+          type: string
+          enum: [ENFORCED, SUGGESTED]
+        inherited:
+          type: boolean
+
     Settings:
       type: object
       properties:
+        permissionPolicies:
+          type: object
+          readOnly: true
+          description: Effective feature policies resolved from this agency's Traeger and supported agency overrides. Account and handover policies remain Traeger-owned. Never written as agency overrides.
+          additionalProperties:
+            $ref: '#/components/schemas/AgencyPermissionPolicy'
         counsellorTopicPermission:
           type: string
           enum: [NONE, SELECT_EXISTING, CREATE]
@@ -357,6 +375,18 @@ components:
           type: boolean
           example: false
           description: "AI media scan when a user is in supervision mode."
+        featureDirectInviteChatEnabled:
+          type: boolean
+          example: true
+          description: "Direkteinladung erlauben for chats: counsellors may invite a person directly by link (ADR-029 §6). Unset inherits the Traeger value. On the public agency response this is the effective value: Traeger AND Beratungsstelle; a Traeger 'off' always wins (ADR-013)."
+        featureDirectInviteAudioEnabled:
+          type: boolean
+          example: true
+          description: "Direkteinladung erlauben for audio calls: counsellors may invite a person directly by link (ADR-029 §6). Unset inherits the Traeger value. On the public agency response this is the effective value: Traeger AND Beratungsstelle; a Traeger 'off' always wins (ADR-013)."
+        featureDirectInviteVideoEnabled:
+          type: boolean
+          example: true
+          description: "Direkteinladung erlauben for video calls: counsellors may invite a person directly by link (ADR-029 §6). Unset inherits the Traeger value. On the public agency response this is the effective value: Traeger AND Beratungsstelle; a Traeger 'off' always wins (ADR-013)."
         featureToolsOICDToken:
           type: string
           example: "1234-1234-1234-1234"

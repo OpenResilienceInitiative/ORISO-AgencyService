@@ -64,6 +64,10 @@ class AgencyAdminSearchPickerIT {
         .thenReturn(new RestrictedTenantDTO().id(OWN_TENANT).name("Träger Köln"));
     when(tenantService.getRestrictedTenantDataByTenantId(OTHER_TENANT))
         .thenReturn(new RestrictedTenantDTO().id(OTHER_TENANT).name("Träger Nord"));
+    when(tenantService.getRestrictedTenantDataByTenantIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenAnswer(invocation -> ((java.util.Collection<Long>) invocation.getArgument(0)).stream()
+            .map(id -> new RestrictedTenantDTO().id(id)
+                .name(id.equals(1L) ? "Träger Köln" : "Träger Nord")).toList());
     when(authenticatedUser.requireUserId()).thenReturn("agency-admin-id");
     when(authenticatedUser.getAccessToken()).thenReturn("token");
   }
@@ -261,6 +265,95 @@ class AgencyAdminSearchPickerIT {
     when(authenticatedUser.hasRestrictedAgencyPriviliges()).thenReturn(false);
 
     assertThat(ids(searchInTenant("zebrafink", OWN_TENANT))).isEmpty();
+  }
+
+  @Test
+  void search_Should_AndTokensAcrossLocalFieldsAndId() {
+    actAsTenantAdmin();
+    assertThat(ids(search("9001 50667", false))).containsExactly(9001L);
+    assertThat(ids(search("zebrafink 50999", false))).containsExactly(9002L);
+    assertThat(ids(search("zebrafink 50999 absent", false))).isEmpty();
+  }
+
+  @Test
+  void search_Should_MatchTenantNameWithLocalAndTopicTokens() {
+    actAsTenantAdmin();
+    assertThat(ids(search("TRÄGER mitte schuldner", false))).containsExactly(9001L);
+  }
+
+  @Test
+  void search_Should_FailInsteadOfOmittingMatches_WhenTopicOwnerFails() {
+    actAsTenantAdmin();
+    when(topicService.getAllTopics()).thenThrow(new IllegalStateException("owner unavailable"));
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> search("zebrafink", false))
+        .isInstanceOf(RuntimeException.class);
+  }
+
+  @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+  @Test
+  void search_Should_MatchStreetAndLiteralWildcardOnlyQueries() {
+    actAsTenantAdmin();
+    jdbc.update("update agency set street = ? where id = 9001", "Harbor %_! Avenue");
+    assertThat(ids(search("harbor 9001", false))).containsExactly(9001L);
+    for (String literal : List.of("%", "_", "!", "%_!")) {
+      assertThat(ids(search(literal, false))).containsExactly(9001L);
+    }
+  }
+
+  @Test
+  void search_Should_MatchAllLinkedTopicsAndAndThemWithTenantName() {
+    actAsTenantAdmin();
+    jdbc.update("insert into agency_topic (id, agency_id, topic_id) values (99002,9001,502)");
+    assertThat(ids(search("schuldner sucht träger", false))).containsExactly(9001L);
+  }
+
+  @Test
+  void search_Should_ResolveAllScopedMetadataBeforePagingAndReuseIt() {
+    actAsPlatformAdmin();
+    var page = agencyAdminSearchService.searchAgencies("nord zebrafink", 1, 1, byName());
+    assertThat(ids(page.getEmbedded())).containsExactly(9003L);
+    assertThat(page.getTotal()).isEqualTo(1);
+    org.mockito.Mockito.verify(topicService, org.mockito.Mockito.times(1))
+        .getAllTopicsOfTenant(OTHER_TENANT);
+    org.mockito.Mockito.verify(tenantService, org.mockito.Mockito.never())
+        .getRestrictedTenantDataByTenantId(OTHER_TENANT);
+  }
+
+  @Test
+  void search_Should_KeepMetadataRequestsWithinRestrictedAgencyScope() {
+    actAsAgencyAdminOf(9002L);
+    assertThat(ids(search("träger", false))).containsExactly(9002L);
+    org.mockito.Mockito.verify(tenantService).getRestrictedTenantDataByTenantIds(List.of(1L));
+    org.mockito.Mockito.verify(topicService, org.mockito.Mockito.never()).getAllTopicsOfTenant(2L);
+  }
+
+  @Test
+  void search_Should_KeepTopicIdsWithinTheirOwningTenant() {
+    actAsPlatformAdmin();
+    when(topicService.getAllTopicsOfTenant(OTHER_TENANT))
+        .thenReturn(List.of(topic(501L, "ForeignExclusive")));
+    jdbc.update("insert into agency_topic (id, agency_id, topic_id) values (99003,9003,501)");
+    assertThat(ids(search("ForeignExclusive", false))).containsExactly(9003L);
+  }
+
+  @Test
+  void search_Should_FailInsteadOfOmittingMatches_WhenTenantOwnerFails() {
+    actAsTenantAdmin();
+    when(tenantService.getRestrictedTenantDataByTenantIds(org.mockito.ArgumentMatchers.anyCollection()))
+        .thenThrow(new IllegalStateException("owner unavailable"));
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> search("zebrafink", false))
+        .isInstanceOf(RuntimeException.class);
+  }
+
+  @Test
+  void search_Should_KeepTotalAndSortForMultipleMatchingPagesAndClear() {
+    actAsTenantAdmin();
+    var page = agencyAdminSearchService.searchAgencies("zebrafink träger", 2, 1, byName());
+    assertThat(ids(page.getEmbedded())).containsExactly(9001L);
+    assertThat(page.getTotal()).isEqualTo(3);
+    assertThat(search("  ", false)).hasSizeGreaterThan(3);
+    assertThat(ids(search(" * ", false))).containsExactlyElementsOf(ids(search("", false)));
   }
 
   private List<AgencyAdminFullResponseDTO> searchInTenant(String q, Long tenantId) {

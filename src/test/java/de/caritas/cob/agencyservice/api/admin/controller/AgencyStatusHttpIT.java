@@ -397,6 +397,11 @@ public class AgencyStatusHttpIT {
         .andExpect(jsonPath("$.ownActive").value(false))
         .andExpect(jsonPath("$.tenantActive").isEmpty());
     mvc.perform(update(883L, false)).andExpect(status().is5xxServerError());
+    // The admin read itself needs live tenant policy authority, so restore it before proving the
+    // refused reactivation left the saved own pause in place.
+    org.mockito.Mockito.doReturn(new de.caritas.cob.agencyservice.tenantservice.generated.web.model
+            .RestrictedTenantDTO().active(true))
+        .when(tenantClient).getRestrictedTenantDataByTenantId(1L);
     mvc.perform(read(883L)).andExpect(status().isOk())
         .andExpect(jsonPath("$._embedded.offline").value(true));
   }
