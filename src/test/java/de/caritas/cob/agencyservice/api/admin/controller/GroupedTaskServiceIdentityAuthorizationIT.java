@@ -69,7 +69,8 @@ class GroupedTaskServiceIdentityAuthorizationIT {
           "matrix-agency",
           "matrix-agency-provision",
           "appointment-sync",
-          "appointment-participant-cleanup");
+          "appointment-participant-cleanup",
+          "deletion-audit-read");
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final jakarta.servlet.http.Cookie CSRF =
       new jakarta.servlet.http.Cookie("csrfCookie", "test");
@@ -91,6 +92,12 @@ class GroupedTaskServiceIdentityAuthorizationIT {
 
   @BeforeEach
   void setup() {
+    when(tenants.getPermissionPolicies(anyLong()))
+        .thenAnswer(call -> new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
+            .tenantId(call.getArgument(0)).policies(Map.of()));
+    org.mockito.Mockito.when(tenants.getRestrictedTenantDataForPermissionPolicies(anyLong()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .projection(call.getArgument(0), java.util.Map.of()));
     when(tenants.getRestrictedTenantDataByTenantId(anyLong()))
         .thenAnswer(call -> new RestrictedTenantDTO().id(call.getArgument(0)));
     when(types.getExtendedConsultingTypeResponseDTO(anyInt()))

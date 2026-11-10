@@ -170,6 +170,18 @@ class AgencySettingsServiceTest {
   }
 
   @Test
+  void toSettingsJson_Should_OmitAllEffectivePolicyMetadata() {
+    var settings = buildSettingsWithControls();
+    settings.setPermissionPolicies(java.util.Map.of("featureDisplayNameEditable",
+        new de.caritas.cob.agencyservice.api.model.AgencyPermissionPolicy()
+            .value(false).mode(de.caritas.cob.agencyservice.api.model.AgencyPermissionPolicy.ModeEnum.ENFORCED)
+            .inherited(true)));
+    var json = agencySettingsService.toSettingsJson(settings);
+    assertThat(json).doesNotContain("permissionPolicies").doesNotContain("agencyAdminControls");
+    assertThat(parseJson(json).get("featureStatisticsEnabled").booleanValue()).isTrue();
+  }
+
+  @Test
   void toSettingsJson_Should_OmitAgencyAdminControls_When_SettingsHasAgencyAdminControls() {
     Settings settings = buildSettingsWithControls();
 

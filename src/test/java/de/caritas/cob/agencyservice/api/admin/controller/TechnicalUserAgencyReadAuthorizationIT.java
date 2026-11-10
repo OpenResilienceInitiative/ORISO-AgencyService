@@ -67,6 +67,18 @@ class TechnicalUserAgencyReadAuthorizationIT {
   /** Topic names come from ConsultingTypeService, which this test does not run. */
   @MockitoBean private TopicService topicService;
 
+  @MockitoBean private de.caritas.cob.agencyservice.api.service.TenantService tenantService;
+
+  @org.junit.jupiter.api.BeforeEach
+  void tenantPolicies() {
+    when(tenantService.getPermissionPolicies(org.mockito.ArgumentMatchers.anyLong()))
+        .thenAnswer(call -> new de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies()
+            .tenantId(call.getArgument(0)).policies(Map.of()));
+    org.mockito.Mockito.when(tenantService.getRestrictedTenantDataForPermissionPolicies(org.mockito.ArgumentMatchers.anyLong()))
+        .thenAnswer(call -> de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture
+            .projection(call.getArgument(0), java.util.Map.of()));
+  }
+
   private void tokenWithRealmRoles(String... roles) {
     var token = serviceToken().claim("realm_access", Map.of("roles", List.of(roles)));
     if (!List.of(roles).contains("technical")) {
