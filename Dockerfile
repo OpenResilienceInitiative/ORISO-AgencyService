@@ -6,8 +6,10 @@ ENV JAVA_UPPER_VERSION=eclipse-temurin:21-jre@sha256:0b99b3376fbb50dbf9c0af8535f
 # The Ubuntu-based Temurin image ships Canonical's pebble service manager,
 # which is unused here and carries fixable Go CVEs; drop it from the image.
 RUN rm -f /usr/bin/pebble
-# This base digest already ships the Ubuntu fixes the image CVE gate needs
-# (OpenSSL 3.5.5-1ubuntu3.7, curl/libcurl4t64 8.18.0-1ubuntu2.8,
-# libbrotli1 1.2.0-3ubuntu0.1 for CVE-2026-111497), so no package upgrades here.
+# Ubuntu USN-8996-1 fixes APT and its shared library. Disable APT retries
+# during the upgrade because the old APT is vulnerable when it retries downloads.
+RUN apt-get -o Acquire::Retries=0 update \
+    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
+    && rm -rf /var/lib/apt/lists/*
 COPY ./target/AgencyService.jar app.jar
 ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom","-Dtomcat.util.http.parser.HttpParser.requestTargetAllow=|{}","-XX:MaxRAMPercentage=75","-jar","/app.jar"]
