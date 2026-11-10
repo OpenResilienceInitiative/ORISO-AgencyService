@@ -541,6 +541,7 @@ public class AgencyAdminControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "AUTHORIZATION_AGENCY_ADMIN")
   public void deleteAgency_Should_returnOk_When_AllParamsAreValid() throws Exception {
     this.mvc
         .perform(delete(UPDATE_DELETE_AGENCY_PATH).contentType(MediaType.APPLICATION_JSON))

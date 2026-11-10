@@ -296,6 +296,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link ResponseEntity} with the status code.
    */
   @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
   public ResponseEntity<Void> deleteAgency(@PathVariable Long agencyId) {
     this.agencyAdminService.deleteAgency(agencyId);
     return new ResponseEntity<>(HttpStatus.OK);
@@ -326,7 +327,7 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> createAgencyPostcodeRange(
       @PathVariable Long agencyId, PostcodeRangeDTO postcodeRangeDTO) {
-
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     return new ResponseEntity<>(
         agencyPostcodeRangeAdminService.createPostcodeRanges(agencyId, postcodeRangeDTO),
         HttpStatus.CREATED);
@@ -342,6 +343,7 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> updateAgencyPostcodeRange(
       @PathVariable Long agencyId, PostcodeRangeDTO postcodeRangeDTO) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     var rangeResponseDTO = agencyPostcodeRangeAdminService
         .updatePostcodeRange(agencyId, postcodeRangeDTO);
 
@@ -356,6 +358,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<Void> deleteAgencyPostcodeRange(Long agencyId) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(agencyId);
     return new ResponseEntity<>(HttpStatus.OK);
   }
