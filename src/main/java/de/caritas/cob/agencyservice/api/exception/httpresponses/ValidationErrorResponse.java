@@ -16,6 +16,7 @@ public record ValidationErrorResponse(
       case INVALID_DEMOGRAPHICS_EMPTY_GENDERS,
           INVALID_DEMOGRAPHICS_EMPTY_AGE_FROM,
           INVALID_DEMOGRAPHICS_NULL_OBJECT -> "demographics";
+      case TENANT_INACTIVE, AGENCY_DELETED -> "active";
       case INVALID_OFFLINE_STATUS,
           AGENCY_CONTAINS_CONSULTANTS,
           AGENCY_CONTAINS_NO_CONSULTANTS -> "offline";
@@ -44,6 +45,8 @@ public record ValidationErrorResponse(
       case INVALID_DEMOGRAPHICS_EMPTY_AGE_FROM -> "The minimum age is required.";
       case INVALID_DEMOGRAPHICS_NULL_OBJECT -> "Demographic details are required.";
       case INVALID_OFFLINE_STATUS -> "The offline status is invalid.";
+      case TENANT_INACTIVE -> "The centre cannot be activated while its Träger is inactive.";
+      case AGENCY_DELETED -> "A deleted centre cannot be activated.";
       case AGENCY_CONTAINS_CONSULTANTS -> "The agency still contains consultants.";
       case AGENCY_CONTAINS_NO_CONSULTANTS -> "The agency contains no consultants.";
       case AGENCY_IS_ALREADY_TEAM_AGENCY -> "The agency is already a team agency.";

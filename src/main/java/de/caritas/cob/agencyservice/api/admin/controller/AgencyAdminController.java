@@ -66,6 +66,9 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import de.caritas.cob.agencyservice.api.admin.service.AgencyStatusService;
+import de.caritas.cob.agencyservice.api.model.AgencyStatusResponseDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyStatusUpdateDTO;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
@@ -92,6 +95,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyPostcodeRangeAdminService agencyPostcodeRangeAdminService;
   private final @NonNull AgencyAdminService agencyAdminService;
   private final @NonNull AgencyValidator agencyValidator;
+  private final @NonNull AgencyStatusService agencyStatusService;
   private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
   private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
   private final @NonNull DepartmentDetailsService departmentDetailsService;
@@ -266,6 +270,17 @@ public class AgencyAdminController implements AgencyadminApi {
     return authentication != null
         && authentication.getAuthorities().stream()
             .anyMatch(granted -> authority.equals(granted.getAuthority()));
+  }
+
+  @Override
+  public ResponseEntity<AgencyStatusResponseDTO> getAgencyStatus(@PathVariable Long agencyId) {
+    return ResponseEntity.ok(agencyStatusService.getStatus(agencyId));
+  }
+
+  @Override
+  public ResponseEntity<AgencyStatusResponseDTO> changeAgencyStatus(
+      @PathVariable Long agencyId, AgencyStatusUpdateDTO request) {
+    return ResponseEntity.ok(agencyStatusService.changeStatus(agencyId, request.getActive()));
   }
 
   /**

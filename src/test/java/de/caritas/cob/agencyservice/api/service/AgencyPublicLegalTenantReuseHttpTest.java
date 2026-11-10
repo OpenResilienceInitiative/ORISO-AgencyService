@@ -216,11 +216,12 @@ class AgencyPublicLegalTenantReuseHttpTest {
   @ValueSource(booleans = {false, true})
   @ExtendWith(OutputCaptureExtension.class)
   void failedLegalSourceIsReadOnceAndRetainsTheExistingGap(boolean main, CapturedOutput output) {
-    var agency = agency(9L, 7L, 3);
-    if (main) {
-      singleDomain(false);
-    }
-    server.expect(requestTo("http://tenant.test/tenant/public/" + (main ? "main" : "id/7")))
+    final var agency = agency(9L, 7L, 3);
+    singleDomain(false);
+    // The own tenant read also carries the Träger operational status, so it must succeed for the
+    // centre to be offered at all; only the separate MAIN legal source may fail into a gap.
+    expect("id/7", 7L, true, true, "OWN-7");
+    server.expect(requestTo("http://tenant.test/tenant/public/main"))
         .andRespond(withServerError().body("PRIVATE_PROVIDER_RESPONSE_SENTINEL"));
     var response = service(List.of(agency), false).getAgencies("12345", 1);
     assertThat(response).hasSize(1);
@@ -230,18 +231,40 @@ class AgencyPublicLegalTenantReuseHttpTest {
     server.verify();
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void nullLegalSourceIsReadOnceAndRetainsTheExistingGap(boolean main) {
-    var agency = agency(9L, 7L, 3);
-    if (main) {
-      singleDomain(false);
-    }
-    server.expect(requestTo("http://tenant.test/tenant/public/" + (main ? "main" : "id/7")))
+  @Test
+  @ExtendWith(OutputCaptureExtension.class)
+  void failedOwnTenantReadLeavesTraegerStatusUnknownAndOffersNoCentre(CapturedOutput output) {
+    server.expect(requestTo("http://tenant.test/tenant/public/id/7"))
+        .andRespond(withServerError().body("PRIVATE_PROVIDER_RESPONSE_SENTINEL"));
+    var service = service(List.of(agency(9L, 7L, 3)), false);
+    assertThatThrownBy(() -> service.getAgencies("12345", 1))
+        .isInstanceOf(ServiceUnavailableException.class);
+    assertThat(renderedLegal).isEmpty();
+    assertThat(output.getAll()).doesNotContain("PRIVATE_PROVIDER_RESPONSE_SENTINEL");
+    server.verify();
+  }
+
+  @Test
+  void nullLegalSourceIsReadOnceAndRetainsTheExistingGap() {
+    final var agency = agency(9L, 7L, 3);
+    singleDomain(false);
+    expect("id/7", 7L, true, true, "OWN-7");
+    server.expect(requestTo("http://tenant.test/tenant/public/main"))
         .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
     assertThat(service(List.of(agency), false).getAgencies("12345", 1)).hasSize(1);
     assertThat(renderedLegal).hasSize(6);
     assertThat(renderedLegal.values()).allMatch(value -> !value.isPresent());
+    server.verify();
+  }
+
+  @Test
+  void emptyOwnTenantReadIsMissingStatusAuthorityAndOffersNoCentre() {
+    server.expect(requestTo("http://tenant.test/tenant/public/id/7"))
+        .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
+    var service = service(List.of(agency(9L, 7L, 3)), false);
+    assertThatThrownBy(() -> service.getAgencies("12345", 1))
+        .isInstanceOf(TenantService.MissingOperationalTenantException.class);
+    assertThat(renderedLegal).isEmpty();
     server.verify();
   }
 
