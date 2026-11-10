@@ -7,6 +7,9 @@ import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerF
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -113,6 +116,23 @@ public class TenantService {
 
   private ServiceUnavailableException settingsUnavailable() {
     return new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
+  }
+
+  /** Existing public owner API accepts at most 100 IDs per request. */
+  public List<RestrictedTenantDTO> getRestrictedTenantDataByTenantIds(
+      Collection<Long> tenantIds) {
+    var ids = tenantIds.stream().distinct().toList();
+    var result = new ArrayList<RestrictedTenantDTO>();
+    var api = tenantServiceApiControllerFactory.createControllerApi();
+    for (int offset = 0; offset < ids.size(); offset += 100) {
+      var batch = api.getRestrictedTenantDataByTenantIds(
+          ids.subList(offset, Math.min(offset + 100, ids.size())));
+      if (batch == null) {
+        throw new IllegalStateException("Tenant owner returned no response");
+      }
+      result.addAll(batch);
+    }
+    return List.copyOf(result);
   }
 
   @Cacheable(cacheNames = CacheManagerConfig.TENANT_CACHE, key = "'single-tenant'")
