@@ -39,9 +39,9 @@ import java.util.ArrayList;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.function.Function;
 import lombok.NonNull;
@@ -160,12 +160,15 @@ public class AgencyService {
     var agencies = findAgencies(postCode, getConsultingTypeIdForSearch(consultingTypeId), topicId,
         age, gender, counsellingRelation);
     Collections.shuffle(agencies);
-    var agencyResponseDTOs = convertToFullAgencyResponses(agencies);
+    var ownTenant = requestTenantLookup();
+    var mainTenant = requestMainTenantLookup();
+    var agencyResponseDTOs = convertToFullAgencyResponses(
+        operationalAgencies(agencies, ownTenant), ownTenant, mainTenant);
 
     var mutableResponseDTO = Lists.newArrayList(agencyResponseDTOs);
 
     if (agencyResponseDTOs.isEmpty()) {
-      addWhiteSpotAgency(consultingTypeSettings, mutableResponseDTO);
+      addWhiteSpotAgency(consultingTypeSettings, mutableResponseDTO, ownTenant, mainTenant);
     }
 
     return mutableResponseDTO;
@@ -174,11 +177,21 @@ public class AgencyService {
   public List<FullAgencyResponseDTO> getAgencies(String postCode, Integer topicId) {
 
     var agencies = findAgenciesForCurrentTenant(postCode, topicId);
-    return convertToFullAgencyResponses(agencies);
+    var ownTenant = requestTenantLookup();
+    var mainTenant = requestMainTenantLookup();
+    return convertToFullAgencyResponses(
+        operationalAgencies(agencies, ownTenant), ownTenant, mainTenant);
   }
 
   public List<Integer> getAgenciesTopics() {
-    return agencyRepository.findAllAgenciesTopics(TenantContext.getCurrentTenant());
+    Map<Long, Boolean> tenantInactive = new HashMap<>();
+    return agencyRepository.findAvailableAgencyTopics().stream()
+        .filter(topic -> !tenantInactive.computeIfAbsent(
+            topic.getTenantId(), tenantService::isTenantInactive))
+        .map(topic -> Math.toIntExact(topic.getTopicId()))
+        .distinct()
+        .sorted()
+        .toList();
   }
 
   @Transactional
@@ -426,7 +439,8 @@ public class AgencyService {
   }
 
   private void addWhiteSpotAgency(ExtendedConsultingTypeResponseDTO consultingTypeSettings,
-      List<FullAgencyResponseDTO> agencyResponseDTOs) {
+      List<FullAgencyResponseDTO> agencyResponseDTOs,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
 
     var whiteSpot = consultingTypeSettings.getWhiteSpot();
     if (nonNull(whiteSpot) && nonNull(whiteSpot.getWhiteSpotAgencyId()) && isTrue(
@@ -434,13 +448,38 @@ public class AgencyService {
       try {
         getAgencyRepositoryForSearch().findByIdAndDeleteDateNull(
             Long.valueOf(whiteSpot.getWhiteSpotAgencyId()))
-            .ifPresent(agency -> agencyResponseDTOs.addAll(
-                convertToFullAgencyResponses(List.of(agency))));
+            .filter(agency -> !agency.isOffline() && !isTenantInactive(agency, ownTenant))
+            .ifPresent(agency -> agencyResponseDTOs.add(
+                convertToFullAgencyResponseDTO(agency, ownTenant, mainTenant)));
       } catch (NumberFormatException nfEx) {
         throw new InternalServerErrorException(LogService::logNumberFormatException,
             "Invalid white spot agency id");
       }
     }
+  }
+
+  private List<Agency> operationalAgencies(
+      List<Agency> agencies, Function<Agency, RestrictedTenantDTO> ownTenant) {
+    return agencies.stream()
+        .filter(agency -> !agency.isOffline())
+        .filter(agency -> !isTenantInactive(agency, ownTenant))
+        .toList();
+  }
+
+  /**
+   * Träger operational status comes from the same fresh, per-request tenant read that supplies
+   * feature and legal authority. Unknown status never implies active: a failed read surfaces as
+   * the lookup's own failure, and a read without tenant data is missing authority.
+   */
+  private boolean isTenantInactive(Agency agency, Function<Agency, RestrictedTenantDTO> ownTenant) {
+    if (agency.getTenantId() == null) {
+      return false;
+    }
+    var tenant = ownTenant.apply(agency);
+    if (tenant == null) {
+      throw new TenantService.MissingOperationalTenantException();
+    }
+    return Boolean.FALSE.equals(tenant.getActive());
   }
 
   private RestrictedTenantDTO getTenantDataRelevantForFeatureToggles(Agency agency) {
@@ -517,8 +556,10 @@ public class AgencyService {
         continue;
       }
       try {
+        var tenantData = ownTenant.apply(agency);
+        boolean offline = agency.isOffline() || isTenantInactive(agency, ownTenant);
         available.add(convertToAgencyResponseDTO(
-            agency, ownTenant.apply(agency), ownTenant, mainTenant));
+            agency, offline, tenantData, ownTenant, mainTenant));
       } catch (ServiceUnavailableException exception) {
         failedPolicy = exception;
       }
@@ -529,9 +570,8 @@ public class AgencyService {
     return List.copyOf(available);
   }
 
-  private List<FullAgencyResponseDTO> convertToFullAgencyResponses(List<Agency> agencies) {
-    var ownTenant = requestTenantLookup();
-    var mainTenant = requestMainTenantLookup();
+  private List<FullAgencyResponseDTO> convertToFullAgencyResponses(List<Agency> agencies,
+      Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return agencies.stream().map(agency ->
         convertToFullAgencyResponseDTO(agency, ownTenant, mainTenant)).toList();
   }
@@ -540,7 +580,8 @@ public class AgencyService {
     return !multitenancy || (agency.getTenantId() != null && agency.getTenantId() > 0);
   }
 
-  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, RestrictedTenantDTO tenantData,
+  private AgencyResponseDTO convertToAgencyResponseDTO(Agency agency, boolean offline,
+      RestrictedTenantDTO tenantData,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     String renderedAgencySpecificPrivacy =
         getRenderedAgencySpecificPrivacy(agency, tenantData, ownTenant, mainTenant);
@@ -551,7 +592,7 @@ public class AgencyService {
         .city(agency.getCity())
         .description(agency.getDescription())
         .teamAgency(agency.isTeamAgency())
-        .offline(agency.isOffline())
+        .offline(offline)
         .tenantId(agency.getTenantId())
         .consultingType(agency.getConsultingTypeId())
         .agencySpecificPrivacy(renderedAgencySpecificPrivacy)

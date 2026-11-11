@@ -101,6 +101,16 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
       nativeQuery = true)
   List<Integer> findAllAgenciesTopics(Long tenantId);
 
+  interface AvailableTopic {
+    Long getTenantId();
+
+    Long getTopicId();
+  }
+
+  @Query("select distinct a.tenantId as tenantId, t.topicId as topicId from Agency a "
+      + "join a.agencyTopics t where a.offline = false and a.deleteDate is null")
+  List<AvailableTopic> findAvailableAgencyTopics();
+
   Optional<Agency> findByIdAndDeleteDateNull(Long agencyId);
 
   @EntityGraph(attributePaths = {"agencyTopics", "agencyTopics.dpp", "agencyTopics.imprint"})
@@ -122,6 +132,14 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
   List<Agency> findByTenantIdAndDeleteDateNullOrderByIdAsc(Long tenantId);
 
   Agency save(Agency agency);
+
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query("UPDATE Agency a SET a.offline = :offline, a.updateDate = :updateDate "
+      + "WHERE a.id = :agencyId")
+  int updateOfflineStatus(
+      @Param("agencyId") Long agencyId,
+      @Param("offline") boolean offline,
+      @Param("updateDate") java.time.LocalDateTime updateDate);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("UPDATE Agency a SET a.matrixUserId = :matrixUserId, a.matrixPassword = :matrixPassword WHERE a.id = :agencyId")

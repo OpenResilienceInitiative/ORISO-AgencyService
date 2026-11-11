@@ -71,6 +71,12 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- The OWASP HTML sanitizer brings Guava 30.1-jre. Keep its API while fixing CVE-2026-102554. -->
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>33.7.2-jre</version>
+      </dependency>
       <!-- Spring Boot 4.0.7 manages 5.3.6, which is affected by CVE-2026-54399
            and CVE-2026-54428. Keep both transport modules on the fixed release. -->
       <dependency>

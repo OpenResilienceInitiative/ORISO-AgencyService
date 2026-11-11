@@ -7,6 +7,9 @@ import de.caritas.cob.agencyservice.config.apiclient.TenantServiceApiControllerF
 import de.caritas.cob.agencyservice.tenantservice.generated.web.TenantControllerApi;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPermissionPolicies;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -115,10 +118,49 @@ public class TenantService {
     return new ServiceUnavailableException(HttpStatusExceptionReason.SETTINGS_UNAVAILABLE);
   }
 
+  /** Existing public owner API accepts at most 100 IDs per request. */
+  public List<RestrictedTenantDTO> getRestrictedTenantDataByTenantIds(
+      Collection<Long> tenantIds) {
+    var ids = tenantIds.stream().distinct().toList();
+    var result = new ArrayList<RestrictedTenantDTO>();
+    var api = tenantServiceApiControllerFactory.createControllerApi();
+    for (int offset = 0; offset < ids.size(); offset += 100) {
+      var batch = api.getRestrictedTenantDataByTenantIds(
+          ids.subList(offset, Math.min(offset + 100, ids.size())));
+      if (batch == null) {
+        throw new IllegalStateException("Tenant owner returned no response");
+      }
+      result.addAll(batch);
+    }
+    return List.copyOf(result);
+  }
+
   @Cacheable(cacheNames = CacheManagerConfig.TENANT_CACHE, key = "'single-tenant'")
   public RestrictedTenantDTO getRestrictedTenantDataForSingleTenant() {
     TenantControllerApi controllerApi = tenantServiceApiControllerFactory.createControllerApi();
     return controllerApi.getRestrictedSingleTenancyTenantData();
+  }
+
+  /** Operational status is read fresh so a pause or reactivation is not delayed by settings caches. */
+  public boolean isTenantInactive(Long tenantId) {
+    if (tenantId == null) {
+      return false;
+    }
+    var tenant = tenantServiceApiControllerFactory.createControllerApi()
+        .getRestrictedTenantDataByTenantId(tenantId);
+    if (tenant == null) {
+      throw new MissingOperationalTenantException();
+    }
+    return Boolean.FALSE.equals(tenant.getActive());
+  }
+
+  /** A completed remote read without metadata is unavailable authority, not a programming fault. */
+  public static class MissingOperationalTenantException extends RestClientException {
+    private static final long serialVersionUID = 1L;
+
+    public MissingOperationalTenantException() {
+      super("Tenant operational status is unavailable");
+    }
   }
 
   public RestrictedTenantDTO getMainTenant() {

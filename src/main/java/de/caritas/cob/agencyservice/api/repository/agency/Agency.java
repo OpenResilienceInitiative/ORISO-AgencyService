@@ -39,6 +39,7 @@ import org.hibernate.annotations.ParamDef;
 import org.hibernate.type.NumericBooleanConverter;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "agency")
 @AllArgsConstructor
 @RequiredArgsConstructor
