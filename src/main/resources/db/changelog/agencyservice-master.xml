@@ -117,4 +117,8 @@
   -->
 
   <include file="db/changelog/changeset/0040_task_reservation_proof/0040_changeSet.xml"/>
+
+  <!-- OBP 2.1 #130: finished agency purges wait here until UserService pulls them into its
+       deletion log (RUNTIME task actor, deletion-audit-read). Ids and outcome only. -->
+  <include file="db/changelog/changeset/0041_deletion_audit_outbox/0041_changeSet.xml"/>
 </databaseChangeLog>

@@ -156,9 +156,27 @@ components:
         enforcedPermissionToggles:
           $ref: '#/components/schemas/AgencyAdminAllowedPermissionToggles'
 
+    AgencyPermissionPolicy:
+      type: object
+      required: [value, mode, inherited]
+      properties:
+        value:
+          type: boolean
+        mode:
+          type: string
+          enum: [ENFORCED, SUGGESTED]
+        inherited:
+          type: boolean
+
     Settings:
       type: object
       properties:
+        permissionPolicies:
+          type: object
+          readOnly: true
+          description: Effective feature policies resolved from this agency's Traeger and supported agency overrides. Account and handover policies remain Traeger-owned. Never written as agency overrides.
+          additionalProperties:
+            $ref: '#/components/schemas/AgencyPermissionPolicy'
         counsellorTopicPermission:
           type: string
           enum: [NONE, SELECT_EXISTING, CREATE]

@@ -29,7 +29,11 @@ public class TaskServiceIdentity {
           "SMTP_SYNC",
           "smtp-sync",
           "RUNTIME_POLICY",
-          "runtime-policy");
+          "runtime-policy",
+          "DELETION_AUDIT_READ",
+          "deletion-audit-read");
+  /** Purposes introduced with the five actors; they have no legacy credential to fall back to. */
+  private static final Set<String> GROUPED_ONLY = Set.of("DELETION_AUDIT_READ");
   private static final Set<String> FORBIDDEN =
       Set.of(
           "technical",
@@ -61,6 +65,7 @@ public class TaskServiceIdentity {
       String task = name.trim();
       if (!task.isEmpty()
           && (!ROLES.containsKey(task)
+              || (!grouped && GROUPED_ONLY.contains(task))
               || configured(task, "CLIENT_ID").isBlank()
               || configured(task, "SERVICE_SUBJECT").isBlank()
               || environment.getProperty("TASK_IDENTITY_AUDIENCE", "").isBlank())) {
@@ -79,6 +84,7 @@ public class TaskServiceIdentity {
       }
     } else {
       bindingNames.addAll(ROLES.keySet());
+      bindingNames.removeAll(GROUPED_ONLY);
     }
     for (String binding : bindingNames) {
       String client = bindingValue(binding, "CLIENT_ID");
@@ -100,6 +106,7 @@ public class TaskServiceIdentity {
     String role = ROLES.get(task);
     if (role == null
         || (grouped && !requiredTasks.contains(task))
+        || (!grouped && GROUPED_ONLY.contains(task))
         || authentication == null
         || !authentication.isAuthenticated()
         || !(authentication.getPrincipal() instanceof Jwt jwt)) {

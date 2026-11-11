@@ -142,6 +142,88 @@ class TaskServiceIdentityTest {
     assertThat(identity.allows(caller, "INVITE_RESERVATIONS")).isFalse();
   }
 
+  private static final List<String> RUNTIME_ROLES =
+      List.of(
+          "runtime-policy",
+          "matrix-agency",
+          "matrix-agency-provision",
+          "appointment-sync",
+          "appointment-participant-cleanup",
+          "deletion-audit-read");
+
+  @Test
+  void groupedRuntimeReadsTheDeletionAuditOutboxOnlyWithItsCompleteRoleUnion() {
+    var identity = new TaskServiceIdentity(runtimeBindings("DELETION_AUDIT_READ"));
+
+    assertThat(identity.allows(runtimeCaller(RUNTIME_ROLES, "receiver"), "DELETION_AUDIT_READ"))
+        .isTrue();
+    assertThat(
+            identity.allows(
+                runtimeCaller(RUNTIME_ROLES.subList(0, 5), "receiver"), "DELETION_AUDIT_READ"))
+        .isFalse();
+    assertThat(identity.allows(runtimeCaller(RUNTIME_ROLES, "other"), "DELETION_AUDIT_READ"))
+        .isFalse();
+    assertThat(
+            identity.allows(
+                runtimeCaller(List.of("deletion-audit-read"), "receiver"), "DELETION_AUDIT_READ"))
+        .isFalse();
+  }
+
+  @Test
+  void deletionAuditReadMustBeDeclaredAtTheReceiver() {
+    var identity = new TaskServiceIdentity(runtimeBindings("MATRIX_AGENCY"));
+
+    assertThat(identity.allows(runtimeCaller(RUNTIME_ROLES, "receiver"), "DELETION_AUDIT_READ"))
+        .isFalse();
+    assertThat(identity.allows(runtimeCaller(RUNTIME_ROLES, "receiver"), "MATRIX_AGENCY"))
+        .isTrue();
+  }
+
+  @Test
+  void legacyModeNeverAuthorizesTheDeletionAuditOutbox() {
+    var environment =
+        new MockEnvironment()
+            .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
+            .withProperty("IDENTITY_DELETION_AUDIT_READ_CLIENT_ID", "backend-runtime")
+            .withProperty("IDENTITY_DELETION_AUDIT_READ_SERVICE_SUBJECT", "runtime-subject");
+    var identity = new TaskServiceIdentity(environment);
+
+    assertThat(
+            identity.allows(
+                runtimeCaller(List.of("deletion-audit-read"), "receiver"), "DELETION_AUDIT_READ"))
+        .isFalse();
+    assertThat(identity.allows(runtimeCaller(RUNTIME_ROLES, "receiver"), "DELETION_AUDIT_READ"))
+        .isFalse();
+    assertThatThrownBy(
+            () ->
+                new TaskServiceIdentity(
+                    environment.withProperty(
+                        "TASK_IDENTITY_REQUIRED_TASKS", "DELETION_AUDIT_READ")))
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  private MockEnvironment runtimeBindings(String purposes) {
+    return new MockEnvironment()
+        .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
+        .withProperty("TASK_IDENTITY_REQUIRED_TASKS", purposes)
+        .withProperty("TASK_IDENTITY_AUDIENCE", "receiver")
+        .withProperty("IDENTITY_RUNTIME_CLIENT_ID", "backend-runtime")
+        .withProperty("IDENTITY_RUNTIME_SERVICE_SUBJECT", "runtime-subject");
+  }
+
+  private JwtAuthenticationToken runtimeCaller(List<String> roles, String audience) {
+    return new JwtAuthenticationToken(
+        Jwt.withTokenValue("fixture")
+            .header("alg", "none")
+            .subject("runtime-subject")
+            .claim("azp", "backend-runtime")
+            .audience(List.of(audience))
+            .expiresAt(Instant.now().plusSeconds(60))
+            .claim("realm_access", Map.of("roles", roles))
+            .build(),
+        List.of());
+  }
+
   private MockEnvironment groupedBindings(String purposes) {
     return new MockEnvironment()
         .withProperty("TASK_IDENTITY_MODEL", "FIVE_ACTORS")
