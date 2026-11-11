@@ -49,10 +49,10 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -98,13 +98,16 @@ public class AgencyAdminControllerAuthorizationIT {
 
   @Before
   public void setUpJwtDecoder() {
-    Jwt agencyAdminJwt =
-        Jwt.withTokenValue("test-token")
-            .header("alg", "none")
-            .claim("sub", "agency-admin")
-            .claim("realm_access", Map.of("roles", List.of("agency-admin")))
-            .build();
-    when(jwtDecoder.decode(any(String.class))).thenReturn(agencyAdminJwt);
+    when(jwtDecoder.decode(any(String.class))).thenReturn(agencyAdminJwt());
+  }
+
+  private static Jwt agencyAdminJwt() {
+    return Jwt.withTokenValue("test-token")
+        .header("alg", "none")
+        .subject("agency-admin")
+        .claim("username", "agency-admin")
+        .claim("realm_access", Map.of("roles", List.of("agency-admin")))
+        .build();
   }
 
   @Test
@@ -480,9 +483,7 @@ public class AgencyAdminControllerAuthorizationIT {
 
   private static RequestPostProcessor agencyAdminCookieAuth() {
     return authentication(
-        new UsernamePasswordAuthenticationToken(
-            "agency-admin",
-            "n/a",
-            List.of(new SimpleGrantedAuthority("AUTHORIZATION_AGENCY_ADMIN"))));
+        new JwtAuthenticationToken(
+            agencyAdminJwt(), List.of(new SimpleGrantedAuthority("AUTHORIZATION_AGENCY_ADMIN"))));
   }
 }

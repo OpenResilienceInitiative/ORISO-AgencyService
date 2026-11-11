@@ -164,6 +164,9 @@ public class AgencyStatusHttpIT {
   public void unassignedCentreAdminCannotChangeTheSavedStatus() throws Exception {
     when(userClient.getAdminAgencies("centre-admin")).thenReturn(List.of());
     mvc.perform(update(883L, true)).andExpect(status().is4xxClientError());
+    // An unassigned restricted admin may not read another centre's details either.
+    mvc.perform(read(883L)).andExpect(status().isForbidden());
+    authenticate("agency-admin", 1L);
     mvc.perform(read(883L)).andExpect(status().isOk())
         .andExpect(jsonPath("$._embedded.offline").value(false));
   }
