@@ -29,6 +29,7 @@ class AgencyAdminControllerDepartmentDetailsTest {
   @Mock private AgencyAdminSearchService agencyAdminSearchService;
   @Mock private AgencyPostcodeRangeAdminService agencyPostcodeRangeAdminService;
   @Mock private AgencyAdminService agencyAdminService;
+  @Mock private de.caritas.cob.agencyservice.api.admin.service.AgencyStatusService agencyStatusService;
   @Mock private AgencyValidator agencyValidator;
   @Mock private AgencyAdminControlsFacade agencyAdminControlsFacade;
   @Mock private DepartmentDataProtectionService departmentDataProtectionService;
@@ -44,6 +45,8 @@ class AgencyAdminControllerDepartmentDetailsTest {
       agencyLegalProposalFacade;
 
 
+  @Mock private de.caritas.cob.agencyservice.api.admin.service.legal.LegalAdminAccessGuard
+      legalAdminAccessGuard;
   @InjectMocks private AgencyAdminController controller;
 
   @Test

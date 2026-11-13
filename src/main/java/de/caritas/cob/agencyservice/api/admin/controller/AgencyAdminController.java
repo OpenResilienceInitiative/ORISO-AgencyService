@@ -15,6 +15,7 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.DepartmentImprintSer
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftView;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalProposalFacade;
+import de.caritas.cob.agencyservice.api.admin.service.legal.LegalAdminAccessGuard;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalDraftArchiveDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptRequestDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptionDTO;
@@ -66,6 +67,9 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import de.caritas.cob.agencyservice.api.admin.service.AgencyStatusService;
+import de.caritas.cob.agencyservice.api.model.AgencyStatusResponseDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyStatusUpdateDTO;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
@@ -92,6 +96,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyPostcodeRangeAdminService agencyPostcodeRangeAdminService;
   private final @NonNull AgencyAdminService agencyAdminService;
   private final @NonNull AgencyValidator agencyValidator;
+  private final @NonNull AgencyStatusService agencyStatusService;
   private final @NonNull AgencyAdminControlsFacade agencyAdminControlsFacade;
   private final @NonNull DepartmentDataProtectionService departmentDataProtectionService;
   private final @NonNull DepartmentDetailsService departmentDetailsService;
@@ -100,6 +105,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull LegalTextVersionAdminService legalTextVersionAdminService;
   private final @NonNull AgencyLegalDraftService agencyLegalDraftService;
   private final @NonNull AgencyLegalProposalFacade agencyLegalProposalFacade;
+  private final @NonNull LegalAdminAccessGuard legalAdminAccessGuard;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
 
   /**
@@ -121,6 +127,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<AgencyAdminFullResponseDTO> getAgency(@PathVariable Long agencyId) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     return ResponseEntity.ok(this.agencyAdminService.findAgency(agencyId));
   }
 
@@ -268,6 +275,17 @@ public class AgencyAdminController implements AgencyadminApi {
             .anyMatch(granted -> authority.equals(granted.getAuthority()));
   }
 
+  @Override
+  public ResponseEntity<AgencyStatusResponseDTO> getAgencyStatus(@PathVariable Long agencyId) {
+    return ResponseEntity.ok(agencyStatusService.getStatus(agencyId));
+  }
+
+  @Override
+  public ResponseEntity<AgencyStatusResponseDTO> changeAgencyStatus(
+      @PathVariable Long agencyId, AgencyStatusUpdateDTO request) {
+    return ResponseEntity.ok(agencyStatusService.changeStatus(agencyId, request.getActive()));
+  }
+
   /**
    * Entry point to update a specific agency.
    *
@@ -293,6 +311,7 @@ public class AgencyAdminController implements AgencyadminApi {
    * @return a {@link ResponseEntity} with the status code.
    */
   @Override
+  @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
   public ResponseEntity<Void> deleteAgency(@PathVariable Long agencyId) {
     this.agencyAdminService.deleteAgency(agencyId);
     return new ResponseEntity<>(HttpStatus.OK);
@@ -307,6 +326,7 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> getAgencyPostcodeRanges(
       @PathVariable Long agencyId) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     var postcodeRangesForAgency = this.agencyPostcodeRangeAdminService
         .findPostcodeRangesForAgency(agencyId);
     return ResponseEntity.ok(postcodeRangesForAgency);
@@ -322,7 +342,7 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> createAgencyPostcodeRange(
       @PathVariable Long agencyId, PostcodeRangeDTO postcodeRangeDTO) {
-
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     return new ResponseEntity<>(
         agencyPostcodeRangeAdminService.createPostcodeRanges(agencyId, postcodeRangeDTO),
         HttpStatus.CREATED);
@@ -338,6 +358,7 @@ public class AgencyAdminController implements AgencyadminApi {
   @Override
   public ResponseEntity<AgencyPostcodeRangeResponseDTO> updateAgencyPostcodeRange(
       @PathVariable Long agencyId, PostcodeRangeDTO postcodeRangeDTO) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     var rangeResponseDTO = agencyPostcodeRangeAdminService
         .updatePostcodeRange(agencyId, postcodeRangeDTO);
 
@@ -352,6 +373,7 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   public ResponseEntity<Void> deleteAgencyPostcodeRange(Long agencyId) {
+    legalAdminAccessGuard.assertRestrictedAdminOwnsAgency(agencyId);
     this.agencyPostcodeRangeAdminService.deleteAgencyPostcodeRange(agencyId);
     return new ResponseEntity<>(HttpStatus.OK);
   }

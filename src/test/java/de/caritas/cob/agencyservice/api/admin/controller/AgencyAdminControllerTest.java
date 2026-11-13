@@ -48,6 +48,7 @@ import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.service.TenantHeaderSupplier;
 import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSupplier;
+import de.caritas.cob.agencyservice.api.util.AuthenticatedUser;
 import de.caritas.cob.agencyservice.config.apiclient.UserAdminServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.config.security.AuthorisationService;
 import de.caritas.cob.agencyservice.config.security.JwtAuthConverter;
@@ -90,6 +91,8 @@ public class AgencyAdminControllerTest {
   public static final int AGE_TO = 100;
   @Autowired
   private MockMvc mvc;
+  @MockitoBean
+  private AuthenticatedUser authenticatedUser;
   @MockitoBean
   private AgencyAdminService agencyAdminService;
   @MockitoBean
@@ -538,6 +541,7 @@ public class AgencyAdminControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "AUTHORIZATION_AGENCY_ADMIN")
   public void deleteAgency_Should_returnOk_When_AllParamsAreValid() throws Exception {
     this.mvc
         .perform(delete(UPDATE_DELETE_AGENCY_PATH).contentType(MediaType.APPLICATION_JSON))
