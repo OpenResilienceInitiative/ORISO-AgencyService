@@ -10,7 +10,10 @@ def test_httpcore_modules_are_pinned_to_the_fixed_release():
     pom = ET.parse(ROOT / "pom.xml").getroot()
     properties = pom.find("m:properties", MAVEN)
     assert properties is not None
-    assert properties.findtext("m:httpcore5.version", namespaces=MAVEN) == "5.4.3"
+    # 5.4.3 is the first fixed release; later patch bumps stay acceptable.
+    version = properties.findtext("m:httpcore5.version", namespaces=MAVEN)
+    assert version is not None
+    assert tuple(int(part) for part in version.split(".")) >= (5, 4, 3)
 
     managed_versions = {
         (
