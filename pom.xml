@@ -303,6 +303,12 @@
           <groupId>org.liquibase</groupId>
           <artifactId>liquibase-core</artifactId>
         </exclusion>
+        <!-- Since 4.3x the plugin pulls liquibase-commercial, which shades a vulnerable
+             jackson 2.18.3 into the image; the service only needs liquibase-core. -->
+        <exclusion>
+          <groupId>org.liquibase</groupId>
+          <artifactId>liquibase-commercial</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
 
