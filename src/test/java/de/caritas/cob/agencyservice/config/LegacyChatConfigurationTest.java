@@ -32,7 +32,7 @@ class LegacyChatConfigurationTest {
     assertTrue(
         buildAction.contains("aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"));
     assertTrue(
-        mainWorkflow.contains("actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6"));
+        mainWorkflow.contains("actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6"));
     assertTrue(mainWorkflow.contains("subject-digest: ${{ steps.image.outputs.digest }}"));
 
     // The vulnerability scan has to sit ahead of the publish. Scanning after
