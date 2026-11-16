@@ -188,6 +188,15 @@ components:
             without this key leaves the stored value unchanged. The prefill is done by the Admin
             UI only: an invite that omits topicPermission is stored by the UserService as
             SELECT_EXISTING, not as this agency default.
+        featureLiveChatFurtherCounsellingEnabled:
+          type: boolean
+          description: >-
+            Agency-owned switch "Weitere Beratung im Live-Chat empfehlen" (ORISO-Frontend#2251).
+            true lets the counsellor who accepted an anonymous live chat of this agency recommend
+            further counselling. Absent or null means off. Served as stored, never cascaded from
+            the Traeger or the platform and never governed by a tenant permission policy. Only
+            Traeger and platform admins may change it: an update without this key, or any update
+            by a restricted agency admin, keeps the stored value.
         featureStatisticsEnabled:
           type: boolean
           example: false

@@ -48,6 +48,11 @@ public final class EffectiveAgencySettingsResolver {
           "featureSystemNotificationEmailsEnabled",
           "showAskerProfile",
           "isVideoCallAllowed");
+  /**
+   * Agency-owned flags without a Träger counterpart or tenant permission policy (ORISO-Frontend#2251).
+   * They are served as stored and authorized by role in the agency update, not by a policy.
+   */
+  static final Set<String> AGENCY_OWNED = Set.of("featureLiveChatFurtherCounsellingEnabled");
   private static final Set<String> GROUP_CHAT_FORMATS =
       Set.of("featureInternalGroupChatEnabled", "featureSelfHelpGroupsEnabled");
 
@@ -223,7 +228,7 @@ public final class EffectiveAgencySettingsResolver {
         continue;
       }
       String name = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
-      if (NOT_CASCADED.contains(name)) {
+      if (NOT_CASCADED.contains(name) || AGENCY_OWNED.contains(name)) {
         continue;
       }
       bindings.add(new FlagBinding(name, traegerGetter, agencyGetter, agencySetter));

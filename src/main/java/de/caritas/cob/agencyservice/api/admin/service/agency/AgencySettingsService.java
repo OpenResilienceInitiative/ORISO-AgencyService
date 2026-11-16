@@ -100,6 +100,22 @@ public class AgencySettingsService {
     return update;
   }
 
+  /**
+   * "Weitere Beratung im Live-Chat empfehlen" (ORISO-Frontend#2251) belongs to Träger and platform
+   * admins (both hold the tenant-admin role). An update that omits the key, or any update by
+   * another admin such as a restricted agency admin, keeps the stored value (null stays null,
+   * which means off).
+   */
+  public Settings keepStoredLiveChatFurtherCounselling(
+      Settings update, String storedSettingsJson, boolean callerMayChange) {
+    if (update != null
+        && (!callerMayChange || update.getFeatureLiveChatFurtherCounsellingEnabled() == null)) {
+      update.setFeatureLiveChatFurtherCounsellingEnabled(
+          storedSettings(storedSettingsJson).getFeatureLiveChatFurtherCounsellingEnabled());
+    }
+    return update;
+  }
+
   public String toSettingsJson(Settings settings) {
     if (settings == null) {
       return null;
