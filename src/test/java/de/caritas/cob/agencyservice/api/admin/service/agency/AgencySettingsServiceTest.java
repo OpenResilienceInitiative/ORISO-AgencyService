@@ -204,6 +204,65 @@ class AgencySettingsServiceTest {
     assertThat(agencyAdminControlsAbsent(parsed)).isTrue();
   }
 
+  @Test
+  void toSettings_Should_ServeLiveChatFurtherCounsellingAsStored_When_KeyIsPresent() {
+    assertThat(agencySettingsService
+        .toSettings("{\"featureLiveChatFurtherCounsellingEnabled\":true}")
+        .getFeatureLiveChatFurtherCounsellingEnabled()).isTrue();
+  }
+
+  @Test
+  void toSettings_Should_LeaveLiveChatFurtherCounsellingUnset_When_KeyIsAbsent() {
+    // null means off for every consumer; no read-time default is written.
+    assertThat(agencySettingsService.toSettings("{}").getFeatureLiveChatFurtherCounsellingEnabled())
+        .isNull();
+  }
+
+  @Test
+  void keepStoredLiveChatFurtherCounselling_Should_KeepStoredValue_When_UpdateOmitsTheKey() {
+    var update = new Settings().featureStatisticsEnabled(true);
+
+    var result = agencySettingsService.keepStoredLiveChatFurtherCounselling(
+        update, "{\"featureLiveChatFurtherCounsellingEnabled\":true}", true);
+
+    assertThat(result.getFeatureLiveChatFurtherCounsellingEnabled()).isTrue();
+  }
+
+  @Test
+  void keepStoredLiveChatFurtherCounselling_Should_KeepStoredValue_When_CallerIsNotTenantAdmin() {
+    var update = new Settings().featureLiveChatFurtherCounsellingEnabled(true);
+
+    var result = agencySettingsService.keepStoredLiveChatFurtherCounselling(
+        update, "{\"featureLiveChatFurtherCounsellingEnabled\":false}", false);
+
+    assertThat(result.getFeatureLiveChatFurtherCounsellingEnabled()).isFalse();
+  }
+
+  @Test
+  void keepStoredLiveChatFurtherCounselling_Should_KeepUnsetValue_When_RestrictedCallerSendsIt() {
+    var update = new Settings().featureLiveChatFurtherCounsellingEnabled(true);
+
+    var result = agencySettingsService.keepStoredLiveChatFurtherCounselling(update, "{}", false);
+
+    assertThat(result.getFeatureLiveChatFurtherCounsellingEnabled()).isNull();
+  }
+
+  @Test
+  void keepStoredLiveChatFurtherCounselling_Should_ApplyRequestedValue_When_CallerIsTenantAdmin() {
+    var update = new Settings().featureLiveChatFurtherCounsellingEnabled(true);
+
+    var result = agencySettingsService.keepStoredLiveChatFurtherCounselling(
+        update, "{\"featureLiveChatFurtherCounsellingEnabled\":false}", true);
+
+    assertThat(result.getFeatureLiveChatFurtherCounsellingEnabled()).isTrue();
+  }
+
+  @Test
+  void keepStoredLiveChatFurtherCounselling_Should_ReturnNull_When_UpdateIsNull() {
+    assertThat(agencySettingsService.keepStoredLiveChatFurtherCounselling(null, "{}", true))
+        .isNull();
+  }
+
   private Settings buildSettingsWithControls() {
     return new Settings()
         .featureStatisticsEnabled(true)
