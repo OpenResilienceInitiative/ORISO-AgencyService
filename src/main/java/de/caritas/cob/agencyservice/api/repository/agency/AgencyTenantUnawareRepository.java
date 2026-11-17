@@ -1,6 +1,7 @@
 package de.caritas.cob.agencyservice.api.repository.agency;
 
 import de.caritas.cob.agencyservice.api.repository.TenantUnaware;
+import de.caritas.cob.agencyservice.api.statistics.AgencyStatisticsNameDTO;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -48,4 +49,10 @@ public interface AgencyTenantUnawareRepository extends JpaRepository<Agency, Lon
   List<Agency> findByConsultingTypeId(int consultingTypeId);
 
   List<Agency> findByTenantId(Long tenantId);
+
+  /** Id, name and Träger of every non-deleted agency of every tenant, one query, sorted by name. */
+  @Query("SELECT new de.caritas.cob.agencyservice.api.statistics.AgencyStatisticsNameDTO("
+      + "a.id, a.name, a.tenantId) FROM Agency a WHERE a.deleteDate IS NULL "
+      + "ORDER BY a.name ASC, a.id ASC")
+  List<AgencyStatisticsNameDTO> findStatisticsNamesOfNonDeletedAgencies();
 }

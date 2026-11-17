@@ -15,12 +15,15 @@ import de.caritas.cob.agencyservice.api.service.legal.ResolvedLegalText;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.generated.api.controller.AgenciesApi;
 import io.swagger.annotations.Api;
+import de.caritas.cob.agencyservice.api.statistics.AgencyStatisticsNameDTO;
+import de.caritas.cob.agencyservice.api.statistics.AgencyStatisticsNamesService;
 import java.util.List;
 import java.util.Optional;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +42,17 @@ public class AgencyController implements AgenciesApi {
   private final @NonNull AgencyService agencyService;
   private final @NonNull TopicEnrichmentService topicEnrichmentService;
   private final @NonNull DepartmentLegalService departmentLegalService;
+  private final @NonNull AgencyStatisticsNamesService agencyStatisticsNamesService;
+
+  /**
+   * Beratungsstelle names for the platform statistics panel (ORISO-UserService#1666); exposed as
+   * {@code /service/agencies/statistics/names} through the agency rewrite ingress.
+   */
+  @GetMapping("/agencies/statistics/names")
+  @PreAuthorize("@statisticsNamesAuthorization.mayReadNames()")
+  public ResponseEntity<List<AgencyStatisticsNameDTO>> getAgencyStatisticsNames() {
+    return ResponseEntity.ok(agencyStatisticsNamesService.findNames());
+  }
 
   @GetMapping("/internal/agencies/{agencyId}/matrix-service-account")
   public ResponseEntity<AgencyMatrixCredentialsDTO> getAgencyMatrixCredentials(
