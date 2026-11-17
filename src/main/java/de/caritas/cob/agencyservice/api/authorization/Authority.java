@@ -22,6 +22,12 @@ public enum Authority {
 
   ADVICE_SEEKER("user", AuthorityValue.SEARCH_AGENCIES_WITHIN_TENANT),
 
+  /**
+   * Statistik-Leser (ORISO-UserService#1666): reads Beratungsstelle names for the platform
+   * statistics panel and nothing else.
+   */
+  STATISTICS_READER("statistics-reader", AuthorityValue.READ_STATISTICS_NAMES),
+
   /** Keycloak technical user used for service-to-service calls (e.g. Matrix credential lookup). */
   TECHNICAL_USER("technical", AuthorityValue.TECHNICAL_USER);
 
@@ -64,6 +70,7 @@ public enum Authority {
     public static final String SEARCH_AGENCIES_WITHIN_TENANT = PREFIX + "SEARCH_AGENCIES_WITHIN_TENANT";
     public static final String GET_ALL_AGENCIES = PREFIX + "GET_ALL_AGENCIES";
     public static final String TECHNICAL_USER = PREFIX + "TECHNICAL_USER";
+    public static final String READ_STATISTICS_NAMES = PREFIX + "READ_STATISTICS_NAMES";
 
   }
 
