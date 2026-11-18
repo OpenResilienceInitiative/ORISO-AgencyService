@@ -660,4 +660,24 @@ class EffectiveAgencySettingsResolverTest {
     assertThat(agency.getFeatureAudioCallsEnabled()).isFalse();
   }
 
+  // ORISO-Frontend#2251: an agency-owned flag with no Träger counterpart and no tenant policy.
+  @Test
+  void liveChatFurtherCounselling_should_beServedAsStoredAndNeverNeedATenantPolicy() {
+    var agency = new Settings().featureLiveChatFurtherCounsellingEnabled(true);
+    EffectiveAgencySettingsResolver.applyTo(agency, newTraeger(),
+        Map.of("featureThreadsEnabled", policy(false, "ENFORCED")));
+    assertThat(agency.getFeatureLiveChatFurtherCounsellingEnabled()).isTrue();
+    assertThat(agency.getPermissionPolicies()).doesNotContainKey("featureLiveChatFurtherCounsellingEnabled");
+
+    var unset = new Settings();
+    EffectiveAgencySettingsResolver.applyTo(unset, newTraeger());
+    assertThat(unset.getFeatureLiveChatFurtherCounsellingEnabled()).isNull();
+
+    assertThat(EffectiveAgencySettingsResolver.flagNames())
+        .doesNotContain("featureLiveChatFurtherCounsellingEnabled");
+    assertThat(EffectiveAgencySettingsResolver.changedOverrides(
+        new Settings(), new Settings().featureLiveChatFurtherCounsellingEnabled(true)))
+        .isEmpty();
+  }
+
 }

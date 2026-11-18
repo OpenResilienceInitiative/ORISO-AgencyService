@@ -73,6 +73,10 @@ public class ResponseEntityExceptionHandlerIT {
   private DepartmentLegalService departmentLegalService;
 
   @MockitoBean
+  private de.caritas.cob.agencyservice.api.statistics.AgencyStatisticsNamesService
+      agencyStatisticsNamesService;
+
+  @MockitoBean
   private LinkDiscoverers linkDiscoverers;
 
   @MockitoBean

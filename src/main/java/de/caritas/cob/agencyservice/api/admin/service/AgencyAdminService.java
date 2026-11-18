@@ -463,9 +463,12 @@ public class AgencyAdminService {
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
     if (updateAgencyDTO.getSettings() != null) {
+      var settings = agencySettingsService.keepStoredCounsellorTopicPermission(
+          updateAgencyDTO.getSettings(), agency.getSettings());
       return agencySettingsService.toSettingsJson(
-          agencySettingsService.keepStoredCounsellorTopicPermission(
-              updateAgencyDTO.getSettings(), agency.getSettings()));
+          agencySettingsService.keepStoredLiveChatFurtherCounselling(
+              settings, agency.getSettings(),
+              authenticatedUser.isTenantSuperAdmin()));
     }
     return agency.getSettings();
   }

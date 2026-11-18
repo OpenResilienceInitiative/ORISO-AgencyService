@@ -138,6 +138,10 @@ public class SecurityConfig {
             // only used by logged-in clients; anonymous access must 401 here instead of NPE-500ing
             // in the request-scoped AuthenticatedUser bean.
             .requestMatchers("/agencies/topics", "/agencies/topics/").authenticated()
+            // Statistics names (ORISO-UserService#1666): must be authenticated before the
+            // "/agencies/**" permitAll below; the method rule decides reader vs. platform admin.
+            .requestMatchers("/agencies/statistics/names", "/agencies/statistics/names/")
+            .authenticated()
             .requestMatchers("/agencies/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/internal/agencies/*/contact-details")
             .access(legacyOrTask("NOTIFICATION_DISPATCH", AuthorityValue.TECHNICAL_USER))
