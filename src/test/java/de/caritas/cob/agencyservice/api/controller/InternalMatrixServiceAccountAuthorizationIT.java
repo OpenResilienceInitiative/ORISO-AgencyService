@@ -1,5 +1,8 @@
 package de.caritas.cob.agencyservice.api.controller;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -207,14 +210,15 @@ class InternalMatrixServiceAccountAuthorizationIT {
     when(matrixProvisioningService.ensureAgencyAccount("agency-42", "Synthetic centre"))
         .thenReturn(Optional.of(new MatrixProvisioningService.MatrixCredentials(
             "@agency:matrix.local", "public-disposable-provision-fixture")));
+    when(agencyRepository.updateMatrixCredentials(eq(42L), eq("@agency:matrix.local"), startsWith("enc:")))
+        .thenReturn(1);
     mockMvc.perform(post(MATRIX_CREDENTIALS_PATH).cookie(CSRF_COOKIE)
         .header(CSRF_HEADER, CSRF_VALUE).accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.matrixUserId").value("@agency:matrix.local"))
         .andExpect(jsonPath("$.matrixPassword").doesNotExist());
-    org.mockito.Mockito.verify(agencyRepository).updateMatrixCredentials(
-        org.mockito.ArgumentMatchers.eq(42L), org.mockito.ArgumentMatchers.eq("@agency:matrix.local"),
-        org.mockito.ArgumentMatchers.startsWith("enc:"));
+    verify(agencyRepository).updateMatrixCredentials(
+        eq(42L), eq("@agency:matrix.local"), startsWith("enc:"));
   }
 
   @Test

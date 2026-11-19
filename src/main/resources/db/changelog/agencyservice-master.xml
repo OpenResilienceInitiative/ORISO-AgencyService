@@ -121,4 +121,6 @@
   <!-- OBP 2.1 #130: finished agency purges wait here until UserService pulls them into its
        deletion log (RUNTIME task actor, deletion-audit-read). Ids and outcome only. -->
   <include file="db/changelog/changeset/0041_deletion_audit_outbox/0041_changeSet.xml"/>
+
+  <include file="db/changelog/changeset/0042_agency_matrix_provisioning/0042_changeSet.xml"/>
 </databaseChangeLog>

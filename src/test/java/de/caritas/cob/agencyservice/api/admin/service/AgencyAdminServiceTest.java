@@ -432,6 +432,7 @@ class AgencyAdminServiceTest {
     agency.setDataProtectionResponsibleEntity(DataProtectionResponsibleEntity.DATA_PROTECTION_OFFICER);
 
     agency.setCounsellingRelations(null);
+    agency.setMatrixAccountProvisioned(true);
     when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
     when(agencyRepository.save(any())).thenReturn(agency);
 
@@ -440,8 +441,9 @@ class AgencyAdminServiceTest {
     agencyAdminService.updateAgency(AGENCY_ID, updateAgencyDTO);
 
     verify(agencyRepository).save(agencyArgumentCaptor.capture());
-    var passedConsultingTypeId = agencyArgumentCaptor.getValue().getConsultingTypeId();
-    assertEquals(agency.getConsultingTypeId(), passedConsultingTypeId);
+    var updatedAgency = agencyArgumentCaptor.getValue();
+    assertEquals(agency.getConsultingTypeId(), updatedAgency.getConsultingTypeId());
+    assertEquals(true, updatedAgency.isMatrixAccountProvisioned());
   }
 
   @Test
