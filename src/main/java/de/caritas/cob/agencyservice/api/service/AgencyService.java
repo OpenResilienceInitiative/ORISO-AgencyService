@@ -202,15 +202,22 @@ public class AgencyService {
 
   @Transactional
   public Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Agency agency) {
-    return provisionMatrixCredentials(agency, true);
-  }
-
-  private Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Agency agency, boolean saveEntity) {
     log.info("Attempting to provision Matrix credentials for agency {} (id={})", agency.getName(), agency.getId());
 
-    if (nonNull(agency.getMatrixUserId()) && nonNull(agency.getMatrixPassword())) {
-      log.info("Agency {} already has Matrix credentials: {}", agency.getName(), agency.getMatrixUserId());
+    var matrixUserId = agency.getMatrixUserId();
+    boolean hasStoredPassword = nonNull(agency.getMatrixPassword());
+    boolean provisioningRecorded = agency.isMatrixAccountProvisioned();
+    // Older pods write the legacy pair without setting the new completion marker.
+    if (matrixUserId != null && !matrixUserId.isBlank()
+        && (provisioningRecorded || hasStoredPassword)) {
+      log.info("Agency {} already has a provisioned Matrix account", agency.getId());
       return Optional.of(matrixCredentialsDto(agency));
+    }
+
+    if (matrixUserId != null || hasStoredPassword || provisioningRecorded) {
+      log.warn("Agency {} has incomplete Matrix provisioning state; reconciliation is required",
+          agency.getId());
+      return Optional.empty();
     }
 
     log.info("No existing Matrix credentials found. Provisioning new account for agency {}", agency.getName());
@@ -225,17 +232,27 @@ public class AgencyService {
       }
 
       var creds = optionalCredentials.get();
-      var encryptedPassword = matrixPasswordCipher.encrypt(creds.getPassword());
-      agency.setMatrixUserId(creds.getUserId());
-      agency.setMatrixPassword(encryptedPassword);
-      if (saveEntity) {
-        agencyRepository.updateMatrixCredentials(
-            agency.getId(), creds.getUserId(), encryptedPassword);
-        log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}",
-            agency.getName(), agency.getId(), creds.getUserId());
+      var provisionedMatrixUserId = creds.getUserId();
+      if (provisionedMatrixUserId == null || provisionedMatrixUserId.isBlank()
+          || creds.getPassword() == null || creds.getPassword().isBlank()) {
+        log.warn("Matrix provisioning returned incomplete credentials for agency {}", agency.getId());
+        return Optional.empty();
       }
+      var encryptedPassword = matrixPasswordCipher.encrypt(creds.getPassword());
+      int updatedRows = agencyRepository.updateMatrixCredentials(
+          agency.getId(), provisionedMatrixUserId, encryptedPassword);
+      if (updatedRows != 1) {
+        log.warn("Matrix provisioning completed but no agency row was updated for agency {}",
+            agency.getId());
+        return Optional.empty();
+      }
+      log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}",
+          agency.getName(), agency.getId(), provisionedMatrixUserId);
+      agency.setMatrixUserId(provisionedMatrixUserId);
+      agency.setMatrixPassword(encryptedPassword);
+      agency.setMatrixAccountProvisioned(true);
 
-      return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId()));
+      return Optional.of(matrixCredentialsDto(agency));
     } catch (Exception ex) {
       log.warn(
           "Matrix provisioning failed for agency {} (id={}): {}",

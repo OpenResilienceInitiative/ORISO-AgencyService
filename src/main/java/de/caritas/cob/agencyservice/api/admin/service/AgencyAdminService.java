@@ -556,6 +556,7 @@ public class AgencyAdminService {
         .agencyLogo(updateAgencyDTO.getAgencyLogo())
         .matrixUserId(agency.getMatrixUserId())
         .matrixPassword(agency.getMatrixPassword())
+        .matrixAccountProvisioned(agency.isMatrixAccountProvisioned())
         .settings(resolveSettingsForUpdate(agency, updateAgencyDTO))
         .contentDpp(
             resolveLegalTextForUpdate(

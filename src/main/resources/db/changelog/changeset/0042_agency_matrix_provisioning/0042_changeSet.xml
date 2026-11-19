@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+  <changeSet id="addAgencyMatrixAccountProvisioned" author="oriso">
+    <preConditions onFail="MARK_RAN">
+      <not><columnExists tableName="agency" columnName="matrix_account_provisioned"/></not>
+    </preConditions>
+    <addColumn tableName="agency">
+      <column name="matrix_account_provisioned" type="TINYINT" defaultValueNumeric="0">
+        <constraints nullable="false"/>
+      </column>
+    </addColumn>
+    <rollback>
+      <dropColumn tableName="agency" columnName="matrix_account_provisioned"/>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>
