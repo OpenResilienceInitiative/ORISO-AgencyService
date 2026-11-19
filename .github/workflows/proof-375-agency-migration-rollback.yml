@@ -1,0 +1,52 @@
+name: AgencyService native MariaDB rollback proof
+
+on:
+  push:
+    branches: [proof/375-agency-migration-rollback]
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    name: Apply, roll back and reapply AgencyService changeset 0042
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      mariadb:
+        image: mariadb:11.0.6@sha256:9f56b2ac10055b68d07e3dcf2a17109fef77f1f08d504b1f028eb874457963b6
+        env:
+          MARIADB_ROOT_PASSWORD: synthetic-root-proof
+          MARIADB_DATABASE: agency_rollback_proof
+          MARIADB_USER: agency_proof
+          MARIADB_PASSWORD: synthetic-agency-proof
+        ports: ['3306/tcp']
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Run committed migration against synthetic MariaDB records
+        shell: bash
+        env:
+          PROOF_DB_PORT: ${{ job.services.mariadb.ports[3306] }}
+        run: |
+          set -euo pipefail
+          proof_dir="$(mktemp -d "$RUNNER_TEMP/agency-375-proof.XXXXXX")"
+          trap 'rm -rf "$proof_dir"' EXIT
+          ./mvnw -B --no-transfer-progress dependency:build-classpath \
+            -DincludeScope=runtime -Dmdep.outputFile="$proof_dir/classpath"
+          classpath="$(cat "$proof_dir/classpath")"
+          tr ':' '\n' <<< "$classpath" |
+            sed -nE 's@.*/((liquibase-core|mariadb-java-client)-[^/]+\.jar)$@\1@p'
+          javac --release 21 -cp "$classpath" -d "$proof_dir" scripts/ci/AgencyRollbackProof.java
+          java -cp "$proof_dir:src/main/resources:$classpath" AgencyRollbackProof "$PROOF_DB_PORT"
