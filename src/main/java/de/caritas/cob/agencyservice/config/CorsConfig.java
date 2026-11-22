@@ -34,7 +34,8 @@ public class CorsConfig {
     allowedPaths.forEach(path -> source.registerCorsConfiguration(path, configuration));
 
     var registrationBean = new FilterRegistrationBean<>(new CorsFilter(source));
-    registrationBean.setOrder(Ordered.HIGHEST_PRECEDENCE);
+    // The tenant cleanup filter must also wrap requests that end at CORS.
+    registrationBean.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
     return registrationBean;
   }
 }
