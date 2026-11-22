@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.NonNull;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -162,7 +163,8 @@ public class AgencyService {
     var agencies = findAgencies(postCode, getConsultingTypeIdForSearch(consultingTypeId), topicId,
         age, gender, counsellingRelation);
     Collections.shuffle(agencies);
-    var ownTenant = requestTenantLookup();
+    var ownTenant = requestTenantLookup(preloadPublicAgencyTenants(
+        agencies.stream().filter(agency -> !agency.isOffline())));
     var mainTenant = requestMainTenantLookup();
     var agencyResponseDTOs = convertToFullAgencyResponses(
         operationalAgencies(agencies, ownTenant), ownTenant, mainTenant);
@@ -571,8 +573,8 @@ public class AgencyService {
     };
   }
 
-  private Map<Long, RestrictedTenantDTO> preloadPublicAgencyTenants(List<Agency> agencies) {
-    var tenantIds = agencies.stream()
+  private Map<Long, RestrictedTenantDTO> preloadPublicAgencyTenants(Stream<Agency> agencies) {
+    var tenantIds = agencies
         .map(Agency::getTenantId)
         .filter(id -> id != null && id > 0)
         .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -594,7 +596,7 @@ public class AgencyService {
 
   private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
     var eligible = agencies.stream().filter(this::hasPublicPolicyAuthority).toList();
-    var ownTenant = requestTenantLookup(preloadPublicAgencyTenants(eligible));
+    var ownTenant = requestTenantLookup(preloadPublicAgencyTenants(eligible.stream()));
     var mainTenant = requestMainTenantLookup();
     List<AgencyResponseDTO> available = new ArrayList<>();
     ServiceUnavailableException failedPolicy = null;

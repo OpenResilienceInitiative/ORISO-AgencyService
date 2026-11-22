@@ -170,15 +170,52 @@ class AgencyPublicLegalTenantReuseHttpTest {
     var agencies = path.equals("white-spot") ? List.of(first)
         : List.of(first, agency(10L, 7L, 2), agency(11L, 8L, 2));
     var service = service(agencies, path.equals("white-spot"));
-    expect("id/7", 7L, false, true, "LEGAL-7");
-    if (!path.equals("white-spot")) {
-      expect("id/8", 8L, false, false, "LEGAL-8");
+    if (path.equals("consulting-search")) {
+      expectBatch(List.of(7L, 8L), List.of(tenantJson(8L, false, false, "LEGAL-8"),
+          tenantJson(7L, false, true, "LEGAL-7")));
+    } else {
+      expect("id/7", 7L, false, true, "LEGAL-7");
+      if (path.equals("tenant-topic-search")) {
+        expect("id/8", 8L, false, false, "LEGAL-8");
+      }
     }
     var result = path.equals("tenant-topic-search") ? service.getAgencies("12345", 1)
         : service.getAgencies(Optional.of("12345"), 1, Optional.empty());
     assertThat(result).hasSize(agencies.size());
     agencies.forEach(agency -> assertLegal(agency,
         agency.getTenantId() == 7L ? "LEGAL-7" : "LEGAL-8", LegalTextSourceLevel.TENANT));
+    server.verify();
+  }
+
+  @Test
+  void registrationBatchesOnlineCandidatesAndReadsWhiteSpotOnlyWhenTheyAreInactive() {
+    var offline = agency(12L, 10L, 1);
+    offline.setOffline(true);
+    var fallback = agency(9L, 11L, 1);
+    var service = service(List.of(agency(10L, 7L, 1), offline, agency(11L, 8L, 1)),
+        Optional.of(fallback));
+    expectBatch(List.of(7L, 8L), List.of(
+        "{\"id\":7,\"active\":false}", "{\"id\":8,\"active\":false}"));
+    expect("id/11", 11L, false, false, "WHITE-SPOT");
+
+    var result = service.getAgencies(Optional.of("12345"), 1, Optional.empty());
+
+    assertThat(result).extracting(value -> value.getId()).containsExactly(9L);
+    assertLegal(fallback, "WHITE-SPOT", LegalTextSourceLevel.TENANT);
+    server.verify();
+  }
+
+  @Test
+  void registrationRetainsTheSingleReadFailureForAnOmittedTenant() {
+    var service = service(List.of(agency(10L, 7L, 1), agency(11L, 8L, 1)),
+        Optional.of(agency(9L, 11L, 1)));
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(7L, false, false, "LEGAL-7")));
+    server.expect(requestTo("http://tenant.test/tenant/public/id/8"))
+        .andRespond(withServerError());
+
+    assertThatThrownBy(() -> service.getAgencies(Optional.of("12345"), 1, Optional.empty()))
+        .isInstanceOf(ServiceUnavailableException.class);
+    assertThat(renderedLegal).isEmpty();
     server.verify();
   }
 
@@ -325,17 +362,22 @@ class AgencyPublicLegalTenantReuseHttpTest {
   }
 
   private AgencyService service(List<Agency> agencies, boolean whiteSpot) {
+    return whiteSpot ? service(List.of(), Optional.of(agencies.getFirst()))
+        : service(agencies, Optional.empty());
+  }
+
+  private AgencyService service(List<Agency> agencies, Optional<Agency> whiteSpot) {
     var result = mock(AgencyService.class, Answers.CALLS_REAL_METHODS);
     var repository = mock(AgencyRepository.class, call -> switch (call.getMethod().getName()) {
-      case "findByIdIn", "findByConsultingTypeId" -> new ArrayList<>(agencies);
-      case "searchWithoutTopic", "searchWithTopic" -> whiteSpot ? List.of() : new ArrayList<>(agencies);
-      case "findByIdAndDeleteDateNull" -> Optional.of(agencies.getFirst());
+      case "findByIdIn", "findByConsultingTypeId", "searchWithoutTopic", "searchWithTopic" ->
+          new ArrayList<>(agencies);
+      case "findByIdAndDeleteDateNull" -> whiteSpot;
       default -> Answers.RETURNS_DEFAULTS.answer(call);
     });
     var consulting = mock(ConsultingTypeManager.class, call ->
         call.getMethod().getName().equals("getConsultingTypeSettings")
             ? new ExtendedConsultingTypeResponseDTO().whiteSpot(new WhiteSpotDTO()
-                .whiteSpotAgencyAssigned(whiteSpot).whiteSpotAgencyId(9))
+                .whiteSpotAgencyAssigned(whiteSpot.isPresent()).whiteSpotAgencyId(9))
             : Answers.RETURNS_DEFAULTS.answer(call));
     ReflectionTestUtils.setField(result, "tenantService", tenants);
     ReflectionTestUtils.setField(result, "agencyRepository", repository);
