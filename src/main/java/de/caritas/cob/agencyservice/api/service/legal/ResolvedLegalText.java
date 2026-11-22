@@ -12,10 +12,9 @@ package de.caritas.cob.agencyservice.api.service.legal;
  * @param sourceLevel which rung answered — never omitted, because "the privacy policy" without a
  *     level is not a valid statement (decision 1)
  * @param versionId the {@code legal_text_version} row this wording corresponds to, or {@code null}
- *     for the Träger and platform levels, whose history lives in ORISO-TenantService rather than
- *     here. This is the identifier a consuming service pins a recorded consent to (ORISO-UserService
- *     {@code session.consented_legal_version_id}, ADR-022 decision 2) — without it, "is this room
- *     cleared for the current version" cannot be answered at all.
+ *     for availability-only lists and for the Träger and platform levels, whose history lives in
+ *     ORISO-TenantService. This is the identifier a consuming service pins a recorded consent to
+ *     (ORISO-UserService {@code session.consented_legal_version_id}, ADR-022 decision 2).
  */
 public record ResolvedLegalText(
     String content, String consentText, LegalTextSourceLevel sourceLevel, Long versionId) {

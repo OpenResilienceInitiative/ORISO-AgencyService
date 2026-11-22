@@ -186,11 +186,11 @@ class AgencyPublicLegalTenantReuseHttpTest {
     singleDomain(false);
     expect("id/7", 7L, false, true, "UNUSED-TENANT");
     service(List.of(agency), false).getAgencies(List.of(9L));
-    assertThat(renderedLegal.get("9/900/resolveDpp").content()).contains("DEPARTMENT-DPP");
-    assertThat(renderedLegal.get("9/900/resolveDpp").sourceLevel())
+    assertThat(renderedLegal.get("9/900/resolveDppForList").content()).contains("DEPARTMENT-DPP");
+    assertThat(renderedLegal.get("9/900/resolveDppForList").sourceLevel())
         .isEqualTo(LegalTextSourceLevel.DEPARTMENT);
-    assertThat(renderedLegal.get("9/901/resolveDpp").content()).contains("AGENCY-DPP");
-    assertThat(renderedLegal.get("9/901/resolveDpp").sourceLevel()).isEqualTo(LegalTextSourceLevel.AGENCY);
+    assertThat(renderedLegal.get("9/901/resolveDppForList").content()).contains("AGENCY-DPP");
+    assertThat(renderedLegal.get("9/901/resolveDppForList").sourceLevel()).isEqualTo(LegalTextSourceLevel.AGENCY);
     server.verify();
   }
 
@@ -334,10 +334,10 @@ class AgencyPublicLegalTenantReuseHttpTest {
   private void assertLegal(Agency agency, String sentinel, LegalTextSourceLevel level) {
     for (var topic : agency.getAgencyTopics()) {
       var key = agency.getId() + "/" + topic.getTopicId() + "/";
-      assertThat(renderedLegal.get(key + "resolveDpp").content()).contains(sentinel + " privacy");
-      assertThat(renderedLegal.get(key + "resolveImprint").content()).contains(sentinel + " imprint");
-      assertThat(renderedLegal.get(key + "resolveDpp").sourceLevel()).isEqualTo(level);
-      assertThat(renderedLegal.get(key + "resolveImprint").sourceLevel()).isEqualTo(level);
+      assertThat(renderedLegal.get(key + "resolveDppForList").content()).contains(sentinel + " privacy");
+      assertThat(renderedLegal.get(key + "resolveImprintForList").content()).contains(sentinel + " imprint");
+      assertThat(renderedLegal.get(key + "resolveDppForList").sourceLevel()).isEqualTo(level);
+      assertThat(renderedLegal.get(key + "resolveImprintForList").sourceLevel()).isEqualTo(level);
     }
   }
 }
