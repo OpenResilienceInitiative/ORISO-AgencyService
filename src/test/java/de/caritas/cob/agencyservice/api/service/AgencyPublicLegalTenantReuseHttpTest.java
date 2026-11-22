@@ -3,6 +3,8 @@ package de.caritas.cob.agencyservice.api.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -30,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +48,7 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -120,8 +124,8 @@ class AgencyPublicLegalTenantReuseHttpTest {
     var sameTenant = agency(10L, 7L, 2);
     var other = agency(11L, 8L, 2);
     var service = service(List.of(first, sameTenant, other), false);
-    expect("id/7", 7L, true, true, "OWN-7");
-    expect("id/8", 8L, true, false, "OWN-8");
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(8L, true, false, "OWN-8"),
+        tenantJson(7L, true, true, "OWN-7")));
     var responses = service.getAgencies(List.of(9L, 10L, 11L));
     assertThat(responses).extracting(value -> value.getAgencySpecificPrivacy())
         .containsExactly("OWN-7 privacy", "OWN-7 privacy", "OWN-8 privacy");
@@ -130,12 +134,33 @@ class AgencyPublicLegalTenantReuseHttpTest {
     assertLegal(other, "OWN-8", LegalTextSourceLevel.TENANT);
     server.verify();
     server.reset();
-    expect("id/7", 7L, true, false, "UPDATED-7");
-    expect("id/8", 8L, true, true, "UPDATED-8");
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(7L, true, false, "UPDATED-7"),
+        tenantJson(8L, true, true, "UPDATED-8")));
     assertThat(service.getAgencies(List.of(9L, 10L, 11L)))
         .extracting(value -> value.getAgencySpecificPrivacy())
         .containsExactly("UPDATED-7 privacy", "UPDATED-7 privacy", "UPDATED-8 privacy");
     server.verify();
+  }
+
+  @Test
+  void fixedIdListUsesTwoBoundedReadsAndPreservesOrderFor101Tenants() {
+    var tenantIds = LongStream.rangeClosed(1, 101).boxed().toList();
+    var agencies = tenantIds.stream().map(id -> agency(id + 1000L, id, 0)).toList();
+    var agencyIds = agencies.stream().map(Agency::getId).toList();
+    expectActiveTenantBatch(tenantIds.subList(0, 100));
+    expectActiveTenantBatch(tenantIds.subList(100, 101));
+
+    var response = service(agencies, false).getAgencies(agencyIds);
+
+    assertThat(response).extracting(value -> value.getId()).containsExactlyElementsOf(agencyIds);
+    assertThat(response.getFirst().getOffline()).isTrue();
+    assertThat(response.getLast().getOffline()).isFalse();
+    server.verify();
+  }
+
+  private void expectActiveTenantBatch(List<Long> ids) {
+    expectBatch(ids, ids.reversed().stream().map(id ->
+        "{\"id\":" + id + ",\"active\":" + (id != 1L) + "}").toList());
   }
 
   @ParameterizedTest
@@ -162,8 +187,8 @@ class AgencyPublicLegalTenantReuseHttpTest {
     final var first = agency(9L, 7L, 2);
     final var other = agency(11L, 8L, 2);
     singleDomain(false);
-    expect("id/7", 7L, true, true, "OWN-7");
-    expect("id/8", 8L, true, false, "OWN-8");
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(8L, true, false, "OWN-8"),
+        tenantJson(7L, true, true, "OWN-7")));
     expect("main", 1L, true, false, "MAIN");
     var response = service(List.of(first, other), false).getAgencies(List.of(9L, 11L));
     assertThat(response).extracting(value -> value.getAgencySpecificPrivacy())
@@ -323,12 +348,24 @@ class AgencyPublicLegalTenantReuseHttpTest {
   }
 
   private void expect(String route, long id, boolean central, boolean video, String sentinel) {
-    server.expect(requestTo("http://tenant.test/tenant/public/" + route)).andRespond(withSuccess("""
+    server.expect(requestTo("http://tenant.test/tenant/public/" + route))
+        .andRespond(withSuccess(tenantJson(id, central, video, sentinel), MediaType.APPLICATION_JSON));
+  }
+
+  private void expectBatch(List<Long> ids, List<String> tenants) {
+    server.expect(requestTo("http://tenant.test/tenant/public/ids"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(content().json(ids.toString()))
+        .andRespond(withSuccess("[" + String.join(",", tenants) + "]", MediaType.APPLICATION_JSON));
+  }
+
+  private String tenantJson(long id, boolean central, boolean video, String sentinel) {
+    return """
         {"id":%d,"settings":{"featureCentralDataProtectionTemplateEnabled":%s,
         "featureVideoCallsOneOnOneChatsEnabled":%s},"permissionPolicies":{
         "featureVideoCallsOneOnOneChatsEnabled":{"value":%s,"mode":"ENFORCED"}},
         "content":{"privacy":"%s privacy","impressum":"%s imprint"}}
-        """.formatted(id, central, video, video, sentinel, sentinel), MediaType.APPLICATION_JSON));
+        """.formatted(id, central, video, video, sentinel, sentinel);
   }
 
   private void assertLegal(Agency agency, String sentinel, LegalTextSourceLevel level) {

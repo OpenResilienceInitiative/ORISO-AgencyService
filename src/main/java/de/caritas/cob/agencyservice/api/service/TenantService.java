@@ -10,6 +10,7 @@ import de.caritas.cob.agencyservice.tenantservice.generated.web.model.TenantPerm
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -127,8 +128,8 @@ public class TenantService {
     for (int offset = 0; offset < ids.size(); offset += 100) {
       var batch = api.getRestrictedTenantDataByTenantIds(
           ids.subList(offset, Math.min(offset + 100, ids.size())));
-      if (batch == null) {
-        throw new IllegalStateException("Tenant owner returned no response");
+      if (batch == null || batch.stream().anyMatch(Objects::isNull)) {
+        throw new IllegalStateException("Tenant owner returned an invalid batch response");
       }
       result.addAll(batch);
     }

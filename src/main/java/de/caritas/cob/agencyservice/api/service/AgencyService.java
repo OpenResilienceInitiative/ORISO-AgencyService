@@ -40,10 +40,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.NonNull;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -519,9 +521,15 @@ public class AgencyService {
     }
   }
 
-  /** Each request reuses successes, legitimate nulls and failures only within that request. */
   private Function<Agency, RestrictedTenantDTO> requestTenantLookup() {
+    return requestTenantLookup(Map.of());
+  }
+
+  /** Each request reuses successes, legitimate nulls and failures only within that request. */
+  private Function<Agency, RestrictedTenantDTO> requestTenantLookup(
+      Map<Long, RestrictedTenantDTO> initialTenants) {
     Map<Long, Optional<RestrictedTenantDTO>> tenants = new HashMap<>();
+    initialTenants.forEach((id, tenant) -> tenants.put(id, Optional.of(tenant)));
     Map<Long, RuntimeException> failures = new HashMap<>();
     return agency -> {
       Long id = agency.getTenantId();
@@ -563,15 +571,34 @@ public class AgencyService {
     };
   }
 
+  private Map<Long, RestrictedTenantDTO> preloadPublicAgencyTenants(List<Agency> agencies) {
+    var tenantIds = agencies.stream()
+        .map(Agency::getTenantId)
+        .filter(id -> id != null && id > 0)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    if (tenantIds.size() < 2) {
+      return Map.of();
+    }
+    try {
+      var byId = tenantService.getRestrictedTenantDataByTenantIds(tenantIds).stream()
+          .filter(tenant -> tenantIds.contains(tenant.getId()))
+          .collect(Collectors.groupingBy(RestrictedTenantDTO::getId));
+      return byId.entrySet().stream()
+          .filter(entry -> entry.getValue().size() == 1)
+          .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().getFirst()));
+    } catch (RestClientException | IllegalStateException exception) {
+      // The single lookup still determines which organisations are available.
+      return Map.of();
+    }
+  }
+
   private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
-    var ownTenant = requestTenantLookup();
+    var eligible = agencies.stream().filter(this::hasPublicPolicyAuthority).toList();
+    var ownTenant = requestTenantLookup(preloadPublicAgencyTenants(eligible));
     var mainTenant = requestMainTenantLookup();
     List<AgencyResponseDTO> available = new ArrayList<>();
     ServiceUnavailableException failedPolicy = null;
-    for (Agency agency : agencies) {
-      if (!hasPublicPolicyAuthority(agency)) {
-        continue;
-      }
+    for (Agency agency : eligible) {
       try {
         var tenantData = ownTenant.apply(agency);
         boolean offline = agency.isOffline() || isTenantInactive(agency, ownTenant);
