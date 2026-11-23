@@ -13,13 +13,14 @@ public class DeleteAgenciesMarkedForDeletionScheduler {
 
   private final @NonNull DeleteAgencyService deleteAgencyService;
   private final @NonNull TenantContextProvider tenantContextProvider;
+  private final @NonNull AgencyPurgeRunLock purgeRunLock;
 
   @Scheduled(cron = "${agency.deleteworkflow.cron}")
   public void performDeletionWorkflow() {
     TenantContext.clear();
     try {
       tenantContextProvider.setTechnicalContextIfMultiTenancyIsEnabled();
-      this.deleteAgencyService.deleteAgenciesMarkedForDeletion();
+      purgeRunLock.runIfAcquired(deleteAgencyService::deleteAgenciesMarkedForDeletion);
     } finally {
       TenantContext.clear();
     }

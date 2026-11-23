@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -67,6 +68,12 @@ class DeleteAgenciesMarkedForDeletionSchedulerTest {
   private DeleteAgenciesMarkedForDeletionScheduler scheduler(boolean multiTenancyEnabled) {
     var tenantContextProvider = new TenantContextProvider();
     ReflectionTestUtils.setField(tenantContextProvider, "multiTenancyEnabled", multiTenancyEnabled);
-    return new DeleteAgenciesMarkedForDeletionScheduler(deleteAgencyService, tenantContextProvider);
+    var runLock = mock(AgencyPurgeRunLock.class);
+    doAnswer(invocation -> {
+      invocation.<Runnable>getArgument(0).run();
+      return null;
+    }).when(runLock).runIfAcquired(any(Runnable.class));
+    return new DeleteAgenciesMarkedForDeletionScheduler(
+        deleteAgencyService, tenantContextProvider, runLock);
   }
 }
