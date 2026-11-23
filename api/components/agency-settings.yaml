@@ -141,6 +141,9 @@ components:
         mediaAiScanSupervisionChats:
           type: boolean
           example: true
+        teamDiscussionAfterAccept:
+          type: boolean
+          example: true
         teamDiscussion:
           type: boolean
           example: true
@@ -408,6 +411,10 @@ components:
           type: boolean
           example: false
           description: "AI media scan when a user is in supervision mode."
+        featureTeamDiscussionAfterAcceptEnabled:
+          type: boolean
+          example: false
+          description: "May the team chat on an enquiry continue after the enquiry is accepted? Off = archived read-only at accept (ADR-016). Group teamDiscussion. ORISO-Frontend#2491. Unset inherits the Traeger value. On the public agency response this is the effective value: Traeger AND Beratungsstelle; a Traeger 'off' always wins (ADR-013)."
         featureTeamDiscussionEnabled:
           type: boolean
           example: true

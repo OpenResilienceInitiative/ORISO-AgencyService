@@ -33,7 +33,7 @@ class AgencyPermissionPolicyMapperTest {
 
   @Test
   void registry_shouldCoverEveryLegacyPolicyFeatureIncludingMedia() {
-    assertThat(mapper.supportedFeatures()).hasSize(52);
+    assertThat(mapper.supportedFeatures()).hasSize(53);
     assertThat(mapper.supportedFeatures())
         .contains(
             "featureMediaAiScanSupervisionChatsEnabled",
@@ -42,7 +42,8 @@ class AgencyPermissionPolicyMapperTest {
             "featureInternalGroupChatEnabled",
             "featureSelfHelpGroupsEnabled",
             "featureTeamDiscussionEnabled",
-            "featureMediaAiScanTeamDiscussionsEnabled");
+            "featureMediaAiScanTeamDiscussionsEnabled",
+            "featureTeamDiscussionAfterAcceptEnabled");
   }
 
   @Test
@@ -62,6 +63,31 @@ class AgencyPermissionPolicyMapperTest {
     assertThat(controls.getEnforcedPermissionToggles().getVideoCallsTeamDiscussions()).isTrue();
     assertThat(controls.getAllowedPermissionToggles().getThreadsTeamDiscussions()).isTrue();
     assertThat(controls.getEnforcedPermissionToggles().getThreadsTeamDiscussions()).isFalse();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "featureTeamDiscussionEnabled, teamDiscussion",
+    "featureVideoCallsTeamDiscussionsEnabled, videoCallsTeamDiscussions",
+    "featureAudioCallsTeamDiscussionsEnabled, audioCallsTeamDiscussions",
+    "featureVoiceMessagesTeamDiscussionsEnabled, voiceMessagesTeamDiscussions",
+    "featureThreadsTeamDiscussionsEnabled, threadsTeamDiscussions",
+    "featureMediaUploadTeamDiscussionsEnabled, mediaUploadTeamDiscussions",
+    "featureMediaInlineDisplayTeamDiscussionsEnabled, mediaInlineDisplayTeamDiscussions",
+    "featureMediaAiScanTeamDiscussionsEnabled, mediaAiScanTeamDiscussions",
+    "featureTeamDiscussionAfterAcceptEnabled, teamDiscussionAfterAccept"
+  })
+  void toLegacyControls_shouldMapEveryTeamDiscussionPolicy(String feature, String toggle) {
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var on = mapper.toLegacyControls(Map.of(feature, policy(true, PermissionPolicyMode.ENFORCED)));
+    var off = mapper.toLegacyControls(Map.of(feature, policy(false, PermissionPolicyMode.ENFORCED)));
+
+    assertThat(json.valueToTree(on.getEnforcedPermissionToggles()).path(toggle).asBoolean())
+        .as(toggle)
+        .isTrue();
+    assertThat(json.valueToTree(off.getAllowedPermissionToggles()).path(toggle).asBoolean(true))
+        .as(toggle)
+        .isFalse();
   }
 
   private static BooleanPermissionPolicy policy(boolean value, PermissionPolicyMode mode) {

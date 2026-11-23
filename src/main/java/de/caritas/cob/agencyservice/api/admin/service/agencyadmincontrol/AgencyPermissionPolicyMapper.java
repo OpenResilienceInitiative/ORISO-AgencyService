@@ -66,6 +66,7 @@ public class AgencyPermissionPolicyMapper {
           Map.entry("featureMediaAiScanOneOnOneChatsEnabled", "mediaAiScanOneOnOneChats"),
           Map.entry("featureMediaAiScanGroupChatsEnabled", "mediaAiScanGroupChats"),
           Map.entry("featureMediaAiScanSupervisionChatsEnabled", "mediaAiScanSupervisionChats"),
+          Map.entry("featureTeamDiscussionAfterAcceptEnabled", "teamDiscussionAfterAccept"),
           Map.entry("featureTeamDiscussionEnabled", "teamDiscussion"),
           Map.entry("featureVideoCallsTeamDiscussionsEnabled", "videoCallsTeamDiscussions"),
           Map.entry("featureAudioCallsTeamDiscussionsEnabled", "audioCallsTeamDiscussions"),

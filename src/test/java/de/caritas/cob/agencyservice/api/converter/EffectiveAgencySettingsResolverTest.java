@@ -149,7 +149,7 @@ class EffectiveAgencySettingsResolverTest {
           "featureAudioCallsTeamDiscussionsEnabled", "featureVoiceMessagesTeamDiscussionsEnabled",
           "featureThreadsTeamDiscussionsEnabled", "featureMediaUploadTeamDiscussionsEnabled",
           "featureMediaInlineDisplayTeamDiscussionsEnabled",
-          "featureMediaAiScanTeamDiscussionsEnabled");
+          "featureMediaAiScanTeamDiscussionsEnabled", "featureTeamDiscussionAfterAcceptEnabled");
 
   /**
    * Shared flags deliberately not cascaded: the eight operational tenant-level flags (served as
@@ -325,6 +325,15 @@ class EffectiveAgencySettingsResolverTest {
     "featureMediaAiScanTeamDiscussionsEnabled, null, true, true",
     "featureMediaAiScanTeamDiscussionsEnabled, null, false, false",
     "featureMediaAiScanTeamDiscussionsEnabled, null, null, null",
+    "featureTeamDiscussionAfterAcceptEnabled, true, true, true",
+    "featureTeamDiscussionAfterAcceptEnabled, true, false, false",
+    "featureTeamDiscussionAfterAcceptEnabled, true, null, true",
+    "featureTeamDiscussionAfterAcceptEnabled, false, true, false",
+    "featureTeamDiscussionAfterAcceptEnabled, false, false, false",
+    "featureTeamDiscussionAfterAcceptEnabled, false, null, false",
+    "featureTeamDiscussionAfterAcceptEnabled, null, true, true",
+    "featureTeamDiscussionAfterAcceptEnabled, null, false, false",
+    "featureTeamDiscussionAfterAcceptEnabled, null, null, null",
     "featureAnonymousChatEnabled, true, true, true",
     "featureAnonymousChatEnabled, true, false, false",
     "featureAnonymousChatEnabled, true, null, true",

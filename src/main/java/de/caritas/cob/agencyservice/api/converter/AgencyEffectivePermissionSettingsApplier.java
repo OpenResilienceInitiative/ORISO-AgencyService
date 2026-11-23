@@ -172,6 +172,8 @@ public class AgencyEffectivePermissionSettingsApplier {
               AgencyAdminAllowedPermissionToggles::getMediaAiScanSupervisionChats,
               Settings::setFeatureMediaAiScanSupervisionChatsEnabled),
           new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getTeamDiscussionAfterAccept, Settings::setFeatureTeamDiscussionAfterAcceptEnabled),
+          new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getTeamDiscussion, Settings::setFeatureTeamDiscussionEnabled),
           new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getVideoCallsTeamDiscussions, Settings::setFeatureVideoCallsTeamDiscussionsEnabled),

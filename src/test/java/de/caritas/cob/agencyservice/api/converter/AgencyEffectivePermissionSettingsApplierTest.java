@@ -104,4 +104,38 @@ class AgencyEffectivePermissionSettingsApplierTest {
     assertThat(settings.getFeatureTeamDiscussionEnabled()).isFalse();
     assertThat(settings.getFeatureMediaUploadTeamDiscussionsEnabled()).isTrue();
   }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "featureTeamDiscussionEnabled, teamDiscussion",
+    "featureVideoCallsTeamDiscussionsEnabled, videoCallsTeamDiscussions",
+    "featureAudioCallsTeamDiscussionsEnabled, audioCallsTeamDiscussions",
+    "featureVoiceMessagesTeamDiscussionsEnabled, voiceMessagesTeamDiscussions",
+    "featureThreadsTeamDiscussionsEnabled, threadsTeamDiscussions",
+    "featureMediaUploadTeamDiscussionsEnabled, mediaUploadTeamDiscussions",
+    "featureMediaInlineDisplayTeamDiscussionsEnabled, mediaInlineDisplayTeamDiscussions",
+    "featureMediaAiScanTeamDiscussionsEnabled, mediaAiScanTeamDiscussions",
+    "featureTeamDiscussionAfterAcceptEnabled, teamDiscussionAfterAccept"
+  })
+  void applyTo_should_mapEveryTeamDiscussionControl(String key, String toggle) {
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    for (boolean value : new boolean[] {true, false}) {
+      var settings =
+          mapper.convertValue(mapper.createObjectNode().put(key, !value), Settings.class);
+      var toggles =
+          mapper.convertValue(
+              mapper.createObjectNode().put(toggle, value),
+              AgencyAdminAllowedPermissionToggles.class);
+      var controls =
+          value
+              ? new AgencyAdminControls().enforcedPermissionToggles(toggles)
+              : new AgencyAdminControls().allowedPermissionToggles(toggles);
+
+      applier.applyTo(settings, controls);
+
+      assertThat(mapper.valueToTree(settings).path(key).asBoolean())
+          .as(key + " " + value)
+          .isEqualTo(value);
+    }
+  }
 }

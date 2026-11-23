@@ -2797,6 +2797,10 @@ components:
           type: boolean
           example: "false"
           description: "AI media scan when a user is in supervision mode."
+        featureTeamDiscussionAfterAcceptEnabled:
+          type: boolean
+          example: "false"
+          description: "May the team chat on an enquiry continue after the enquiry is accepted? Off = archived read-only at accept (ADR-016). Group teamDiscussion. ORISO-Frontend#2491."
         featureVideoCallsTeamDiscussionsEnabled:
           type: boolean
           example: "true"
@@ -3290,6 +3294,7 @@ components:
         - featureMediaAiScanOneOnOneChatsEnabled
         - featureMediaAiScanGroupChatsEnabled
         - featureMediaAiScanSupervisionChatsEnabled
+        - featureTeamDiscussionAfterAcceptEnabled
         - featureTeamDiscussionEnabled
         - featureVideoCallsTeamDiscussionsEnabled
         - featureAudioCallsTeamDiscussionsEnabled
@@ -3640,6 +3645,9 @@ components:
           type: boolean
           example: "true"
         mediaAiScanSupervisionChats:
+          type: boolean
+          example: "true"
+        teamDiscussionAfterAccept:
           type: boolean
           example: "true"
         teamDiscussion:
