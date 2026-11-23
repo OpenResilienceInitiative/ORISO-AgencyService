@@ -77,7 +77,16 @@ public class AgencyAdminControlsConverter {
         .voiceMessagesAnonymousChats(settings.getVoiceMessagesAnonymousChats())
         .voiceMessagesOneOnOneChats(settings.getVoiceMessagesOneOnOneChats())
         .voiceMessagesGroupChats(settings.getVoiceMessagesGroupChats())
-        .voiceMessagesSupervisionChats(settings.getVoiceMessagesSupervisionChats());
+        .voiceMessagesSupervisionChats(settings.getVoiceMessagesSupervisionChats())
+        .teamDiscussionAfterAccept(settings.getTeamDiscussionAfterAccept())
+        .teamDiscussion(settings.getTeamDiscussion())
+        .videoCallsTeamDiscussions(settings.getVideoCallsTeamDiscussions())
+        .audioCallsTeamDiscussions(settings.getAudioCallsTeamDiscussions())
+        .voiceMessagesTeamDiscussions(settings.getVoiceMessagesTeamDiscussions())
+        .threadsTeamDiscussions(settings.getThreadsTeamDiscussions())
+        .mediaUploadTeamDiscussions(settings.getMediaUploadTeamDiscussions())
+        .mediaInlineDisplayTeamDiscussions(settings.getMediaInlineDisplayTeamDiscussions())
+        .mediaAiScanTeamDiscussions(settings.getMediaAiScanTeamDiscussions());
   }
 
   private AgencyAdminAllowedPermissionTogglesSettings toAllowedPermissionTogglesSettings(
@@ -116,6 +125,15 @@ public class AgencyAdminControlsConverter {
         .voiceMessagesOneOnOneChats(nullAsTrue(toggles.getVoiceMessagesOneOnOneChats()))
         .voiceMessagesGroupChats(nullAsTrue(toggles.getVoiceMessagesGroupChats()))
         .voiceMessagesSupervisionChats(nullAsTrue(toggles.getVoiceMessagesSupervisionChats()))
+        .teamDiscussionAfterAccept(nullAsTrue(toggles.getTeamDiscussionAfterAccept()))
+        .teamDiscussion(nullAsTrue(toggles.getTeamDiscussion()))
+        .videoCallsTeamDiscussions(nullAsTrue(toggles.getVideoCallsTeamDiscussions()))
+        .audioCallsTeamDiscussions(nullAsTrue(toggles.getAudioCallsTeamDiscussions()))
+        .voiceMessagesTeamDiscussions(nullAsTrue(toggles.getVoiceMessagesTeamDiscussions()))
+        .threadsTeamDiscussions(nullAsTrue(toggles.getThreadsTeamDiscussions()))
+        .mediaUploadTeamDiscussions(nullAsTrue(toggles.getMediaUploadTeamDiscussions()))
+        .mediaInlineDisplayTeamDiscussions(nullAsTrue(toggles.getMediaInlineDisplayTeamDiscussions()))
+        .mediaAiScanTeamDiscussions(nullAsTrue(toggles.getMediaAiScanTeamDiscussions()))
         .build();
   }
 
@@ -155,6 +173,15 @@ public class AgencyAdminControlsConverter {
         .voiceMessagesOneOnOneChats(nullAsFalse(toggles.getVoiceMessagesOneOnOneChats()))
         .voiceMessagesGroupChats(nullAsFalse(toggles.getVoiceMessagesGroupChats()))
         .voiceMessagesSupervisionChats(nullAsFalse(toggles.getVoiceMessagesSupervisionChats()))
+        .teamDiscussionAfterAccept(nullAsFalse(toggles.getTeamDiscussionAfterAccept()))
+        .teamDiscussion(nullAsFalse(toggles.getTeamDiscussion()))
+        .videoCallsTeamDiscussions(nullAsFalse(toggles.getVideoCallsTeamDiscussions()))
+        .audioCallsTeamDiscussions(nullAsFalse(toggles.getAudioCallsTeamDiscussions()))
+        .voiceMessagesTeamDiscussions(nullAsFalse(toggles.getVoiceMessagesTeamDiscussions()))
+        .threadsTeamDiscussions(nullAsFalse(toggles.getThreadsTeamDiscussions()))
+        .mediaUploadTeamDiscussions(nullAsFalse(toggles.getMediaUploadTeamDiscussions()))
+        .mediaInlineDisplayTeamDiscussions(nullAsFalse(toggles.getMediaInlineDisplayTeamDiscussions()))
+        .mediaAiScanTeamDiscussions(nullAsFalse(toggles.getMediaAiScanTeamDiscussions()))
         .build();
   }
 }

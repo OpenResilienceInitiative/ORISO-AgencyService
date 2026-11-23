@@ -170,7 +170,25 @@ public class AgencyEffectivePermissionSettingsApplier {
               Settings::setFeatureMediaAiScanGroupChatsEnabled),
           new ToggleBinding(
               AgencyAdminAllowedPermissionToggles::getMediaAiScanSupervisionChats,
-              Settings::setFeatureMediaAiScanSupervisionChatsEnabled));
+              Settings::setFeatureMediaAiScanSupervisionChatsEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getTeamDiscussionAfterAccept, Settings::setFeatureTeamDiscussionAfterAcceptEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getTeamDiscussion, Settings::setFeatureTeamDiscussionEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getVideoCallsTeamDiscussions, Settings::setFeatureVideoCallsTeamDiscussionsEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getAudioCallsTeamDiscussions, Settings::setFeatureAudioCallsTeamDiscussionsEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getVoiceMessagesTeamDiscussions, Settings::setFeatureVoiceMessagesTeamDiscussionsEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getThreadsTeamDiscussions, Settings::setFeatureThreadsTeamDiscussionsEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getMediaUploadTeamDiscussions, Settings::setFeatureMediaUploadTeamDiscussionsEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getMediaInlineDisplayTeamDiscussions, Settings::setFeatureMediaInlineDisplayTeamDiscussionsEnabled),
+          new ToggleBinding(
+              AgencyAdminAllowedPermissionToggles::getMediaAiScanTeamDiscussions, Settings::setFeatureMediaAiScanTeamDiscussionsEnabled));
 
   private static Boolean allowedFormat(
       Boolean formatToggle, AgencyAdminAllowedPermissionToggles toggles) {
