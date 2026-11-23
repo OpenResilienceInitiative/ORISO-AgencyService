@@ -721,9 +721,8 @@ public class AgencyService {
 
   /**
    * Maps a department (Fachbereich = agency × topic) to its registration-search view: the topic id
-   * plus whether its own legal texts (ADR-003) are published. Uses the already-loaded {@code
-   * agencyTopics} association (the same one {@code topicIds} is built from), so no additional
-   * query is issued per agency or topic.
+   * and whether its effective legal texts are published. The flags use the same {@code agencyTopics}
+   * association as {@code topicIds}. Publication version reads belong to the legal detail route.
    *
    * <p><b>Two flags, two questions — deliberately not the same predicate.</b> This public flag
    * answers "is a data protection policy in force for this department at all", resolved across the
@@ -776,13 +775,13 @@ public class AgencyService {
    */
   private boolean hasPublishedDpp(AgencyTopic agencyTopic,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
-    return legalTextInheritanceResolver.resolveDpp(agencyTopic, ownTenant, mainTenant).isPresent();
+    return legalTextInheritanceResolver.resolveDppForList(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   /** Same fix for the imprint half — an inherited imprint is reachable and must be reported so. */
   private boolean hasPublishedImprint(AgencyTopic agencyTopic,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
-    return legalTextInheritanceResolver.resolveImprint(agencyTopic, ownTenant, mainTenant).isPresent();
+    return legalTextInheritanceResolver.resolveImprintForList(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

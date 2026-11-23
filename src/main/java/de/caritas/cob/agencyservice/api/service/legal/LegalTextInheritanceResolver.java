@@ -83,11 +83,11 @@ public class LegalTextInheritanceResolver {
     return resolve(department, LegalTextKind.DPP);
   }
 
-  /** Same ADR-021 ladder using the caller's request-local verified tenant lookups. */
-  public ResolvedLegalText resolveDpp(AgencyTopic department,
+  /** Resolves policy availability using the verified tenant lookups for a public list. */
+  public ResolvedLegalText resolveDppForList(AgencyTopic department,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return resolve(department, LegalTextKind.DPP,
-        agency -> loadGoverningTenant(agency, ownTenant, mainTenant));
+        agency -> loadGoverningTenant(agency, ownTenant, mainTenant), false);
   }
 
   /**
@@ -98,49 +98,57 @@ public class LegalTextInheritanceResolver {
     return resolve(department, LegalTextKind.IMPRINT);
   }
 
-  /** Same ADR-021 ladder using the caller's request-local verified tenant lookups. */
-  public ResolvedLegalText resolveImprint(AgencyTopic department,
+  /** Resolves imprint availability using the verified tenant lookups for a public list. */
+  public ResolvedLegalText resolveImprintForList(AgencyTopic department,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return resolve(department, LegalTextKind.IMPRINT,
-        agency -> loadGoverningTenant(agency, ownTenant, mainTenant));
+        agency -> loadGoverningTenant(agency, ownTenant, mainTenant), false);
   }
 
   private ResolvedLegalText resolve(AgencyTopic department, LegalTextKind kind) {
-    return resolve(department, kind, this::loadGoverningTenant);
+    return resolve(department, kind, this::loadGoverningTenant, true);
   }
 
   private ResolvedLegalText resolve(AgencyTopic department, LegalTextKind kind,
-      Function<Agency, RestrictedTenantDTO> governingTenant) {
+      Function<Agency, RestrictedTenantDTO> governingTenant, boolean includeVersion) {
     if (department == null) {
       return ResolvedLegalText.none();
     }
-    var fromDepartment = fromDepartment(department, kind);
-    if (fromDepartment != null) {
-      return fromDepartment;
+    var departmentText = fromDepartment(department, kind);
+    if (departmentText != null) {
+      return resolveLocalText(departmentText, kind, includeVersion);
     }
     var agency = department.getAgency();
-    var fromAgency = fromAgency(agency, kind);
-    if (fromAgency != null) {
-      return fromAgency;
-    }
-    return fromTenantChain(agency, kind, governingTenant);
+    var agencyText = fromAgency(agency, kind);
+    return agencyText == null
+        ? fromTenantChain(agency, kind, governingTenant)
+        : resolveLocalText(agencyText, kind, includeVersion);
   }
+
+  private ResolvedLegalText resolveLocalText(
+      SelectedLocalText text, LegalTextKind kind, boolean includeVersion) {
+    var version = includeVersion ? currentVersionId(text.ownerLevel(), text.ownerId(), kind) : null;
+    return new ResolvedLegalText(text.content(), text.consentText(), text.sourceLevel(), version);
+  }
+
+  private record SelectedLocalText(String content, String consentText,
+      LegalTextSourceLevel sourceLevel, LegalTextLevel ownerLevel, Long ownerId) {}
 
   /**
    * Rung 4. A referenced shared object wins over the inline column entirely (ADR-014), so its own
    * publication status decides; a reference-less department falls back to its inline text.
    */
-  private ResolvedLegalText fromDepartment(AgencyTopic department, LegalTextKind kind) {
+  private SelectedLocalText fromDepartment(AgencyTopic department, LegalTextKind kind) {
     LegalText referenced = kind == LegalTextKind.DPP ? department.getDpp() : department.getImprint();
     if (referenced != null) {
       if (!isPublished(referenced.getContent(), referenced.getPublicationStatus())) {
         return null;
       }
-      return new ResolvedLegalText(
+      return new SelectedLocalText(
           referenced.getContent(),
           consentOf(kind, referenced.getConsentText()),
           LegalTextSourceLevel.DEPARTMENT,
-          currentVersionId(LegalTextLevel.SHARED, referenced.getId(), kind));
+          LegalTextLevel.SHARED, referenced.getId());
     }
 
     var content =
@@ -152,15 +160,15 @@ public class LegalTextInheritanceResolver {
     if (!isPublished(content, status)) {
       return null;
     }
-    return new ResolvedLegalText(
+    return new SelectedLocalText(
         content,
         consentOf(kind, department.getConsentText()),
         LegalTextSourceLevel.DEPARTMENT,
-        currentVersionId(LegalTextLevel.DEPARTMENT, department.getId(), kind));
+        LegalTextLevel.DEPARTMENT, department.getId());
   }
 
   /** Rung 3. No publication status here — a stored Beratungsstelle text is the text in force. */
-  private ResolvedLegalText fromAgency(Agency agency, LegalTextKind kind) {
+  private SelectedLocalText fromAgency(Agency agency, LegalTextKind kind) {
     if (agency == null) {
       return null;
     }
@@ -168,11 +176,11 @@ public class LegalTextInheritanceResolver {
     if (hasNoWording(content)) {
       return null;
     }
-    return new ResolvedLegalText(
+    return new SelectedLocalText(
         content,
         consentOf(kind, agency.getConsentText()),
         LegalTextSourceLevel.AGENCY,
-        currentVersionId(LegalTextLevel.AGENCY, agency.getId(), kind));
+        LegalTextLevel.AGENCY, agency.getId());
   }
 
   /**

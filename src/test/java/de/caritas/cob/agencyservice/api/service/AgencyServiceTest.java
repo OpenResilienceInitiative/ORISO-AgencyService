@@ -118,10 +118,10 @@ public class AgencyServiceTest {
   @org.junit.Before
   public void stubLegalResolutionAsEmpty() {
     org.mockito.Mockito.lenient()
-        .when(legalTextInheritanceResolver.resolveDpp(any(), any(), any()))
+        .when(legalTextInheritanceResolver.resolveDppForList(any(), any(), any()))
         .thenReturn(ResolvedLegalText.none());
     org.mockito.Mockito.lenient()
-        .when(legalTextInheritanceResolver.resolveImprint(any(), any(), any()))
+        .when(legalTextInheritanceResolver.resolveImprintForList(any(), any(), any()))
         .thenReturn(ResolvedLegalText.none());
   }
 
@@ -278,9 +278,9 @@ public class AgencyServiceTest {
     AgencyTopic withoutLegal = AgencyTopic.builder().agency(agency).topicId(2L).build();
     ReflectionTestUtils.setField(agency, "agencyTopics", List.of(withLegal, withoutLegal));
 
-    when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
+    when(legalTextInheritanceResolver.resolveDppForList(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
-    when(legalTextInheritanceResolver.resolveImprint(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
+    when(legalTextInheritanceResolver.resolveImprintForList(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
@@ -315,7 +315,7 @@ public class AgencyServiceTest {
     AgencyTopic departmentWithoutOwnText = AgencyTopic.builder().agency(agency).topicId(1L).build();
     ReflectionTestUtils.setField(agency, "agencyTopics", List.of(departmentWithoutOwnText));
 
-    when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.eq(departmentWithoutOwnText), any(), any()))
+    when(legalTextInheritanceResolver.resolveDppForList(org.mockito.ArgumentMatchers.eq(departmentWithoutOwnText), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.AGENCY));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
