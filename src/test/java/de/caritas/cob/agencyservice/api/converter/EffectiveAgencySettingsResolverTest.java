@@ -143,7 +143,13 @@ class EffectiveAgencySettingsResolverTest {
           "featureVideoCallsSupervisionChatsEnabled", "featureVoiceMessagesAnonymousChatsEnabled",
           "featureVoiceMessagesEnabled", "featureVoiceMessagesGroupChatsEnabled",
           "featureVoiceMessagesOneOnOneChatsEnabled",
-          "featureVoiceMessagesSupervisionChatsEnabled");
+          "featureVoiceMessagesSupervisionChatsEnabled",
+          // ORISO-Frontend#2491: team chat on an open enquiry, governed like supervision.
+          "featureTeamDiscussionEnabled", "featureVideoCallsTeamDiscussionsEnabled",
+          "featureAudioCallsTeamDiscussionsEnabled", "featureVoiceMessagesTeamDiscussionsEnabled",
+          "featureThreadsTeamDiscussionsEnabled", "featureMediaUploadTeamDiscussionsEnabled",
+          "featureMediaInlineDisplayTeamDiscussionsEnabled",
+          "featureMediaAiScanTeamDiscussionsEnabled");
 
   /**
    * Shared flags deliberately not cascaded: the eight operational tenant-level flags (served as
@@ -301,6 +307,24 @@ class EffectiveAgencySettingsResolverTest {
     "featureMediaAiScanSupervisionChatsEnabled, null, true, true",
     "featureMediaAiScanSupervisionChatsEnabled, null, false, false",
     "featureMediaAiScanSupervisionChatsEnabled, null, null, null",
+    "featureTeamDiscussionEnabled, true, true, true",
+    "featureTeamDiscussionEnabled, true, false, false",
+    "featureTeamDiscussionEnabled, true, null, true",
+    "featureTeamDiscussionEnabled, false, true, false",
+    "featureTeamDiscussionEnabled, false, false, false",
+    "featureTeamDiscussionEnabled, false, null, false",
+    "featureTeamDiscussionEnabled, null, true, true",
+    "featureTeamDiscussionEnabled, null, false, false",
+    "featureTeamDiscussionEnabled, null, null, null",
+    "featureMediaAiScanTeamDiscussionsEnabled, true, true, true",
+    "featureMediaAiScanTeamDiscussionsEnabled, true, false, false",
+    "featureMediaAiScanTeamDiscussionsEnabled, true, null, true",
+    "featureMediaAiScanTeamDiscussionsEnabled, false, true, false",
+    "featureMediaAiScanTeamDiscussionsEnabled, false, false, false",
+    "featureMediaAiScanTeamDiscussionsEnabled, false, null, false",
+    "featureMediaAiScanTeamDiscussionsEnabled, null, true, true",
+    "featureMediaAiScanTeamDiscussionsEnabled, null, false, false",
+    "featureMediaAiScanTeamDiscussionsEnabled, null, null, null",
     "featureAnonymousChatEnabled, true, true, true",
     "featureAnonymousChatEnabled, true, false, false",
     "featureAnonymousChatEnabled, true, null, true",

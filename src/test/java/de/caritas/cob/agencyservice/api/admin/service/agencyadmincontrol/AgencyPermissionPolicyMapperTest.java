@@ -33,14 +33,35 @@ class AgencyPermissionPolicyMapperTest {
 
   @Test
   void registry_shouldCoverEveryLegacyPolicyFeatureIncludingMedia() {
-    assertThat(mapper.supportedFeatures()).hasSize(44);
+    assertThat(mapper.supportedFeatures()).hasSize(52);
     assertThat(mapper.supportedFeatures())
         .contains(
             "featureMediaAiScanSupervisionChatsEnabled",
             "featureThreadsOneOnOneEnabled",
             "appearance",
             "featureInternalGroupChatEnabled",
-            "featureSelfHelpGroupsEnabled");
+            "featureSelfHelpGroupsEnabled",
+            "featureTeamDiscussionEnabled",
+            "featureMediaAiScanTeamDiscussionsEnabled");
+  }
+
+  @Test
+  void toLegacyControls_shouldMapTeamDiscussionPoliciesLikeSupervision() {
+    // ORISO-Frontend#2491: the Träger requirement reaches the Beratungsstelle controls.
+    var controls =
+        mapper.toLegacyControls(
+            Map.of(
+                "featureTeamDiscussionEnabled",
+                policy(false, PermissionPolicyMode.ENFORCED),
+                "featureVideoCallsTeamDiscussionsEnabled",
+                policy(true, PermissionPolicyMode.ENFORCED),
+                "featureThreadsTeamDiscussionsEnabled",
+                policy(false, PermissionPolicyMode.SUGGESTED)));
+
+    assertThat(controls.getAllowedPermissionToggles().getTeamDiscussion()).isFalse();
+    assertThat(controls.getEnforcedPermissionToggles().getVideoCallsTeamDiscussions()).isTrue();
+    assertThat(controls.getAllowedPermissionToggles().getThreadsTeamDiscussions()).isTrue();
+    assertThat(controls.getEnforcedPermissionToggles().getThreadsTeamDiscussions()).isFalse();
   }
 
   private static BooleanPermissionPolicy policy(boolean value, PermissionPolicyMode mode) {

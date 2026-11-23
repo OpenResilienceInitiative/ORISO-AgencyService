@@ -65,7 +65,15 @@ public class AgencyPermissionPolicyMapper {
           Map.entry("featureMediaAiScanAnonymousChatsEnabled", "mediaAiScanAnonymousChats"),
           Map.entry("featureMediaAiScanOneOnOneChatsEnabled", "mediaAiScanOneOnOneChats"),
           Map.entry("featureMediaAiScanGroupChatsEnabled", "mediaAiScanGroupChats"),
-          Map.entry("featureMediaAiScanSupervisionChatsEnabled", "mediaAiScanSupervisionChats"));
+          Map.entry("featureMediaAiScanSupervisionChatsEnabled", "mediaAiScanSupervisionChats"),
+          Map.entry("featureTeamDiscussionEnabled", "teamDiscussion"),
+          Map.entry("featureVideoCallsTeamDiscussionsEnabled", "videoCallsTeamDiscussions"),
+          Map.entry("featureAudioCallsTeamDiscussionsEnabled", "audioCallsTeamDiscussions"),
+          Map.entry("featureVoiceMessagesTeamDiscussionsEnabled", "voiceMessagesTeamDiscussions"),
+          Map.entry("featureThreadsTeamDiscussionsEnabled", "threadsTeamDiscussions"),
+          Map.entry("featureMediaUploadTeamDiscussionsEnabled", "mediaUploadTeamDiscussions"),
+          Map.entry("featureMediaInlineDisplayTeamDiscussionsEnabled", "mediaInlineDisplayTeamDiscussions"),
+          Map.entry("featureMediaAiScanTeamDiscussionsEnabled", "mediaAiScanTeamDiscussions"));
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 

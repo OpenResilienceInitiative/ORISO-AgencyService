@@ -84,4 +84,24 @@ class AgencyEffectivePermissionSettingsApplierTest {
 
     assertThat(settings.getFeatureCallsEnabled()).isTrue();
   }
+
+  @Test
+  void applyTo_should_governTeamDiscussionLikeSupervision() {
+    // ORISO-Frontend#2491: Träger off forces the Beratungsstelle team chat off, a requirement on.
+    var settings =
+        new Settings()
+            .featureTeamDiscussionEnabled(true)
+            .featureMediaUploadTeamDiscussionsEnabled(false);
+    var controls =
+        new AgencyAdminControls()
+            .allowedPermissionToggles(
+                new AgencyAdminAllowedPermissionToggles().teamDiscussion(false))
+            .enforcedPermissionToggles(
+                new AgencyAdminAllowedPermissionToggles().mediaUploadTeamDiscussions(true));
+
+    applier.applyTo(settings, controls);
+
+    assertThat(settings.getFeatureTeamDiscussionEnabled()).isFalse();
+    assertThat(settings.getFeatureMediaUploadTeamDiscussionsEnabled()).isTrue();
+  }
 }
