@@ -75,6 +75,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.dao.DataAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -450,13 +451,43 @@ public class AgencyServiceTest {
         .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
     ensureAgencyTopics(available);
     when(agencyRepository.findByIdIn(List.of(91L, 92L))).thenReturn(List.of(unavailable, available));
+    when(tenantService.getRestrictedTenantDataByTenantIds(any())).thenReturn(List.of(
+        new RestrictedTenantDTO().id(14L), new RestrictedTenantDTO().id(99L),
+        new RestrictedTenantDTO().id(13L), new RestrictedTenantDTO().id(13L)));
     when(tenantService.getRestrictedTenantDataByTenantId(13L))
-        .thenThrow(new org.springframework.web.client.RestClientException("unavailable"));
-    when(tenantService.getRestrictedTenantDataByTenantId(14L))
-        .thenReturn(new RestrictedTenantDTO().id(14L));
+        .thenThrow(new RestClientException("unavailable"));
 
     assertEquals(List.of(92L), agencyService.getAgencies(List.of(91L, 92L)).stream()
         .map(AgencyResponseDTO::getId).toList());
+    verify(tenantService).getRestrictedTenantDataByTenantId(13L);
+    verify(tenantService, Mockito.never()).getRestrictedTenantDataByTenantId(14L);
+  }
+
+  @Test
+  public void getAgenciesByConsultingTypeReadsFreshBatchesAndKeepsSingleLookupFallback() {
+    var first = Agency.builder().id(91L).tenantId(13L).name("Synthetic first")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    var second = Agency.builder().id(92L).tenantId(14L).name("Synthetic second")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    ensureAgencyTopics(first);
+    ensureAgencyTopics(second);
+    when(agencyRepository.findByConsultingTypeId(CONSULTING_TYPE_SUCHT))
+        .thenReturn(List.of(first, second));
+    when(tenantService.getRestrictedTenantDataByTenantIds(any()))
+        .thenReturn(List.of(new RestrictedTenantDTO().id(13L).active(false)))
+        .thenThrow(new RestClientException("batch unavailable"));
+    when(tenantService.getRestrictedTenantDataByTenantId(13L))
+        .thenReturn(new RestrictedTenantDTO().id(13L).active(true));
+    when(tenantService.getRestrictedTenantDataByTenantId(14L))
+        .thenReturn(new RestrictedTenantDTO().id(14L).active(true));
+
+    assertThat(agencyService.getAgencies(CONSULTING_TYPE_SUCHT))
+        .extracting(AgencyResponseDTO::getOffline).containsExactly(true, false);
+    assertThat(agencyService.getAgencies(CONSULTING_TYPE_SUCHT))
+        .extracting(AgencyResponseDTO::getOffline).containsExactly(false, false);
+    verify(tenantService, times(2)).getRestrictedTenantDataByTenantIds(any());
+    verify(tenantService).getRestrictedTenantDataByTenantId(13L);
+    verify(tenantService, times(2)).getRestrictedTenantDataByTenantId(14L);
   }
 
   @Test
