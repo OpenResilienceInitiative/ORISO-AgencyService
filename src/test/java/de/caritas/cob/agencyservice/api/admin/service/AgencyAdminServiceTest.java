@@ -9,6 +9,7 @@ import static de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO.Agency
 import static de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO.AgencyTypeEnum.TEAM_AGENCY;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.AGENCY_ID;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -377,6 +378,48 @@ class AgencyAdminServiceTest {
     verify(agencyRepository, never()).save(any());
     verify(tenantService).getRestrictedTenantDataForPermissionPolicies(8L);
     Mockito.verifyNoMoreInteractions(tenantService);
+  }
+
+  @Test
+  void updateAgency_Should_KeepStoredLiveChatFurtherCounselling_When_RestrictedAgencyAdminSaves() {
+    var agency = agencyWithLiveChatFurtherCounselling("{\"featureLiveChatFurtherCounsellingEnabled\":false}");
+    when(authenticatedUser.isTenantSuperAdmin()).thenReturn(false);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateWithSettings(agency,
+        new Settings().featureLiveChatFurtherCounsellingEnabled(true)));
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertThat(agencyArgumentCaptor.getValue().getSettings(),
+        containsString("\"featureLiveChatFurtherCounsellingEnabled\":false"));
+  }
+
+  @Test
+  void updateAgency_Should_StoreLiveChatFurtherCounselling_When_TraegerOrPlatformAdminSaves() {
+    var agency = agencyWithLiveChatFurtherCounselling("{}");
+    when(authenticatedUser.isTenantSuperAdmin()).thenReturn(true);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateWithSettings(agency,
+        new Settings().featureLiveChatFurtherCounsellingEnabled(true)));
+
+    verify(agencyRepository).save(agencyArgumentCaptor.capture());
+    assertThat(agencyArgumentCaptor.getValue().getSettings(),
+        containsString("\"featureLiveChatFurtherCounsellingEnabled\":true"));
+  }
+
+  private Agency agencyWithLiveChatFurtherCounselling(String storedSettings) {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setSettings(storedSettings);
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenReturn(agency);
+    ReflectionTestUtils.setField(agencyAdminService, "agencySettingsService", new AgencySettingsService());
+    return agency;
+  }
+
+  private static UpdateAgencyDTO updateWithSettings(Agency agency, Settings settings) {
+    return new UpdateAgencyDTO().name(agency.getName()).description(agency.getDescription())
+        .postcode(agency.getPostCode()).city(agency.getCity()).external(false).settings(settings);
   }
 
   @Test
