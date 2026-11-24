@@ -696,6 +696,15 @@ public class AgencyService {
     }
   }
 
+  private boolean effectiveTeamAgency(
+      Agency agency, Function<Agency, RestrictedTenantDTO> ownTenant) {
+    return AgencyCaseSharingResolver.isTeamCounselling(
+        AgencyCaseSharingResolver.resolve(
+            agencySettingsService.toSettings(agency.getSettings()),
+            agency.isTeamAgency(),
+            ownTenant.apply(agency)));
+  }
+
   private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return new FullAgencyResponseDTO()
@@ -704,7 +713,8 @@ public class AgencyService {
         .postcode(agency.getPostCode())
         .city(agency.getCity())
         .description(agency.getDescription())
-        .teamAgency(agency.isTeamAgency())
+        // #374: registration search shows the same effective team flag as GET /agencies/{ids}
+        .teamAgency(effectiveTeamAgency(agency, ownTenant))
         .offline(agency.isOffline())
         .consultingType(agency.getConsultingTypeId())
         .url(agency.getUrl())

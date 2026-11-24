@@ -269,6 +269,36 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getListOfAgencies_Should_serveTheEffectiveTeamFlag_When_theCentreChoseACaseSharingMode()
+      throws MissingConsultingTypeException {
+    Agency formerTeamCentre = Agency.builder().id(101L).name("Team, now handover")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).teamAgency(true).settings("handover").build();
+    Agency newTeamCentre = Agency.builder().id(102L).name("Now team")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).teamAgency(false).settings("team").build();
+    ensureAgencyTopics(formerTeamCentre);
+    ensureAgencyTopics(newTeamCentre);
+    when(agencySettingsService.toSettings("handover")).thenReturn(
+        new de.caritas.cob.agencyservice.api.model.Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.CASE_HANDOVER));
+    when(agencySettingsService.toSettings("team")).thenReturn(
+        new de.caritas.cob.agencyservice.api.model.Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING));
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(new ArrayList<>(List.of(formerTeamCentre, newTeamCentre)));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var teamById = agencyService.getAgencies(Optional.of(VALID_POSTCODE), CONSULTING_TYPE_SUCHT,
+            Optional.empty()).stream()
+        .collect(java.util.stream.Collectors.toMap(
+            FullAgencyResponseDTO::getId, FullAgencyResponseDTO::getTeamAgency));
+
+    assertEquals(Boolean.FALSE, teamById.get(101L));
+    assertEquals(Boolean.TRUE, teamById.get(102L));
+  }
+
+  @Test
   public void getListOfAgencies_Should_MapDepartmentsWithLegalPublicationFlags()
       throws MissingConsultingTypeException {
 
