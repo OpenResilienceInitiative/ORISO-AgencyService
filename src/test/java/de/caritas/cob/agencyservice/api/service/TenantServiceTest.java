@@ -111,7 +111,7 @@ class TenantServiceTest {
             .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED));
     when(tenantServiceApiControllerFactory.createControllerApi()).thenReturn(tenantControllerApi);
     when(tenantControllerApi.getRestrictedTenantDataByTenantId(7L))
-        .thenReturn(new RestrictedTenantDTO(policies, null).id(7L));
+        .thenReturn(new RestrictedTenantDTO(policies, null, null).id(7L));
 
     var result = tenantService.getPermissionPolicies(7L);
 

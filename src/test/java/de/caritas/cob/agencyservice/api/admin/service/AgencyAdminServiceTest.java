@@ -362,7 +362,7 @@ class AgencyAdminServiceTest {
         .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED);
     when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L)).thenReturn(
         new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO(
-            Map.of("featureVideoCallsOneOnOneChatsEnabled", policy), null).id(8L));
+            Map.of("featureVideoCallsOneOnOneChatsEnabled", policy), null, null).id(8L));
     var controls = new AgencyAdminControlsService(tenantService,
         new de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyPermissionPolicyMapper());
     ReflectionTestUtils.setField(agencyAdminService, "agencyAdminControlsService", controls);

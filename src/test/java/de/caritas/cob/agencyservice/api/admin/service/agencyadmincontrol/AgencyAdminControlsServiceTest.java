@@ -34,7 +34,7 @@ class AgencyAdminControlsServiceTest {
     var policies = new TenantPermissionPolicies().tenantId(8L)
         .policies(Map.of("featureVideoCallsOneOnOneChatsEnabled", parent));
     when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L))
-        .thenReturn(new RestrictedTenantDTO(policies.getPolicies(), null).id(8L));
+        .thenReturn(new RestrictedTenantDTO(policies.getPolicies(), null, null).id(8L));
     var actualService = new AgencyAdminControlsService(tenantService, new AgencyPermissionPolicyMapper());
     var settings = new Settings().featureVideoCallsOneOnOneChatsEnabled(true);
 
@@ -64,7 +64,7 @@ class AgencyAdminControlsServiceTest {
   void getResolvedControls_shouldUseThePublicResolvedTenantContract() {
     var policy = new BooleanPermissionPolicy().value(false).mode(PermissionPolicyMode.ENFORCED);
     var restricted =
-        new RestrictedTenantDTO(Map.of("featureVideoCallsEnabled", policy), null)
+        new RestrictedTenantDTO(Map.of("featureVideoCallsEnabled", policy), null, null)
             .id(7L)
             .name("Tenant");
     var expected = new AgencyAdminControls();
@@ -93,7 +93,7 @@ class AgencyAdminControlsServiceTest {
     var controls = new AgencyAdminControls();
     var policies = new TenantPermissionPolicies().tenantId(8L).policies(Map.of());
     when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L))
-        .thenReturn(new RestrictedTenantDTO(policies.getPolicies(), null).id(8L));
+        .thenReturn(new RestrictedTenantDTO(policies.getPolicies(), null, null).id(8L));
     when(policyMapper.toLegacyControls(policies.getPolicies())).thenReturn(controls);
 
     assertThat(service.enrichSettingsWithAgencyAdminControls(settings, 8L)).isSameAs(settings);
@@ -105,7 +105,7 @@ class AgencyAdminControlsServiceTest {
     var policies = Map.of("featureDirectInviteVideoEnabled",
         new BooleanPermissionPolicy().value(true).mode(PermissionPolicyMode.ENFORCED));
     when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L)).thenReturn(
-        new RestrictedTenantDTO(policies, null).id(8L).settings(
+        new RestrictedTenantDTO(policies, null, null).id(8L).settings(
             new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings()
                 .featureDirectInviteVideoEnabled(false)));
     var raw = new Settings().featureDirectInviteVideoEnabled(true);
@@ -126,4 +126,67 @@ class AgencyAdminControlsServiceTest {
         .isInstanceOf(de.caritas.cob.agencyservice.api.exception.httpresponses.ServiceUnavailableException.class);
   }
 
+
+  // ORISO-TenantService#374: the centre chooses its case sharing mode only while it is adjustable
+  private static RestrictedTenantDTO caseSharingTenant(
+      de.caritas.cob.agencyservice.tenantservice.generated.web.model.CaseSharingMode value,
+      PermissionPolicyMode mode) {
+    return new RestrictedTenantDTO(
+            Map.of(),
+            null,
+            new de.caritas.cob.agencyservice.tenantservice.generated.web.model.CaseSharingPolicies()
+                .mode(
+                    new de.caritas.cob.agencyservice.tenantservice.generated.web.model
+                            .CaseSharingModePermissionPolicy()
+                        .value(value)
+                        .mode(mode)))
+        .id(8L);
+  }
+
+  @Test
+  void assertSettingsUpdateAllowed_shouldRefuseACaseSharingModeAgainstARequirement() {
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L))
+        .thenReturn(
+            caseSharingTenant(
+                de.caritas.cob.agencyservice.tenantservice.generated.web.model.CaseSharingMode
+                    .CASE_HANDOVER,
+                PermissionPolicyMode.ENFORCED));
+    var requested =
+        new Settings()
+            .caseSharingMode(
+                de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING);
+
+    assertThatThrownBy(() -> service.assertSettingsUpdateAllowed(new Settings(), requested, 8L))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void assertSettingsUpdateAllowed_shouldAcceptACaseSharingModeWhileAdjustable() {
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L))
+        .thenReturn(
+            caseSharingTenant(
+                de.caritas.cob.agencyservice.tenantservice.generated.web.model.CaseSharingMode
+                    .CASE_HANDOVER,
+                PermissionPolicyMode.SUGGESTED));
+    var requested =
+        new Settings()
+            .caseSharingMode(
+                de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING);
+
+    service.assertSettingsUpdateAllowed(new Settings(), requested, 8L);
+  }
+
+  @Test
+  void enrichSettings_shouldServeTheCentresEffectiveCaseSharingMode() {
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(8L))
+        .thenReturn(
+            caseSharingTenant(
+                de.caritas.cob.agencyservice.tenantservice.generated.web.model.CaseSharingMode.NONE,
+                PermissionPolicyMode.SUGGESTED));
+
+    var result = service.enrichSettingsWithAgencyAdminControls(new Settings(), 8L, true);
+
+    assertThat(result.getCaseSharing().getValue())
+        .isEqualTo(de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING);
+  }
 }

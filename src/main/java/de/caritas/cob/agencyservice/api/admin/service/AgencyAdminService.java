@@ -140,7 +140,7 @@ public class AgencyAdminService {
       var settings = agencySettingsService.toSettings(agency.getSettings());
       response.getEmbedded().setSettings(
           agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(
-              settings, agency.getTenantId()));
+              settings, agency.getTenantId(), agency.isTeamAgency()));
     }
   }
 
@@ -467,8 +467,10 @@ public class AgencyAdminService {
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
     if (updateAgencyDTO.getSettings() != null) {
-      var settings = agencySettingsService.keepStoredCounsellorTopicPermission(
-          updateAgencyDTO.getSettings(), agency.getSettings());
+      var settings = agencySettingsService.keepStoredCaseSharingMode(
+          agencySettingsService.keepStoredCounsellorTopicPermission(
+              updateAgencyDTO.getSettings(), agency.getSettings()),
+          agency.getSettings());
       return agencySettingsService.toSettingsJson(
           agencySettingsService.keepStoredLiveChatFurtherCounselling(
               settings, agency.getSettings(),

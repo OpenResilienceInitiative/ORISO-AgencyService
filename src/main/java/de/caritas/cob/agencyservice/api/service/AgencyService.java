@@ -6,6 +6,7 @@ import static org.apache.commons.lang3.BooleanUtils.isTrue;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
+import de.caritas.cob.agencyservice.api.converter.AgencyCaseSharingResolver;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
@@ -631,13 +632,15 @@ public class AgencyService {
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     String renderedAgencySpecificPrivacy =
         getRenderedAgencySpecificPrivacy(agency, tenantData, ownTenant, mainTenant);
+    var settings = buildAgencySettings(agency, tenantData);
     return new AgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
         .postcode(agency.getPostCode())
         .city(agency.getCity())
         .description(agency.getDescription())
-        .teamAgency(agency.isTeamAgency())
+        // #374: new sessions and counsellor assignments follow the effective case sharing mode
+        .teamAgency(AgencyCaseSharingResolver.isTeamCounselling(settings.getCaseSharing()))
         .offline(offline)
         .tenantId(agency.getTenantId())
         .consultingType(agency.getConsultingTypeId())
@@ -654,7 +657,7 @@ public class AgencyService {
             agency.getAgencyTopics().stream()
                 .map(topic -> convertToAgencyDepartmentDTO(topic, agency, ownTenant, mainTenant))
                 .toList())
-        .settings(buildAgencySettings(agency, tenantData));
+        .settings(settings);
   }
 
   /**
@@ -666,6 +669,10 @@ public class AgencyService {
     EffectiveAgencySettingsResolver.applyTo(
         settings, tenantData != null ? tenantData.getSettings() : null,
         tenantData != null ? tenantData.getPermissionPolicies() : null);
+    if (settings == null) {
+      settings = new Settings();
+    }
+    AgencyCaseSharingResolver.applyTo(settings, agency.isTeamAgency(), tenantData);
     return settings;
   }
 
@@ -689,6 +696,16 @@ public class AgencyService {
     }
   }
 
+  private boolean effectiveTeamAgency(
+      Agency agency, Function<Agency, RestrictedTenantDTO> ownTenant) {
+    return AgencyCaseSharingResolver.isTeamCounselling(
+        AgencyCaseSharingResolver.resolve(
+            agencySettingsService.toSettings(agency.getSettings()),
+            agency.isTeamAgency(),
+            // like isTenantInactive: an agency without a tenant has no Traeger to inherit from
+            agency.getTenantId() == null ? null : ownTenant.apply(agency)));
+  }
+
   private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return new FullAgencyResponseDTO()
@@ -697,7 +714,8 @@ public class AgencyService {
         .postcode(agency.getPostCode())
         .city(agency.getCity())
         .description(agency.getDescription())
-        .teamAgency(agency.isTeamAgency())
+        // #374: registration search shows the same effective team flag as GET /agencies/{ids}
+        .teamAgency(effectiveTeamAgency(agency, ownTenant))
         .offline(agency.isOffline())
         .consultingType(agency.getConsultingTypeId())
         .url(agency.getUrl())

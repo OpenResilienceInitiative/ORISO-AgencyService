@@ -269,6 +269,36 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getListOfAgencies_Should_serveTheEffectiveTeamFlag_When_theCentreChoseACaseSharingMode()
+      throws MissingConsultingTypeException {
+    Agency formerTeamCentre = Agency.builder().id(101L).name("Team, now handover")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).teamAgency(true).settings("handover").build();
+    Agency newTeamCentre = Agency.builder().id(102L).name("Now team")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).teamAgency(false).settings("team").build();
+    ensureAgencyTopics(formerTeamCentre);
+    ensureAgencyTopics(newTeamCentre);
+    when(agencySettingsService.toSettings("handover")).thenReturn(
+        new de.caritas.cob.agencyservice.api.model.Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.CASE_HANDOVER));
+    when(agencySettingsService.toSettings("team")).thenReturn(
+        new de.caritas.cob.agencyservice.api.model.Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING));
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(new ArrayList<>(List.of(formerTeamCentre, newTeamCentre)));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var teamById = agencyService.getAgencies(Optional.of(VALID_POSTCODE), CONSULTING_TYPE_SUCHT,
+            Optional.empty()).stream()
+        .collect(java.util.stream.Collectors.toMap(
+            FullAgencyResponseDTO::getId, FullAgencyResponseDTO::getTeamAgency));
+
+    assertEquals(Boolean.FALSE, teamById.get(101L));
+    assertEquals(Boolean.TRUE, teamById.get(102L));
+  }
+
+  @Test
   public void getListOfAgencies_Should_MapDepartmentsWithLegalPublicationFlags()
       throws MissingConsultingTypeException {
 
@@ -506,8 +536,8 @@ public class AgencyServiceTest {
     var on = new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
         .value(true).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED);
     when(tenantService.getRestrictedTenantDataByTenantId(14L))
-        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", off), null).id(14L))
-        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", on), null).id(14L));
+        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", off), null, null).id(14L))
+        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", on), null, null).id(14L));
 
     var before = agencyService.getAgencies(List.of(91L, 92L));
     before.forEach(agency -> assertEquals(false, agency.getSettings().getFeatureVideoCallsOneOnOneChatsEnabled()));
@@ -519,7 +549,7 @@ public class AgencyServiceTest {
   @Test
   public void getAgencies_With_Ids_Should_ForceFeatureOff_When_PlatformDisallowsIt() {
     servePermissionAgency(new de.caritas.cob.agencyservice.api.model.Settings().featureCallsEnabled(true),
-        new RestrictedTenantDTO(java.util.Map.of("featureCallsEnabled", enforced(false)), null));
+        new RestrictedTenantDTO(java.util.Map.of("featureCallsEnabled", enforced(false)), null, null));
     var result = agencyService.getAgencies(AGENCY_IDS_LIST).get(0);
     assertEquals(false, result.getSettings().getFeatureCallsEnabled());
 
@@ -553,7 +583,7 @@ public class AgencyServiceTest {
   public void getAgencies_With_Ids_Should_ForceOnlyOneFormatOff_When_PlatformDisallowsIt() {
     servePermissionAgency(new de.caritas.cob.agencyservice.api.model.Settings()
         .featureGroupChatV2Enabled(true).featureInternalGroupChatEnabled(true).featureSelfHelpGroupsEnabled(true),
-        new RestrictedTenantDTO(java.util.Map.of("featureSelfHelpGroupsEnabled", enforced(false)), null));
+        new RestrictedTenantDTO(java.util.Map.of("featureSelfHelpGroupsEnabled", enforced(false)), null, null));
     var settings = agencyService.getAgencies(AGENCY_IDS_LIST).get(0).getSettings();
     assertEquals(false, settings.getFeatureSelfHelpGroupsEnabled());
     assertEquals(true, settings.getFeatureInternalGroupChatEnabled());
@@ -638,7 +668,7 @@ public class AgencyServiceTest {
   public void getAgencies_With_Ids_Should_EnforceOneFormatOn_When_PlatformEnforcesOnlyThatFormat() {
     servePermissionAgency(new de.caritas.cob.agencyservice.api.model.Settings()
         .featureInternalGroupChatEnabled(false).featureSelfHelpGroupsEnabled(false),
-        new RestrictedTenantDTO(java.util.Map.of("featureInternalGroupChatEnabled", enforced(true)), null));
+        new RestrictedTenantDTO(java.util.Map.of("featureInternalGroupChatEnabled", enforced(true)), null, null));
     var settings = agencyService.getAgencies(AGENCY_IDS_LIST).get(0).getSettings();
     assertEquals(true, settings.getFeatureInternalGroupChatEnabled());
     assertEquals(false, settings.getFeatureSelfHelpGroupsEnabled());
