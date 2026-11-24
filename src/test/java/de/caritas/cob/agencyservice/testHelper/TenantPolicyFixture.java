@@ -27,7 +27,7 @@ public final class TenantPolicyFixture {
 
   public static de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO
       projection(Long tenantId, Map<String, BooleanPermissionPolicy> policies) {
-    return new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO(policies, null)
+    return new de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO(policies, null, null)
         .id(tenantId).settings(new de.caritas.cob.agencyservice.tenantservice.generated.web.model.Settings()
             .featureVideoCallsEnabled(false));
   }

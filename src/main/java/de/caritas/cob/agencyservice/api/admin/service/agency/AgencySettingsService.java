@@ -106,6 +106,14 @@ public class AgencySettingsService {
    * another admin such as a restricted agency admin, keeps the stored value (null stays null,
    * which means off).
    */
+  /** #374: an update without {@code caseSharingMode} keeps the centre's stored choice. */
+  public Settings keepStoredCaseSharingMode(Settings update, String storedSettingsJson) {
+    if (update != null && update.getCaseSharingMode() == null) {
+      update.setCaseSharingMode(storedSettings(storedSettingsJson).getCaseSharingMode());
+    }
+    return update;
+  }
+
   public Settings keepStoredLiveChatFurtherCounselling(
       Settings update, String storedSettingsJson, boolean callerMayChange) {
     if (update != null
@@ -124,6 +132,7 @@ public class AgencySettingsService {
       ObjectNode stored = objectMapper.valueToTree(settings);
       stored.remove("agencyAdminControls");
       stored.remove("permissionPolicies");
+      stored.remove("caseSharing");
       return objectMapper.writeValueAsString(stored);
     } catch (JsonProcessingException exception) {
       throw new RuntimeJsonMappingException(exception.getMessage());

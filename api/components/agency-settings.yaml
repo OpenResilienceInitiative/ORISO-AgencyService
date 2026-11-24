@@ -195,9 +195,46 @@ components:
         inherited:
           type: boolean
 
+    AgencyCaseSharingMode:
+      type: string
+      description: >-
+        How the counsellors of this counselling centre share a Mailberatung case
+        (ORISO-TenantService#374). CASE_HANDOVER = one counsellor owns the case and can hand it
+        over; TEAM_COUNSELLING = every counsellor of the centre sees every case; NONE = the case
+        stays with the counsellor who accepted it.
+      enum: [CASE_HANDOVER, TEAM_COUNSELLING, NONE]
+
+    AgencyCaseSharingPolicy:
+      type: object
+      required: [value, mode, inherited]
+      properties:
+        value:
+          $ref: '#/components/schemas/AgencyCaseSharingMode'
+        mode:
+          type: string
+          enum: [ENFORCED, SUGGESTED]
+        inherited:
+          type: boolean
+
     Settings:
       type: object
       properties:
+        caseSharingMode:
+          allOf:
+            - $ref: '#/components/schemas/AgencyCaseSharingMode'
+          description: >-
+            The centre's own case sharing choice (ORISO-TenantService#374). Absent = none of its
+            own: the Traeger's choice applies, except that a centre with teamAgency under a
+            Traeger without case handover reads TEAM_COUNSELLING. Applies only while the Traeger
+            or platform has not made its choice a requirement. An update without this key keeps
+            the stored value.
+        caseSharing:
+          allOf:
+            - $ref: '#/components/schemas/AgencyCaseSharingPolicy'
+          readOnly: true
+          description: >-
+            Effective case sharing mode of this centre (ORISO-TenantService#374), resolved from
+            platform, Traeger and caseSharingMode. Never stored.
         permissionPolicies:
           type: object
           readOnly: true

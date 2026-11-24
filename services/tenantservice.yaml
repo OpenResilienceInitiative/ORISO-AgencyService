@@ -2361,6 +2361,33 @@ components:
             - $ref: '#/components/schemas/InternalGroupChatPolicies'
           readOnly: true
           description: Resolved internal group chat policies (recipient scope) for downstream services.
+        caseSharing:
+          allOf:
+            - $ref: '#/components/schemas/CaseSharingPolicies'
+          readOnly: true
+          description: Resolved case sharing policy (ORISO-TenantService#374) of the Traeger.
+    CaseSharingMode:
+      type: string
+      enum:
+        - CASE_HANDOVER
+        - TEAM_COUNSELLING
+        - NONE
+    CaseSharingModePermissionPolicy:
+      type: object
+      required: [value, mode]
+      properties:
+        value:
+          $ref: '#/components/schemas/CaseSharingMode'
+        mode:
+          $ref: '#/components/schemas/PermissionPolicyMode'
+        inherited:
+          type: boolean
+          readOnly: true
+    CaseSharingPolicies:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/CaseSharingModePermissionPolicy'
     Licensing:
       type: object
       required:

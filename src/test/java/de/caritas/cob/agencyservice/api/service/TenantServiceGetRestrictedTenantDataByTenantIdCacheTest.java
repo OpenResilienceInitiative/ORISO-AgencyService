@@ -61,10 +61,10 @@ class TenantServiceGetRestrictedTenantDataByTenantIdCacheTest {
         .thenReturn(
             new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsEnabled",
                 new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
-                    .value(true).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.SUGGESTED)), null),
+                    .value(true).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.SUGGESTED)), null, null),
             new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsEnabled",
                 new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
-                    .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED)), null));
+                    .value(false).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED)), null, null));
 
     var before = tenantService.getRestrictedTenantDataByTenantId(TENANT_ID);
     var after = tenantService.getRestrictedTenantDataByTenantId(TENANT_ID);
