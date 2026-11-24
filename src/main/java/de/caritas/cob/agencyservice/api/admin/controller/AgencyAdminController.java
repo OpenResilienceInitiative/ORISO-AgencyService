@@ -16,6 +16,7 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftServ
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftView;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalProposalFacade;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalAdminAccessGuard;
+import de.caritas.cob.agencyservice.api.model.AgencyDeletionResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalDraftArchiveDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptRequestDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptionDTO;
@@ -335,9 +336,8 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
-  public ResponseEntity<Void> deleteAgency(@PathVariable Long agencyId) {
-    this.agencyAdminService.deleteAgency(agencyId);
-    return new ResponseEntity<>(HttpStatus.OK);
+  public ResponseEntity<AgencyDeletionResultDTO> deleteAgency(@PathVariable Long agencyId) {
+    return ResponseEntity.ok(this.agencyAdminService.deleteAgency(agencyId));
   }
 
   /**

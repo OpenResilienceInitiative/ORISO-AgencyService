@@ -46,7 +46,7 @@ jobs:
       uses: actions/checkout@v6
       with:
         repository: OpenResilienceInitiative/ORISO-UserService
-        ref: ${{ github.event_name == 'pull_request' && '004417e44e7882033f90e08d658f77b11d721f64' || 'dev' }}
+        ref: ${{ github.event_name == 'pull_request' && 'cc03ff613409c41419e993f8c854e7c97a2678a4' || 'dev' }}
         path: .providers/user
 
     - name: Set up Node.js
