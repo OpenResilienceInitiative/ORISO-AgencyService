@@ -702,7 +702,8 @@ public class AgencyService {
         AgencyCaseSharingResolver.resolve(
             agencySettingsService.toSettings(agency.getSettings()),
             agency.isTeamAgency(),
-            ownTenant.apply(agency)));
+            // like isTenantInactive: an agency without a tenant has no Traeger to inherit from
+            agency.getTenantId() == null ? null : ownTenant.apply(agency)));
   }
 
   private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency,
