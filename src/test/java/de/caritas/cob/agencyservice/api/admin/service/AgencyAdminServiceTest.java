@@ -31,7 +31,6 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichme
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
-import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.admin.service.legal.ConsentTextService;
@@ -94,7 +93,7 @@ class AgencyAdminServiceTest {
   UserAdminService userAdminService;
 
   @Mock
-  DeleteAgencyValidator deleteAgencyValidator;
+  AgencyDeletionMarker agencyDeletionMarker;
 
   @Mock
   DeletionAuditReporter deletionAuditReporter;
@@ -958,56 +957,104 @@ class AgencyAdminServiceTest {
   }
 
   @Test
-  void deleteAgency_Should_callDeleteAgencyValidatorAndSaveChangedAgency_When_AgencyIsFound() {
+  void deleteAgency_Should_markTheAgencyThenHaveUserServiceDeleteWhatBelongsToIt() {
     var agency = this.easyRandom.nextObject(Agency.class);
     when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(userAdminService.markAgencyContentsForDeletion(AGENCY_ID))
+        .thenReturn(
+            new de.caritas.cob.agencyservice.useradminservice.generated.web.model
+                    .AgencyDeletionResultDTO()
+                .complete(false)
+                .invites(1L)
+                .adviceSeekers(2L)
+                .keptAdviceSeekerSessions(3L)
+                .openEnquiries(4L)
+                .consultantsDeleted(5L)
+                .consultantsUnassigned(6L)
+                .agencyAdmins(7L)
+                .groupChats(8L)
+                .failures(
+                    List.of(
+                        new de.caritas.cob.agencyservice.useradminservice.generated.web.model
+                                .AgencyDeletionFailureDTO()
+                            .kind(
+                                de.caritas.cob.agencyservice.useradminservice.generated.web.model
+                                    .AgencyDeletionFailureDTO.KindEnum.CONSULTANT)
+                            .id("c1")
+                            .reason("IllegalStateException"))));
 
-    agencyAdminService.deleteAgency(AGENCY_ID);
+    var result = agencyAdminService.deleteAgency(AGENCY_ID);
 
-    verify(this.deleteAgencyValidator).validate(agency);
-    verify(this.agencyRepository).save(any());
+    var order = org.mockito.Mockito.inOrder(agencyDeletionMarker, userAdminService);
+    order.verify(agencyDeletionMarker).mark(AGENCY_ID);
+    order.verify(userAdminService).markAgencyContentsForDeletion(AGENCY_ID);
+    assertEquals(false, result.getComplete());
+    assertEquals(2L, result.getAdviceSeekers());
+    assertEquals(6L, result.getConsultantsUnassigned());
+    assertEquals(8L, result.getGroupChats());
+    assertEquals(
+        de.caritas.cob.agencyservice.api.model.AgencyDeletionFailureDTO.KindEnum.CONSULTANT,
+        result.getFailures().get(0).getKind());
+    assertEquals("c1", result.getFailures().get(0).getId());
   }
 
   @Test
-  void deleteAgency_Should_ReportTheMarkingToTheDeletionLog_AfterTheAgencyWasSaved() {
+  void deleteAgency_Should_keepTheMarkAndAnswerServiceUnavailable_When_UserServiceIsDown() {
     var agency = this.easyRandom.nextObject(Agency.class);
     when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(userAdminService.markAgencyContentsForDeletion(AGENCY_ID))
+        .thenThrow(new org.springframework.web.client.ResourceAccessException("down"));
 
-    agencyAdminService.deleteAgency(AGENCY_ID);
+    var thrown =
+        assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> agencyAdminService.deleteAgency(AGENCY_ID));
 
-    var order = org.mockito.Mockito.inOrder(this.agencyRepository, this.deletionAuditReporter);
-    order.verify(this.agencyRepository).save(agency);
-    order.verify(this.deletionAuditReporter)
-        .reportAgency(
-            agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
+    assertEquals(503, thrown.getStatusCode().value());
+    verify(agencyDeletionMarker).mark(AGENCY_ID);
   }
 
   @Test
-  void deleteAgency_Should_NotReport_WhenTheValidatorRefusesTheDeletion() {
+  void deleteAgency_Should_markNothing_When_UserServiceRefusesTheCaller() {
     var agency = this.easyRandom.nextObject(Agency.class);
     when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
-    org.mockito.Mockito.doThrow(new IllegalStateException("has consultants"))
-        .when(this.deleteAgencyValidator)
-        .validate(agency);
+    when(userAdminService.getAgencyDeletionPreview(AGENCY_ID))
+        .thenThrow(
+            org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.FORBIDDEN, "Forbidden", null, null, null));
 
-    assertThrows(IllegalStateException.class, () -> agencyAdminService.deleteAgency(AGENCY_ID));
+    assertThrows(
+        org.springframework.security.access.AccessDeniedException.class,
+        () -> agencyAdminService.deleteAgency(AGENCY_ID));
 
-    org.mockito.Mockito.verifyNoInteractions(this.deletionAuditReporter);
+    org.mockito.Mockito.verifyNoInteractions(agencyDeletionMarker);
+    verify(userAdminService, org.mockito.Mockito.never()).markAgencyContentsForDeletion(any());
   }
 
   @Test
-  void deleteAgency_Should_StillReport_WhenTheAppointmentSyncFails() {
+  void deleteAgency_Should_markNothing_When_UserServiceCannotBeAskedFirst() {
     var agency = this.easyRandom.nextObject(Agency.class);
     when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
-    org.mockito.Mockito.doThrow(new IllegalStateException("appointment service down"))
-        .when(this.appointmentService)
-        .deleteAgency(agency);
+    when(userAdminService.getAgencyDeletionPreview(AGENCY_ID))
+        .thenThrow(new org.springframework.web.client.ResourceAccessException("down"));
 
-    assertThrows(IllegalStateException.class, () -> agencyAdminService.deleteAgency(AGENCY_ID));
+    var thrown =
+        assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> agencyAdminService.deleteAgency(AGENCY_ID));
 
-    verify(this.deletionAuditReporter)
-        .reportAgency(
-            agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
+    assertEquals(503, thrown.getStatusCode().value());
+    org.mockito.Mockito.verifyNoInteractions(agencyDeletionMarker);
+  }
+
+  @Test
+  void deleteAgency_Should_markNothing_When_theAgencyIsNotFound() {
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.empty());
+
+    assertThrows(NotFoundException.class, () -> agencyAdminService.deleteAgency(AGENCY_ID));
+
+    org.mockito.Mockito.verifyNoInteractions(agencyDeletionMarker);
+    verify(userAdminService, org.mockito.Mockito.never()).markAgencyContentsForDeletion(any());
   }
 
 }

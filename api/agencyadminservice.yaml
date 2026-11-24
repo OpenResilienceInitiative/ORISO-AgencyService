@@ -221,7 +221,14 @@ paths:
     delete:
       tags:
         - admin-agency-controller
-      summary: 'Flags an agency as deleted [Authorization: Role: agency-admin]'
+      summary: >-
+        Deletes an agency with everything that belongs to it [Authorization: Role: agency-admin]
+      description: >-
+        Takes the agency offline and marks it for deletion, then has UserService mark what
+        belongs to it (ORISO-Admin#1524): its invitations and invite links, open enquiries, the
+        advice seekers and counsellors whose only agency it is, the sessions of the others there,
+        the agency admins' assignment and its active group chats. The nightly jobs remove them.
+        Repeating the call for an agency already in deletion repeats only the second part.
       operationId: deleteAgency
       parameters:
         - name: agencyId
@@ -233,7 +240,15 @@ paths:
             format: int64
       responses:
         200:
-          description: OK - agency was deleted successfully
+          description: OK - agency marked; the body says what went with it and what could not
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyDeletionResultDTO'
+        503:
+          description: >-
+            SERVICE UNAVAILABLE - the agency is marked and offline, but UserService could not be
+            reached; deleting it again repeats the rest
         400:
           description: BAD REQUEST - invalid/incomplete request
         404:
@@ -1656,6 +1671,68 @@ paths:
         - Bearer: [ ]
 components:
   schemas:
+    AgencyDeletionResultDTO:
+      type: object
+      required: [ complete, invites, adviceSeekers, keptAdviceSeekerSessions, openEnquiries,
+                  consultantsDeleted, consultantsUnassigned, agencyAdmins, groupChats, failures ]
+      properties:
+        complete:
+          type: boolean
+          description: true when everything of the Beratungsstelle is now marked, closed or gone
+        invites:
+          type: integer
+          format: int64
+          description: invitations revoked and invite links switched off by this call
+        adviceSeekers:
+          type: integer
+          format: int64
+          description: advice seekers whose only Beratungsstelle this is; deleted with it
+        keptAdviceSeekerSessions:
+          type: integer
+          format: int64
+          description: sessions here of advice seekers who keep their account; purged at night
+        openEnquiries:
+          type: integer
+          format: int64
+          description: enquiries nobody has taken yet; closed at once
+        consultantsDeleted:
+          type: integer
+          format: int64
+          description: counsellors whose only Beratungsstelle this is; deleted with it
+        consultantsUnassigned:
+          type: integer
+          format: int64
+          description: counsellors who keep their account and only lose this Beratungsstelle
+        agencyAdmins:
+          type: integer
+          format: int64
+          description: agency admins who lose their assignment to this Beratungsstelle
+        groupChats:
+          type: integer
+          format: int64
+          description: active group chats of this Beratungsstelle; stopped at once
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgencyDeletionFailureDTO'
+
+    AgencyDeletionFailureDTO:
+      type: object
+      required:
+        - kind
+        - reason
+      properties:
+        kind:
+          type: string
+          enum: [ INVITES, ENQUIRIES, ADVICE_SEEKER, SESSIONS, MEMBERSHIPS, CONSULTANT,
+                  CONSULTANT_RELATION, AGENCY_ADMIN, GROUP_CHAT ]
+        id:
+          type: string
+          description: the child that could not be handled; empty when its kind could not be read
+        reason:
+          type: string
+          description: the kind of failure (exception type or X-Reason), never personal data
+
     ValidationErrorResponse:
       type: object
       required:

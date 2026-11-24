@@ -5,6 +5,8 @@ import de.caritas.cob.agencyservice.api.service.securityheader.SecurityHeaderSup
 import de.caritas.cob.agencyservice.config.apiclient.UserAdminServiceApiControllerFactory;
 import de.caritas.cob.agencyservice.useradminservice.generated.ApiClient;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.AdminUserControllerApi;
+import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AgencyDeletionPreviewDTO;
+import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AgencyDeletionResultDTO;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AdminAgencyResponseDTO;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AgencyTypeDTO;
 import de.caritas.cob.agencyservice.useradminservice.generated.web.model.AgencyTypeDTO.AgencyTypeEnum;
@@ -48,6 +50,23 @@ public class UserAdminService {
         .changeAgencyType(agencyId,
             new AgencyTypeDTO()
                 .agencyType(AgencyTypeEnum.fromValue(agencyType)));
+  }
+
+  /** What deleting the agency would delete in UserService, as the caller sees it (#1524). */
+  public AgencyDeletionPreviewDTO getAgencyDeletionPreview(Long agencyId) {
+    var controllerApi = userAdminServiceApiControllerFactory.createControllerApi();
+    addDefaultHeaders(controllerApi.getApiClient());
+    return controllerApi.getAgencyDeletionPreview(agencyId);
+  }
+
+  /**
+   * Has UserService delete what belongs to an agency being deleted, as the deleting admin
+   * (ORISO-Admin#1524). UserService skips what is already done, so this can be repeated.
+   */
+  public AgencyDeletionResultDTO markAgencyContentsForDeletion(Long agencyId) {
+    var controllerApi = userAdminServiceApiControllerFactory.createControllerApi();
+    addDefaultHeaders(controllerApi.getApiClient());
+    return controllerApi.markAgencyContentsForDeletion(agencyId);
   }
 
   protected void addDefaultHeaders(ApiClient apiClient) {
