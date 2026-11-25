@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
-  <!-- ORISO-Admin#2494: append-only log of every change of a counselling centre's EFFECTIVE case
+  <!-- ORISO-Frontend#2494: append-only log of every change of a counselling centre's EFFECTIVE case
        sharing model. A case keeps the model it was created under, so this log is what shows which
        model applied from when to when. MariaDB DDL commits implicitly, so table and each index
        are separate changesets: a run that stops between them re-runs only the missing step. -->

@@ -95,7 +95,7 @@ public class SecurityConfig {
             .requestMatchers("/agencies").permitAll()
             .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies", "/agencyadmin/agencies/")
             .hasAuthority(AuthorityValue.SEARCH_AGENCIES)
-            // ORISO-Admin#2494: the case sharing change log mirrors the agency search above, same
+            // ORISO-Frontend#2494: the case sharing change log mirrors the agency search above, same
             // authority; the query reuses the search's tenant and restricted-admin scope.
             .requestMatchers(HttpMethod.GET, "/agencyadmin/agencies/case-sharing-changes",
                 "/agencyadmin/agencies/case-sharing-changes/")

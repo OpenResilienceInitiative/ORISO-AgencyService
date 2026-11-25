@@ -32,7 +32,7 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * ORISO-Admin#2494: the case sharing change log. Real JWT authorities, tenant resolution and
+ * ORISO-Frontend#2494: the case sharing change log. Real JWT authorities, tenant resolution and
  * database; only remote boundaries are mocked. Scope mirrors the agency search
  * ({@link AgencyAdminTenantSearchAuthorizationTest}).
  */

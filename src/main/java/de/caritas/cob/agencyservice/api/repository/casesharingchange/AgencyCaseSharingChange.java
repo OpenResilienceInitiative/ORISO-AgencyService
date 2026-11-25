@@ -16,7 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * One change of a counselling centre's effective case sharing model (ORISO-Admin#2494). Append
+ * One change of a counselling centre's effective case sharing model (ORISO-Frontend#2494). Append
  * only: every column is insert-only and the repository offers no update or delete.
  *
  * <p>Models are stored as the {@link AgencyCaseSharingMode} wire value; {@code previousModel} is

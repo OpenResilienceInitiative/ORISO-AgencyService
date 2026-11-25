@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Records every change of a counselling centre's <b>effective</b> case sharing model
- * (ORISO-Admin#2494). Each case keeps the model it was created under; this log shows which model
+ * (ORISO-Frontend#2494). Each case keeps the model it was created under; this log shows which model
  * applied to new cases from when to when.
  *
  * <p>Rules:

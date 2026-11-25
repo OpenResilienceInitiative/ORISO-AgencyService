@@ -380,7 +380,7 @@ public class AgencyAdminService {
     final var storedDpp = agency.getContentDpp();
     final var storedConsent = agency.getConsentText();
     final var storedImprint = agency.getContentImprint();
-    // ORISO-Admin#2494: the own case sharing mode before the merge overwrites the stored settings.
+    // ORISO-Frontend#2494: the own case sharing mode before the merge overwrites the stored settings.
     final var storedCaseSharingMode = ownCaseSharingMode(agency.getSettings());
     final var storedTeamAgency = agency.isTeamAgency();
     var updatedAgency = agencyRepository.save(mergeAgencies(agency, updateAgencyDTO));

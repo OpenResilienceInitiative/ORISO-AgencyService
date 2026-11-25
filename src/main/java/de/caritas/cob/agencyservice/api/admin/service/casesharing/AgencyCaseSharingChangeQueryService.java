@@ -24,7 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * Paged read of the case sharing change log for the Admin "Logs" area (ORISO-Admin#2494).
+ * Paged read of the case sharing change log for the Admin "Logs" area (ORISO-Frontend#2494).
  *
  * <p>Scope: every row is joined to its agency and filtered with {@link
  * AgencyAdminSearchService#callerScopePredicate}, the same role scope as the agency search {@code

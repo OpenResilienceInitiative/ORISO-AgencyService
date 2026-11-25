@@ -1,6 +1,6 @@
 package de.caritas.cob.agencyservice.api.repository.casesharingchange;
 
-/** What changed a centre's effective case sharing model (ORISO-Admin#2494). */
+/** What changed a centre's effective case sharing model (ORISO-Frontend#2494). */
 public enum AgencyCaseSharingChangeSource {
   /** The centre's own {@code settings.caseSharingMode} was changed in the agency settings. */
   AGENCY_SETTINGS,

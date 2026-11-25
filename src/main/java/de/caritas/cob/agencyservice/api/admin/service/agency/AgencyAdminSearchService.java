@@ -342,7 +342,7 @@ public class AgencyAdminSearchService {
   /**
    * The caller's role scope on agencies, exactly as this search applies it without keyword and
    * filters: tenant scope, and for a restricted agency admin only the agencies they administer.
-   * Other admin reads about agencies (the case sharing log, ORISO-Admin#2494) reuse it so their
+   * Other admin reads about agencies (the case sharing log, ORISO-Frontend#2494) reuse it so their
    * scope cannot drift from the search.
    */
   public Predicate callerScopePredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {

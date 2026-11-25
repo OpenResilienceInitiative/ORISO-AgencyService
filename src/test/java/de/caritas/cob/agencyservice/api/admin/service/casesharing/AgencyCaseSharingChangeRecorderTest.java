@@ -34,7 +34,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClientException;
 
-/** ORISO-Admin#2494: when a change of the effective case sharing model is logged. */
+/** ORISO-Frontend#2494: when a change of the effective case sharing model is logged. */
 @ExtendWith(MockitoExtension.class)
 class AgencyCaseSharingChangeRecorderTest {
 

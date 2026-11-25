@@ -165,7 +165,7 @@ public class AgencyAdminController implements AgencyadminApi {
   }
 
   /**
-   * Log of changes of the centres' effective case sharing model (ORISO-Admin#2494), newest first.
+   * Log of changes of the centres' effective case sharing model (ORISO-Frontend#2494), newest first.
    * Authority and scope mirror {@link #searchAgencies}: {@code AUTHORIZATION_SEARCH_AGENCIES} in
    * the security config, and the search's tenant and restricted-admin predicate in the query.
    *
