@@ -70,7 +70,8 @@ class GroupedTaskServiceIdentityAuthorizationIT {
           "matrix-agency-provision",
           "appointment-sync",
           "appointment-participant-cleanup",
-          "deletion-audit-read");
+          "deletion-audit-read",
+          "tenant-deletion");
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final jakarta.servlet.http.Cookie CSRF =
       new jakarta.servlet.http.Cookie("csrfCookie", "test");

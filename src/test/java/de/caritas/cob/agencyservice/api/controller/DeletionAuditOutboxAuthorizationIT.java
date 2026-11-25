@@ -52,7 +52,8 @@ class DeletionAuditOutboxAuthorizationIT {
           "matrix-agency-provision",
           "appointment-sync",
           "appointment-participant-cleanup",
-          "deletion-audit-read");
+          "deletion-audit-read",
+          "tenant-deletion");
   static final String OUTBOX = "/internal/deletion-audit-outbox";
   static final String ACK = OUTBOX + "/acknowledgements";
   private static final jakarta.servlet.http.Cookie CSRF =
