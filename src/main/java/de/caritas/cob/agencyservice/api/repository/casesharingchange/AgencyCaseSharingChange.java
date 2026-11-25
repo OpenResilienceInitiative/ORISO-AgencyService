@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
  * only: every column is insert-only and the repository offers no update or delete.
  *
  * <p>Models are stored as the {@link AgencyCaseSharingMode} wire value; {@code previousModel} is
- * null only if the previous model was unknown.
+ * null for the creation row ({@link AgencyCaseSharingChangeSource#AGENCY_CREATED}).
  */
 @Entity
 @Table(name = "agency_case_sharing_change")

@@ -218,6 +218,7 @@ public class AgencyAdminService {
     return agencyCreationTransaction.execute(status -> {
       var savedAgency = agencyRepository.save(agency);
       agencyIdAllocationService.guardAssignmentAgainstOpenReservations(savedAgency.getId());
+      recordCaseSharingAtCreation(savedAgency);
       return savedAgency;
     });
   }
@@ -246,8 +247,17 @@ public class AgencyAdminService {
         agencyIdAllocationService.claimReservedId(reservedAgencyId, agency.getTenantId(), agency.getName());
       }
       agency.setId(reservedAgencyId);
-      return agencyRepository.save(agency);
+      var savedAgency = agencyRepository.save(agency);
+      recordCaseSharingAtCreation(savedAgency);
+      return savedAgency;
     });
+  }
+
+  /** ORISO-Frontend#2494: the log starts with the model a centre is created under. */
+  private void recordCaseSharingAtCreation(Agency savedAgency) {
+    caseSharingChangeRecorder.recordCreation(
+        savedAgency.getId(), savedAgency.getTenantId(),
+        ownCaseSharingMode(savedAgency.getSettings()), savedAgency.isTeamAgency());
   }
 
   private void setTenantIdOnCreate(AgencyDTO agencyDTO, Agency agency) {

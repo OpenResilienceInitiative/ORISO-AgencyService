@@ -229,6 +229,26 @@ class AgencyAdminServiceTest {
   }
 
   @Test
+  void createAgency_Should_logTheModelTheCentreStartsWith() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setCounsellingRelations(null);
+    clearDataProtection(agency);
+    agency.setTeamAgency(true);
+    agency.setSettings("{\"caseSharingMode\":\"NONE\"}");
+    ReflectionTestUtils.setField(agencyAdminService, "agencySettingsService", new AgencySettingsService());
+    var agencyDTO = this.easyRandom.nextObject(AgencyDTO.class);
+    agencyDTO.setReservedAgencyId(null);
+    agencyDTO.setConsultingType(1);
+    agencyDTO.setDataProtection(new DataProtectionDTO());
+    when(agencyRepository.save(any())).thenReturn(agency);
+
+    agencyAdminService.createAgency(agencyDTO);
+
+    verify(caseSharingChangeRecorder).recordCreation(agency.getId(), agency.getTenantId(),
+        de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.NONE, true);
+  }
+
+  @Test
   void createAgency_Should_ThrowConflictBeforeProvisioning_When_GeneratedIdIsReservedByOpenInvite() {
     // given: the sequence hands out an ID that an open invite has reserved (TEN-INV-U2 —
     // assigned or reserved IDs must never be re-issued). The DB-level guard runs inside the

@@ -26,7 +26,8 @@ import org.springframework.stereotype.Service;
 /**
  * Paged read of the case sharing change log for the Admin "Logs" area (ORISO-Frontend#2494).
  *
- * <p>Scope: every row is joined to its agency and filtered with {@link
+ * <p>Scope: every row is joined to its current agency by id, recorded tenant and the agency's
+ * creation time (ids are reused after a purge), and filtered with {@link
  * AgencyAdminSearchService#callerScopePredicate}, the same role scope as the agency search {@code
  * GET /agencyadmin/agencies}. Like that search it runs on its own entity manager, outside the
  * Hibernate tenant filter, so the predicate alone decides.
@@ -86,7 +87,19 @@ public class AgencyCaseSharingChangeQueryService {
 
   private Predicate[] scope(CriteriaBuilder cb, Root<AgencyCaseSharingChange> change,
       Root<Agency> agency, Long agencyId) {
-    var join = cb.equal(change.get("agencyId"), agency.get("id"));
+    // Agency ids can be handed out again after a purge, and the log outlives the agency. A row
+    // therefore belongs to an agency only if the id, the recorded tenant and the agency's lifetime
+    // all match; otherwise a reused id would show another centre's (or tenant's) history under the
+    // new centre's name.
+    var join = cb.and(
+        cb.equal(change.get("agencyId"), agency.get("id")),
+        cb.or(
+            cb.equal(change.get("tenantId"), agency.get("tenantId")),
+            cb.and(cb.isNull(change.get("tenantId")), cb.isNull(agency.get("tenantId")))),
+        cb.or(
+            cb.isNull(agency.get("createDate")),
+            cb.greaterThanOrEqualTo(
+                change.<LocalDateTime>get("changedAt"), agency.<LocalDateTime>get("createDate"))));
     var callerScope = agencyAdminSearchService.callerScopePredicate(cb, agency);
     var filter = agencyId == null ? cb.conjunction() : cb.equal(change.get("agencyId"), agencyId);
     return new Predicate[] {join, callerScope, filter};

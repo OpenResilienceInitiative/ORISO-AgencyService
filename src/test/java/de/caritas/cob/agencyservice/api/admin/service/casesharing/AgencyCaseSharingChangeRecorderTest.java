@@ -3,6 +3,7 @@ package de.caritas.cob.agencyservice.api.admin.service.casesharing;
 import static de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.CASE_HANDOVER;
 import static de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.NONE;
 import static de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING;
+import static de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChangeSource.AGENCY_CREATED;
 import static de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChangeSource.AGENCY_SETTINGS;
 import static de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChangeSource.AGENCY_TYPE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -178,6 +179,45 @@ class AgencyCaseSharingChangeRecorderTest {
     var row = savedRow();
     assertThat(row.getChangedByUserId()).isNull();
     assertThat(row.getChangedByName()).isNull();
+  }
+
+  @Test
+  void creationRow_Should_HoldTheEffectiveStartModelWithoutPreviousModel() {
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(TENANT_ID))
+        .thenReturn(tenant(CaseSharingMode.NONE, PermissionPolicyMode.SUGGESTED));
+
+    recorder.recordCreation(AGENCY_ID, TENANT_ID, null, true);
+
+    var row = savedRow();
+    assertThat(row.getAgencyId()).isEqualTo(AGENCY_ID);
+    assertThat(row.getTenantId()).isEqualTo(TENANT_ID);
+    assertThat(row.getPreviousModel()).isNull();
+    assertThat(row.getNewModel()).isEqualTo("TEAM_COUNSELLING");
+    assertThat(row.getSource()).isEqualTo(AGENCY_CREATED);
+    assertThat(row.getChangedByName()).isEqualTo("tenant-admin");
+  }
+
+  @Test
+  void creationRow_Should_FollowTheTraegerRequirement() {
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(TENANT_ID))
+        .thenReturn(tenant(CaseSharingMode.CASE_HANDOVER, PermissionPolicyMode.ENFORCED));
+
+    recorder.recordCreation(AGENCY_ID, TENANT_ID, TEAM_COUNSELLING, true);
+
+    assertThat(savedRow().getNewModel()).isEqualTo("CASE_HANDOVER");
+  }
+
+  @Test
+  void creationRow_Should_StillBeWritten_When_TenantDataFails() {
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(TENANT_ID))
+        .thenThrow(new RestClientException("TenantService down"));
+
+    recorder.recordCreation(AGENCY_ID, TENANT_ID, NONE, false);
+
+    var row = savedRow();
+    assertThat(row.getPreviousModel()).isNull();
+    assertThat(row.getNewModel()).isEqualTo("NONE");
+    assertThat(row.getSource()).isEqualTo(AGENCY_CREATED);
   }
 
   private AgencyCaseSharingChange savedRow() {

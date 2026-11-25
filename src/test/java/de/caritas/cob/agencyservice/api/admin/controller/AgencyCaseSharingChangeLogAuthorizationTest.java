@@ -96,6 +96,44 @@ class AgencyCaseSharingChangeLogAuthorizationTest {
   }
 
   @Test
+  void historyOfAReusedAgencyId_Should_NotLeakIntoTheNewCentre() throws Exception {
+    // Agency id 9001 belonged to tenant 2 before a purge and now belongs to tenant 1; a second
+    // row predates the current 9001's creation (2026-09-01) within tenant 1.
+    insert(9001, 2, "2026-11-21 09:00:00", "foreign-admin", "NONE", "TEAM_COUNSELLING",
+        "AGENCY_SETTINGS");
+    insert(9001, 1, "2026-08-01 09:00:00", "former-admin", "NONE", "CASE_HANDOVER",
+        "AGENCY_SETTINGS");
+
+    tokenFor(1L, "tenant-admin");
+    mvc.perform(get(PATH).param("agencyId", "9001").header("Authorization", "Bearer token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("total").value(2))
+        .andExpect(jsonPath("entries[0].changedAt").value("2026-11-20T13:00:00Z"))
+        .andExpect(jsonPath("entries[1].changedAt").value("2026-11-20T10:00:00Z"))
+        .andExpect(content().string(org.hamcrest.Matchers.not(containsString("foreign-admin"))))
+        .andExpect(content().string(org.hamcrest.Matchers.not(containsString("former-admin"))));
+
+    tokenFor(0L, "agency-admin", "tenant-admin");
+    mvc.perform(get(PATH).header("Authorization", "Bearer token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("total").value(4))
+        .andExpect(content().string(org.hamcrest.Matchers.not(containsString("foreign-admin"))))
+        .andExpect(content().string(org.hamcrest.Matchers.not(containsString("former-admin"))));
+  }
+
+  @Test
+  void creationRow_Should_BeServedWithSourceAgencyCreated() throws Exception {
+    insert(9002, 1, "2026-11-22 08:00:00", "admin-b", null, "NONE", "AGENCY_CREATED");
+    tokenFor(1L, "tenant-admin");
+
+    mvc.perform(get(PATH).param("agencyId", "9002").header("Authorization", "Bearer token"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("entries[0].source").value("AGENCY_CREATED"))
+        .andExpect(jsonPath("entries[0].newModel").value("NONE"))
+        .andExpect(content().string(containsString("\"previousModel\":null")));
+  }
+
+  @Test
   void agencyFilter_Should_NarrowToThatAgency() throws Exception {
     tokenFor(1L, "tenant-admin");
 

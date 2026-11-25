@@ -3349,15 +3349,16 @@ components:
           allOf:
             - $ref: '#/components/schemas/AgencyCaseSharingMode'
           nullable: true
-          description: Effective model before the change; null if unknown
+          description: Effective model before the change; null for AGENCY_CREATED
         newModel:
           $ref: '#/components/schemas/AgencyCaseSharingMode'
         source:
           type: string
           description: >-
-            AGENCY_SETTINGS = the centre's own case sharing mode was changed; AGENCY_TYPE = the
-            centre's team agency flag was changed
-          enum: [AGENCY_SETTINGS, AGENCY_TYPE]
+            AGENCY_CREATED = the centre was created, newModel is the model it started with and
+            previousModel is null; AGENCY_SETTINGS = the centre's own case sharing mode was
+            changed; AGENCY_TYPE = the centre's team agency flag was changed
+          enum: [AGENCY_CREATED, AGENCY_SETTINGS, AGENCY_TYPE]
 
 
   securitySchemes:

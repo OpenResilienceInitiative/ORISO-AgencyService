@@ -25,6 +25,8 @@ import org.springframework.stereotype.Service;
  * <p>Rules:
  *
  * <ul>
+ *   <li>A new centre gets one creation row ({@code AGENCY_CREATED}, no previous model) with the
+ *       effective model it starts with, in the creation transaction.
  *   <li>Nothing is computed unless the centre's own {@code caseSharingMode} or its {@code
  *       teamAgency} flag actually changed, so every other update makes no extra tenant call.
  *   <li>The effective model before and after comes from {@link AgencyCaseSharingResolver#resolve}
@@ -80,6 +82,27 @@ public class AgencyCaseSharingChangeRecorder {
     if (Objects.equals(previous, next)) {
       return;
     }
+    save(agencyId, tenantId, previous, next, source);
+  }
+
+  /**
+   * Writes the creation row of a new centre: no previous model, the effective model it starts
+   * with. Tenant data that is unavailable is handled as described in the class comment.
+   *
+   * @param agencyId the new centre
+   * @param tenantId its tenant (Träger), may be null in single-tenant mode
+   * @param ownMode the centre's own mode at creation, null = not set
+   * @param teamAgency {@code teamAgency} at creation
+   */
+  public void recordCreation(
+      Long agencyId, Long tenantId, AgencyCaseSharingMode ownMode, boolean teamAgency) {
+    var tenant = tenantOrNull(agencyId, tenantId);
+    save(agencyId, tenantId, null, effective(ownMode, teamAgency, tenant),
+        AgencyCaseSharingChangeSource.AGENCY_CREATED);
+  }
+
+  private void save(Long agencyId, Long tenantId, AgencyCaseSharingMode previous,
+      AgencyCaseSharingMode next, AgencyCaseSharingChangeSource source) {
     repository.save(
         AgencyCaseSharingChange.builder()
             .agencyId(agencyId)
