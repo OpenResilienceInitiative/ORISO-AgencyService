@@ -100,6 +100,14 @@ public class AgencySettingsService {
     return update;
   }
 
+  /** #374: an update without {@code caseSharingMode} keeps the centre's stored choice. */
+  public Settings keepStoredCaseSharingMode(Settings update, String storedSettingsJson) {
+    if (update != null && update.getCaseSharingMode() == null) {
+      update.setCaseSharingMode(storedSettings(storedSettingsJson).getCaseSharingMode());
+    }
+    return update;
+  }
+
   /**
    * "Weitere Beratung im Live-Chat empfehlen" (ORISO-Frontend#2251) belongs to Träger and platform
    * admins (both hold the tenant-admin role). An update that omits the key, or any update by
@@ -124,6 +132,7 @@ public class AgencySettingsService {
       ObjectNode stored = objectMapper.valueToTree(settings);
       stored.remove("agencyAdminControls");
       stored.remove("permissionPolicies");
+      stored.remove("caseSharing");
       return objectMapper.writeValueAsString(stored);
     } catch (JsonProcessingException exception) {
       throw new RuntimeJsonMappingException(exception.getMessage());

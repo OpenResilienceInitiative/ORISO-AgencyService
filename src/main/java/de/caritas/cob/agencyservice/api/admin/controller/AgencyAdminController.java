@@ -16,6 +16,7 @@ import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftServ
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftView;
 import de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalProposalFacade;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalAdminAccessGuard;
+import de.caritas.cob.agencyservice.api.model.AgencyDeletionResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalDraftArchiveDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptRequestDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyLegalProposalAdoptionDTO;
@@ -59,12 +60,16 @@ import de.caritas.cob.agencyservice.api.model.RootDTO;
 import de.caritas.cob.agencyservice.api.model.Sort;
 import de.caritas.cob.agencyservice.api.model.UpdateAgencyDTO;
 import de.caritas.cob.agencyservice.generated.api.admin.controller.AgencyadminApi;
+import io.opentelemetry.api.trace.Span;
 import io.swagger.annotations.Api;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import de.caritas.cob.agencyservice.api.admin.service.AgencyStatusService;
@@ -83,6 +88,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @Api(tags = "admin-agency-controller")
 @RequiredArgsConstructor
+@Slf4j
 public class AgencyAdminController implements AgencyadminApi {
   @org.springframework.beans.factory.annotation.Autowired
   private de.caritas.cob.agencyservice.config.security.TaskServiceIdentity taskIdentity;
@@ -151,7 +157,25 @@ public class AgencyAdminController implements AgencyadminApi {
             q, page, perPage, sort,
             new AgencySearchFilter(Boolean.TRUE.equals(excludeDeleted), tenantId));
 
+    logCompletedSearch();
     return new ResponseEntity<>(agencyAdminSearchResultDTO, HttpStatus.OK);
+  }
+
+  private static void logCompletedSearch() {
+    var span = Span.current().getSpanContext();
+    if (!span.isValid() || !span.isSampled()) {
+      return;
+    }
+
+    var requestContext = MDC.getCopyOfContextMap();
+    try {
+      // The request MDC can include a caller-supplied correlation header.
+      MDC.setContextMap(
+          Map.of("traceId", span.getTraceId(), "spanId", span.getSpanId()));
+      log.info("Agency admin search completed");
+    } finally {
+      MDC.setContextMap(requestContext);
+    }
   }
 
   /**
@@ -312,9 +336,8 @@ public class AgencyAdminController implements AgencyadminApi {
    */
   @Override
   @PreAuthorize("hasAuthority('AUTHORIZATION_AGENCY_ADMIN')")
-  public ResponseEntity<Void> deleteAgency(@PathVariable Long agencyId) {
-    this.agencyAdminService.deleteAgency(agencyId);
-    return new ResponseEntity<>(HttpStatus.OK);
+  public ResponseEntity<AgencyDeletionResultDTO> deleteAgency(@PathVariable Long agencyId) {
+    return ResponseEntity.ok(this.agencyAdminService.deleteAgency(agencyId));
   }
 
   /**

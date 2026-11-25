@@ -2,6 +2,7 @@ package de.caritas.cob.agencyservice.api.admin.controller;
 
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.VALID_AGENCY_DTO;
 import static de.caritas.cob.agencyservice.testHelper.TestConstants.VALID_AGENCY_UPDATE_DTO;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
@@ -19,6 +20,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.caritas.cob.agencyservice.api.admin.service.DeletionAuditReporter;
 import de.caritas.cob.agencyservice.api.admin.service.UserAdminService;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
@@ -26,12 +31,14 @@ import de.caritas.cob.agencyservice.api.service.TenantService;
 import de.caritas.cob.agencyservice.api.service.TopicEnrichmentService;
 import de.caritas.cob.agencyservice.testHelper.TenantPolicyFixture;
 import de.caritas.cob.agencyservice.tenantservice.generated.web.model.RestrictedTenantDTO;
+import io.micrometer.tracing.Tracer;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
@@ -61,7 +68,8 @@ import org.springframework.web.server.ResponseStatusException;
     "spring.profiles.active=testing",
     "multitenancy.enabled=true",
     "feature.multitenancy.with.single.domain.enabled=true",
-    "feature.topics.enabled=false"
+    "feature.topics.enabled=false",
+    "management.tracing.sampling.probability=1.0"
 })
 @Sql(scripts = {"/database/AgencyDatabase.sql", "/database/AgencyPickerSearch.sql"})
 class AgencyAdminTenantSearchAuthorizationTest {
@@ -71,6 +79,7 @@ class AgencyAdminTenantSearchAuthorizationTest {
   private static final String POSTCODE_PATH = "/agencyadmin/postcoderanges/";
 
   @Autowired private MockMvc mvc;
+  @Autowired private Tracer tracer;
   @Autowired private JdbcTemplate jdbcTemplate;
   @MockitoBean private JwtDecoder jwtDecoder;
   @MockitoBean private TenantService tenantService;
@@ -102,6 +111,53 @@ class AgencyAdminTenantSearchAuthorizationTest {
             .value(containsInAnyOrder(9001, 9002, 9004)))
         .andExpect(jsonPath("_embedded[*]._embedded.tenantId").value(everyItem(is(1))));
     verifyNoInteractions(userAdminService);
+  }
+
+  @Test
+  void search_Should_LogOnlyTraceContext_When_SampledSearchSucceeds() throws Exception {
+    tokenFor(1L, "tenant-admin");
+    var logger = (Logger) LoggerFactory.getLogger(AgencyAdminController.class);
+    var events = new ListAppender<ILoggingEvent>() {
+      @Override
+      protected void append(ILoggingEvent event) {
+        event.prepareForDeferredProcessing();
+        super.append(event);
+      }
+    };
+    events.start();
+    logger.addAppender(events);
+
+    var span = tracer.nextSpan().name("agency-search-request").start();
+    try (var scope = tracer.withSpan(span)) {
+      var traceparent = "00-" + span.context().traceId() + "-" + span.context().spanId() + "-01";
+      mvc.perform(get(SEARCH_PATH).param("page", "1").param("perPage", "50")
+              .header("traceparent", traceparent)
+              .header("X-Correlation-ID", "caller-controlled-correlation")
+              .header("Authorization", "Bearer tenant-token"))
+          .andExpect(status().isOk());
+
+      assertThat(events.list).singleElement().satisfies(event -> {
+        assertThat(event.getLevel()).isEqualTo(Level.INFO);
+        assertThat(event.getFormattedMessage()).isEqualTo("Agency admin search completed");
+        var context = event.getMDCPropertyMap();
+        assertThat(context).containsOnlyKeys("traceId", "spanId")
+            .containsEntry("traceId", span.context().traceId());
+        assertThat(context.get("spanId")).matches("[0-9a-f]{16}").isNotEqualTo("0000000000000000");
+      });
+
+      events.list.clear();
+      tokenFor(1L, "consultant");
+      mvc.perform(get(SEARCH_PATH).param("page", "1").param("perPage", "50")
+              .header("traceparent", traceparent)
+              .header("X-Correlation-ID", "caller-controlled-correlation")
+              .header("Authorization", "Bearer tenant-token"))
+          .andExpect(status().isForbidden());
+      assertThat(events.list).isEmpty();
+    } finally {
+      span.end();
+      logger.detachAppender(events);
+      events.stop();
+    }
   }
 
   @Test

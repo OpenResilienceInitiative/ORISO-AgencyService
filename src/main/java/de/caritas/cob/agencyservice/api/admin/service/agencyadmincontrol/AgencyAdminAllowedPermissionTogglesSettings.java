@@ -41,4 +41,14 @@ public class AgencyAdminAllowedPermissionTogglesSettings {
   private Boolean voiceMessagesOneOnOneChats;
   private Boolean voiceMessagesGroupChats;
   private Boolean voiceMessagesSupervisionChats;
+  private Boolean teamDiscussionAfterAccept;
+  // Team chat on an open enquiry (ORISO-Frontend#2491), governed like supervision.
+  private Boolean teamDiscussion;
+  private Boolean videoCallsTeamDiscussions;
+  private Boolean audioCallsTeamDiscussions;
+  private Boolean voiceMessagesTeamDiscussions;
+  private Boolean threadsTeamDiscussions;
+  private Boolean mediaUploadTeamDiscussions;
+  private Boolean mediaInlineDisplayTeamDiscussions;
+  private Boolean mediaAiScanTeamDiscussions;
 }

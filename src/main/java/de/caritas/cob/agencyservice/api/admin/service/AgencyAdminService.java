@@ -14,11 +14,11 @@ import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyA
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
-import de.caritas.cob.agencyservice.api.admin.validation.DeleteAgencyValidator;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.ConflictException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.NotFoundException;
 import de.caritas.cob.agencyservice.api.model.AgencyAdminFullResponseDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyDTO;
+import de.caritas.cob.agencyservice.api.model.AgencyDeletionResultDTO;
 import de.caritas.cob.agencyservice.api.model.AgencyTypeRequestDTO;
 import de.caritas.cob.agencyservice.api.admin.service.legal.ConsentTextService;
 import de.caritas.cob.agencyservice.api.admin.service.legal.LegalContentSanitizer;
@@ -49,10 +49,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Service class to handle agency admin requests.
@@ -76,7 +80,7 @@ public class AgencyAdminService {
   private final @NonNull AgencyTenantUnawareRepository agencyTenantUnawareRepository;
 
   private final @NonNull UserAdminService userAdminService;
-  private final @NonNull DeleteAgencyValidator deleteAgencyValidator;
+  private final @NonNull AgencyDeletionMarker agencyDeletionMarker;
   private final @NonNull DeletionAuditReporter deletionAuditReporter;
   private final @NonNull AgencyTopicMergeService agencyTopicMergeService;
   private final @NonNull AgencyTopicRepository agencyTopicRepository;
@@ -136,7 +140,7 @@ public class AgencyAdminService {
       var settings = agencySettingsService.toSettings(agency.getSettings());
       response.getEmbedded().setSettings(
           agencyAdminControlsService.enrichSettingsWithAgencyAdminControls(
-              settings, agency.getTenantId()));
+              settings, agency.getTenantId(), agency.isTeamAgency()));
     }
   }
 
@@ -463,8 +467,10 @@ public class AgencyAdminService {
 
   private String resolveSettingsForUpdate(Agency agency, UpdateAgencyDTO updateAgencyDTO) {
     if (updateAgencyDTO.getSettings() != null) {
-      var settings = agencySettingsService.keepStoredCounsellorTopicPermission(
-          updateAgencyDTO.getSettings(), agency.getSettings());
+      var settings = agencySettingsService.keepStoredCaseSharingMode(
+          agencySettingsService.keepStoredCounsellorTopicPermission(
+              updateAgencyDTO.getSettings(), agency.getSettings()),
+          agency.getSettings());
       return agencySettingsService.toSettingsJson(
           agencySettingsService.keepStoredLiveChatFurtherCounselling(
               settings, agency.getSettings(),
@@ -556,6 +562,7 @@ public class AgencyAdminService {
         .agencyLogo(updateAgencyDTO.getAgencyLogo())
         .matrixUserId(agency.getMatrixUserId())
         .matrixPassword(agency.getMatrixPassword())
+        .matrixAccountProvisioned(agency.isMatrixAccountProvisioned())
         .settings(resolveSettingsForUpdate(agency, updateAgencyDTO))
         .contentDpp(
             resolveLegalTextForUpdate(
@@ -624,22 +631,48 @@ public class AgencyAdminService {
   }
 
   /**
-   * Deletes the provided agency.
+   * Deletes an agency with everything that belongs to it (ORISO-Admin#1524, rule 4 of the deletion
+   * epic ORISO-Admin#1520: cascade instead of blocking). The agency is taken offline and marked in
+   * its own transaction first; then UserService marks its accounts, closes its enquiries, revokes
+   * its invitations and stops its group chats, with the deleting admin's token. The nightly jobs
+   * remove the rest. Deleting an agency already in deletion repeats only the UserService part,
+   * which picks up what was not done before.
    *
    * @param agencyId agency ID
+   * @return what UserService did, and what it could not
    */
-  @Transactional
-  public void deleteAgency(Long agencyId) {
-    var agency = this.findAgencyById(agencyId);
-    entityManager.refresh(agency, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
-    this.deleteAgencyValidator.validate(agency);
-    agency.setDeleteDate(LocalDateTime.now(ZoneOffset.UTC));
-    this.agencyRepository.save(agency);
-    // Reported as soon as the marking is saved: a failing appointment sync afterwards must not
-    // leave a marked agency without its log line.
-    this.deletionAuditReporter.reportAgency(
-        agency.getId(), agency.getTenantId(), DeletionAuditReporter.Outcome.SCHEDULED);
-    this.appointmentService.deleteAgency(agency);
+  public AgencyDeletionResultDTO deleteAgency(Long agencyId) {
+    // Existence and the caller's tenant are checked here, before anything is changed.
+    findAgencyById(agencyId);
+    assertUserServiceWillCascade(agencyId);
+    agencyDeletionMarker.mark(agencyId);
+    try {
+      return AgencyDeletionResults.from(userAdminService.markAgencyContentsForDeletion(agencyId));
+    } catch (RestClientException e) {
+      log.error("Agency {} is marked, but what belongs to it could not be marked yet", agencyId, e);
+      throw new ResponseStatusException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "The agency is offline and marked for deletion; its accounts could not be marked yet",
+          e);
+    }
+  }
+
+  /**
+   * Asks UserService for the deletion preview with the caller's token before anything is marked.
+   * UserService checks the same role and reach as the cascade, so an admin it would refuse, or a
+   * UserService that cannot be reached, leaves the agency untouched instead of offline and marked
+   * with nothing else deleted.
+   */
+  private void assertUserServiceWillCascade(Long agencyId) {
+    try {
+      userAdminService.getAgencyDeletionPreview(agencyId);
+    } catch (HttpClientErrorException.Forbidden | HttpClientErrorException.Unauthorized e) {
+      throw new AccessDeniedException("UserService refuses to delete what belongs to this agency");
+    } catch (RestClientException e) {
+      log.error("Could not ask UserService about deleting agency {}; not deleting it", agencyId, e);
+      throw new ResponseStatusException(
+          HttpStatus.SERVICE_UNAVAILABLE, "Could not check what belongs to the agency", e);
+    }
   }
 
   /**

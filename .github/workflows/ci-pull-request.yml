@@ -11,26 +11,28 @@ jobs:
   validate:
     name: test, build and Docker validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+
+    - name: Test the OCI archive publishing contract
+      run: bash scripts/ci/test-image-archive.sh
 
     - name: Run AgencyService tests and build
       uses: ./.github/actions/maven-build
       with:
         java_version: '21'
 
-    - name: Docker build validation without publishing
+    - name: Build and scan AgencyService image without publishing
       uses: ./.github/actions/docker-build-push
       with:
         push_to_ghcr: false
         image_name: oriso-agencyservice
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        # Scan the PR image with the same Trivy gate as the dev/main publish, so
-        # a fixable HIGH/CRITICAL finding fails the PR instead of the build
-        # after the merge.
-        scan_before_push: true
 
   required-integration-tests:
     name: required integration tests

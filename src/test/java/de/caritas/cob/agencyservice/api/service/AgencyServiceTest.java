@@ -75,6 +75,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.dao.DataAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -117,10 +118,10 @@ public class AgencyServiceTest {
   @org.junit.Before
   public void stubLegalResolutionAsEmpty() {
     org.mockito.Mockito.lenient()
-        .when(legalTextInheritanceResolver.resolveDpp(any(), any(), any()))
+        .when(legalTextInheritanceResolver.resolveDppForList(any(), any(), any()))
         .thenReturn(ResolvedLegalText.none());
     org.mockito.Mockito.lenient()
-        .when(legalTextInheritanceResolver.resolveImprint(any(), any(), any()))
+        .when(legalTextInheritanceResolver.resolveImprintForList(any(), any(), any()))
         .thenReturn(ResolvedLegalText.none());
   }
 
@@ -268,6 +269,36 @@ public class AgencyServiceTest {
   }
 
   @Test
+  public void getListOfAgencies_Should_serveTheEffectiveTeamFlag_When_theCentreChoseACaseSharingMode()
+      throws MissingConsultingTypeException {
+    Agency formerTeamCentre = Agency.builder().id(101L).name("Team, now handover")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).teamAgency(true).settings("handover").build();
+    Agency newTeamCentre = Agency.builder().id(102L).name("Now team")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).teamAgency(false).settings("team").build();
+    ensureAgencyTopics(formerTeamCentre);
+    ensureAgencyTopics(newTeamCentre);
+    when(agencySettingsService.toSettings("handover")).thenReturn(
+        new de.caritas.cob.agencyservice.api.model.Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.CASE_HANDOVER));
+    when(agencySettingsService.toSettings("team")).thenReturn(
+        new de.caritas.cob.agencyservice.api.model.Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING));
+    when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
+        CONSULTING_TYPE_SUCHT, AGE, GENDER, COUNSELLING_RELATION, TENANT_ID))
+        .thenReturn(new ArrayList<>(List.of(formerTeamCentre, newTeamCentre)));
+    when(consultingTypeManager.getConsultingTypeSettings(Mockito.anyInt()))
+        .thenReturn(CONSULTING_TYPE_SETTINGS_WITH_WHITESPOT_AGENCY);
+
+    var teamById = agencyService.getAgencies(Optional.of(VALID_POSTCODE), CONSULTING_TYPE_SUCHT,
+            Optional.empty()).stream()
+        .collect(java.util.stream.Collectors.toMap(
+            FullAgencyResponseDTO::getId, FullAgencyResponseDTO::getTeamAgency));
+
+    assertEquals(Boolean.FALSE, teamById.get(101L));
+    assertEquals(Boolean.TRUE, teamById.get(102L));
+  }
+
+  @Test
   public void getListOfAgencies_Should_MapDepartmentsWithLegalPublicationFlags()
       throws MissingConsultingTypeException {
 
@@ -277,9 +308,9 @@ public class AgencyServiceTest {
     AgencyTopic withoutLegal = AgencyTopic.builder().agency(agency).topicId(2L).build();
     ReflectionTestUtils.setField(agency, "agencyTopics", List.of(withLegal, withoutLegal));
 
-    when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
+    when(legalTextInheritanceResolver.resolveDppForList(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
-    when(legalTextInheritanceResolver.resolveImprint(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
+    when(legalTextInheritanceResolver.resolveImprintForList(org.mockito.ArgumentMatchers.eq(withLegal), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.DEPARTMENT));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
@@ -314,7 +345,7 @@ public class AgencyServiceTest {
     AgencyTopic departmentWithoutOwnText = AgencyTopic.builder().agency(agency).topicId(1L).build();
     ReflectionTestUtils.setField(agency, "agencyTopics", List.of(departmentWithoutOwnText));
 
-    when(legalTextInheritanceResolver.resolveDpp(org.mockito.ArgumentMatchers.eq(departmentWithoutOwnText), any(), any()))
+    when(legalTextInheritanceResolver.resolveDppForList(org.mockito.ArgumentMatchers.eq(departmentWithoutOwnText), any(), any()))
         .thenReturn(resolved(LegalTextSourceLevel.AGENCY));
 
     when(agencyRepository.searchWithoutTopic(VALID_POSTCODE, VALID_POSTCODE_LENGTH,
@@ -450,13 +481,43 @@ public class AgencyServiceTest {
         .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
     ensureAgencyTopics(available);
     when(agencyRepository.findByIdIn(List.of(91L, 92L))).thenReturn(List.of(unavailable, available));
+    when(tenantService.getRestrictedTenantDataByTenantIds(any())).thenReturn(List.of(
+        new RestrictedTenantDTO().id(14L), new RestrictedTenantDTO().id(99L),
+        new RestrictedTenantDTO().id(13L), new RestrictedTenantDTO().id(13L)));
     when(tenantService.getRestrictedTenantDataByTenantId(13L))
-        .thenThrow(new org.springframework.web.client.RestClientException("unavailable"));
-    when(tenantService.getRestrictedTenantDataByTenantId(14L))
-        .thenReturn(new RestrictedTenantDTO().id(14L));
+        .thenThrow(new RestClientException("unavailable"));
 
     assertEquals(List.of(92L), agencyService.getAgencies(List.of(91L, 92L)).stream()
         .map(AgencyResponseDTO::getId).toList());
+    verify(tenantService).getRestrictedTenantDataByTenantId(13L);
+    verify(tenantService, Mockito.never()).getRestrictedTenantDataByTenantId(14L);
+  }
+
+  @Test
+  public void getAgenciesByConsultingTypeReadsFreshBatchesAndKeepsSingleLookupFallback() {
+    var first = Agency.builder().id(91L).tenantId(13L).name("Synthetic first")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    var second = Agency.builder().id(92L).tenantId(14L).name("Synthetic second")
+        .consultingTypeId(CONSULTING_TYPE_SUCHT).build();
+    ensureAgencyTopics(first);
+    ensureAgencyTopics(second);
+    when(agencyRepository.findByConsultingTypeId(CONSULTING_TYPE_SUCHT))
+        .thenReturn(List.of(first, second));
+    when(tenantService.getRestrictedTenantDataByTenantIds(any()))
+        .thenReturn(List.of(new RestrictedTenantDTO().id(13L).active(false)))
+        .thenThrow(new RestClientException("batch unavailable"));
+    when(tenantService.getRestrictedTenantDataByTenantId(13L))
+        .thenReturn(new RestrictedTenantDTO().id(13L).active(true));
+    when(tenantService.getRestrictedTenantDataByTenantId(14L))
+        .thenReturn(new RestrictedTenantDTO().id(14L).active(true));
+
+    assertThat(agencyService.getAgencies(CONSULTING_TYPE_SUCHT))
+        .extracting(AgencyResponseDTO::getOffline).containsExactly(true, false);
+    assertThat(agencyService.getAgencies(CONSULTING_TYPE_SUCHT))
+        .extracting(AgencyResponseDTO::getOffline).containsExactly(false, false);
+    verify(tenantService, times(2)).getRestrictedTenantDataByTenantIds(any());
+    verify(tenantService).getRestrictedTenantDataByTenantId(13L);
+    verify(tenantService, times(2)).getRestrictedTenantDataByTenantId(14L);
   }
 
   @Test
@@ -475,8 +536,8 @@ public class AgencyServiceTest {
     var on = new de.caritas.cob.agencyservice.tenantservice.generated.web.model.BooleanPermissionPolicy()
         .value(true).mode(de.caritas.cob.agencyservice.tenantservice.generated.web.model.PermissionPolicyMode.ENFORCED);
     when(tenantService.getRestrictedTenantDataByTenantId(14L))
-        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", off), null).id(14L))
-        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", on), null).id(14L));
+        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", off), null, null).id(14L))
+        .thenReturn(new RestrictedTenantDTO(java.util.Map.of("featureVideoCallsOneOnOneChatsEnabled", on), null, null).id(14L));
 
     var before = agencyService.getAgencies(List.of(91L, 92L));
     before.forEach(agency -> assertEquals(false, agency.getSettings().getFeatureVideoCallsOneOnOneChatsEnabled()));
@@ -488,7 +549,7 @@ public class AgencyServiceTest {
   @Test
   public void getAgencies_With_Ids_Should_ForceFeatureOff_When_PlatformDisallowsIt() {
     servePermissionAgency(new de.caritas.cob.agencyservice.api.model.Settings().featureCallsEnabled(true),
-        new RestrictedTenantDTO(java.util.Map.of("featureCallsEnabled", enforced(false)), null));
+        new RestrictedTenantDTO(java.util.Map.of("featureCallsEnabled", enforced(false)), null, null));
     var result = agencyService.getAgencies(AGENCY_IDS_LIST).get(0);
     assertEquals(false, result.getSettings().getFeatureCallsEnabled());
 
@@ -522,7 +583,7 @@ public class AgencyServiceTest {
   public void getAgencies_With_Ids_Should_ForceOnlyOneFormatOff_When_PlatformDisallowsIt() {
     servePermissionAgency(new de.caritas.cob.agencyservice.api.model.Settings()
         .featureGroupChatV2Enabled(true).featureInternalGroupChatEnabled(true).featureSelfHelpGroupsEnabled(true),
-        new RestrictedTenantDTO(java.util.Map.of("featureSelfHelpGroupsEnabled", enforced(false)), null));
+        new RestrictedTenantDTO(java.util.Map.of("featureSelfHelpGroupsEnabled", enforced(false)), null, null));
     var settings = agencyService.getAgencies(AGENCY_IDS_LIST).get(0).getSettings();
     assertEquals(false, settings.getFeatureSelfHelpGroupsEnabled());
     assertEquals(true, settings.getFeatureInternalGroupChatEnabled());
@@ -607,7 +668,7 @@ public class AgencyServiceTest {
   public void getAgencies_With_Ids_Should_EnforceOneFormatOn_When_PlatformEnforcesOnlyThatFormat() {
     servePermissionAgency(new de.caritas.cob.agencyservice.api.model.Settings()
         .featureInternalGroupChatEnabled(false).featureSelfHelpGroupsEnabled(false),
-        new RestrictedTenantDTO(java.util.Map.of("featureInternalGroupChatEnabled", enforced(true)), null));
+        new RestrictedTenantDTO(java.util.Map.of("featureInternalGroupChatEnabled", enforced(true)), null, null));
     var settings = agencyService.getAgencies(AGENCY_IDS_LIST).get(0).getSettings();
     assertEquals(true, settings.getFeatureInternalGroupChatEnabled());
     assertEquals(false, settings.getFeatureSelfHelpGroupsEnabled());

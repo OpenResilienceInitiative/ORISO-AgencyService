@@ -31,7 +31,8 @@ enum TaskServiceActor {
           "matrix-agency-provision",
           "appointment-sync",
           "appointment-participant-cleanup",
-          "deletion-audit-read"));
+          "deletion-audit-read",
+          "tenant-deletion"));
 
   private final Set<String> purposes;
   private final Set<String> roles;

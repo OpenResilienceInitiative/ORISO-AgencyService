@@ -6,6 +6,7 @@ import static org.apache.commons.lang3.BooleanUtils.isTrue;
 import com.google.common.collect.Lists;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
+import de.caritas.cob.agencyservice.api.converter.AgencyCaseSharingResolver;
 import de.caritas.cob.agencyservice.api.converter.EffectiveAgencySettingsResolver;
 import de.caritas.cob.agencyservice.api.exception.MissingConsultingTypeException;
 import de.caritas.cob.agencyservice.api.exception.httpresponses.HttpStatusExceptionReason;
@@ -40,10 +41,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.NonNull;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -160,7 +164,8 @@ public class AgencyService {
     var agencies = findAgencies(postCode, getConsultingTypeIdForSearch(consultingTypeId), topicId,
         age, gender, counsellingRelation);
     Collections.shuffle(agencies);
-    var ownTenant = requestTenantLookup();
+    var ownTenant = requestTenantLookup(preloadPublicAgencyTenants(
+        agencies.stream().filter(agency -> !agency.isOffline())));
     var mainTenant = requestMainTenantLookup();
     var agencyResponseDTOs = convertToFullAgencyResponses(
         operationalAgencies(agencies, ownTenant), ownTenant, mainTenant);
@@ -202,15 +207,22 @@ public class AgencyService {
 
   @Transactional
   public Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Agency agency) {
-    return provisionMatrixCredentials(agency, true);
-  }
-
-  private Optional<AgencyMatrixCredentialsDTO> provisionMatrixCredentials(Agency agency, boolean saveEntity) {
     log.info("Attempting to provision Matrix credentials for agency {} (id={})", agency.getName(), agency.getId());
 
-    if (nonNull(agency.getMatrixUserId()) && nonNull(agency.getMatrixPassword())) {
-      log.info("Agency {} already has Matrix credentials: {}", agency.getName(), agency.getMatrixUserId());
+    var matrixUserId = agency.getMatrixUserId();
+    boolean hasStoredPassword = nonNull(agency.getMatrixPassword());
+    boolean provisioningRecorded = agency.isMatrixAccountProvisioned();
+    // Older pods write the legacy pair without setting the new completion marker.
+    if (matrixUserId != null && !matrixUserId.isBlank()
+        && (provisioningRecorded || hasStoredPassword)) {
+      log.info("Agency {} already has a provisioned Matrix account", agency.getId());
       return Optional.of(matrixCredentialsDto(agency));
+    }
+
+    if (matrixUserId != null || hasStoredPassword || provisioningRecorded) {
+      log.warn("Agency {} has incomplete Matrix provisioning state; reconciliation is required",
+          agency.getId());
+      return Optional.empty();
     }
 
     log.info("No existing Matrix credentials found. Provisioning new account for agency {}", agency.getName());
@@ -225,17 +237,27 @@ public class AgencyService {
       }
 
       var creds = optionalCredentials.get();
-      var encryptedPassword = matrixPasswordCipher.encrypt(creds.getPassword());
-      agency.setMatrixUserId(creds.getUserId());
-      agency.setMatrixPassword(encryptedPassword);
-      if (saveEntity) {
-        agencyRepository.updateMatrixCredentials(
-            agency.getId(), creds.getUserId(), encryptedPassword);
-        log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}",
-            agency.getName(), agency.getId(), creds.getUserId());
+      var provisionedMatrixUserId = creds.getUserId();
+      if (provisionedMatrixUserId == null || provisionedMatrixUserId.isBlank()
+          || creds.getPassword() == null || creds.getPassword().isBlank()) {
+        log.warn("Matrix provisioning returned incomplete credentials for agency {}", agency.getId());
+        return Optional.empty();
       }
+      var encryptedPassword = matrixPasswordCipher.encrypt(creds.getPassword());
+      int updatedRows = agencyRepository.updateMatrixCredentials(
+          agency.getId(), provisionedMatrixUserId, encryptedPassword);
+      if (updatedRows != 1) {
+        log.warn("Matrix provisioning completed but no agency row was updated for agency {}",
+            agency.getId());
+        return Optional.empty();
+      }
+      log.info("Successfully provisioned and saved Matrix credentials for agency {} (id={}): {}",
+          agency.getName(), agency.getId(), provisionedMatrixUserId);
+      agency.setMatrixUserId(provisionedMatrixUserId);
+      agency.setMatrixPassword(encryptedPassword);
+      agency.setMatrixAccountProvisioned(true);
 
-      return Optional.of(new AgencyMatrixCredentialsDTO(creds.getUserId()));
+      return Optional.of(matrixCredentialsDto(agency));
     } catch (Exception ex) {
       log.warn(
           "Matrix provisioning failed for agency {} (id={}): {}",
@@ -502,9 +524,15 @@ public class AgencyService {
     }
   }
 
-  /** Each request reuses successes, legitimate nulls and failures only within that request. */
   private Function<Agency, RestrictedTenantDTO> requestTenantLookup() {
+    return requestTenantLookup(Map.of());
+  }
+
+  /** Each request reuses successes, legitimate nulls and failures only within that request. */
+  private Function<Agency, RestrictedTenantDTO> requestTenantLookup(
+      Map<Long, RestrictedTenantDTO> initialTenants) {
     Map<Long, Optional<RestrictedTenantDTO>> tenants = new HashMap<>();
+    initialTenants.forEach((id, tenant) -> tenants.put(id, Optional.of(tenant)));
     Map<Long, RuntimeException> failures = new HashMap<>();
     return agency -> {
       Long id = agency.getTenantId();
@@ -546,15 +574,34 @@ public class AgencyService {
     };
   }
 
+  private Map<Long, RestrictedTenantDTO> preloadPublicAgencyTenants(Stream<Agency> agencies) {
+    var tenantIds = agencies
+        .map(Agency::getTenantId)
+        .filter(id -> id != null && id > 0)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    if (tenantIds.size() < 2) {
+      return Map.of();
+    }
+    try {
+      var byId = tenantService.getRestrictedTenantDataByTenantIds(tenantIds).stream()
+          .filter(tenant -> tenantIds.contains(tenant.getId()))
+          .collect(Collectors.groupingBy(RestrictedTenantDTO::getId));
+      return byId.entrySet().stream()
+          .filter(entry -> entry.getValue().size() == 1)
+          .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().getFirst()));
+    } catch (RestClientException | IllegalStateException exception) {
+      // The single lookup still determines which organisations are available.
+      return Map.of();
+    }
+  }
+
   private List<AgencyResponseDTO> convertToAgencyResponses(List<Agency> agencies) {
-    var ownTenant = requestTenantLookup();
+    var eligible = agencies.stream().filter(this::hasPublicPolicyAuthority).toList();
+    var ownTenant = requestTenantLookup(preloadPublicAgencyTenants(eligible.stream()));
     var mainTenant = requestMainTenantLookup();
     List<AgencyResponseDTO> available = new ArrayList<>();
     ServiceUnavailableException failedPolicy = null;
-    for (Agency agency : agencies) {
-      if (!hasPublicPolicyAuthority(agency)) {
-        continue;
-      }
+    for (Agency agency : eligible) {
       try {
         var tenantData = ownTenant.apply(agency);
         boolean offline = agency.isOffline() || isTenantInactive(agency, ownTenant);
@@ -585,13 +632,15 @@ public class AgencyService {
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     String renderedAgencySpecificPrivacy =
         getRenderedAgencySpecificPrivacy(agency, tenantData, ownTenant, mainTenant);
+    var settings = buildAgencySettings(agency, tenantData);
     return new AgencyResponseDTO()
         .id(agency.getId())
         .name(agency.getName())
         .postcode(agency.getPostCode())
         .city(agency.getCity())
         .description(agency.getDescription())
-        .teamAgency(agency.isTeamAgency())
+        // #374: new sessions and counsellor assignments follow the effective case sharing mode
+        .teamAgency(AgencyCaseSharingResolver.isTeamCounselling(settings.getCaseSharing()))
         .offline(offline)
         .tenantId(agency.getTenantId())
         .consultingType(agency.getConsultingTypeId())
@@ -608,7 +657,7 @@ public class AgencyService {
             agency.getAgencyTopics().stream()
                 .map(topic -> convertToAgencyDepartmentDTO(topic, agency, ownTenant, mainTenant))
                 .toList())
-        .settings(buildAgencySettings(agency, tenantData));
+        .settings(settings);
   }
 
   /**
@@ -620,6 +669,10 @@ public class AgencyService {
     EffectiveAgencySettingsResolver.applyTo(
         settings, tenantData != null ? tenantData.getSettings() : null,
         tenantData != null ? tenantData.getPermissionPolicies() : null);
+    if (settings == null) {
+      settings = new Settings();
+    }
+    AgencyCaseSharingResolver.applyTo(settings, agency.isTeamAgency(), tenantData);
     return settings;
   }
 
@@ -643,6 +696,16 @@ public class AgencyService {
     }
   }
 
+  private boolean effectiveTeamAgency(
+      Agency agency, Function<Agency, RestrictedTenantDTO> ownTenant) {
+    return AgencyCaseSharingResolver.isTeamCounselling(
+        AgencyCaseSharingResolver.resolve(
+            agencySettingsService.toSettings(agency.getSettings()),
+            agency.isTeamAgency(),
+            // like isTenantInactive: an agency without a tenant has no Traeger to inherit from
+            agency.getTenantId() == null ? null : ownTenant.apply(agency)));
+  }
+
   private FullAgencyResponseDTO convertToFullAgencyResponseDTO(Agency agency,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
     return new FullAgencyResponseDTO()
@@ -651,7 +714,8 @@ public class AgencyService {
         .postcode(agency.getPostCode())
         .city(agency.getCity())
         .description(agency.getDescription())
-        .teamAgency(agency.isTeamAgency())
+        // #374: registration search shows the same effective team flag as GET /agencies/{ids}
+        .teamAgency(effectiveTeamAgency(agency, ownTenant))
         .offline(agency.isOffline())
         .consultingType(agency.getConsultingTypeId())
         .url(agency.getUrl())
@@ -675,9 +739,8 @@ public class AgencyService {
 
   /**
    * Maps a department (Fachbereich = agency × topic) to its registration-search view: the topic id
-   * plus whether its own legal texts (ADR-003) are published. Uses the already-loaded {@code
-   * agencyTopics} association (the same one {@code topicIds} is built from), so no additional
-   * query is issued per agency or topic.
+   * and whether its effective legal texts are published. The flags use the same {@code agencyTopics}
+   * association as {@code topicIds}. Publication version reads belong to the legal detail route.
    *
    * <p><b>Two flags, two questions — deliberately not the same predicate.</b> This public flag
    * answers "is a data protection policy in force for this department at all", resolved across the
@@ -730,13 +793,13 @@ public class AgencyService {
    */
   private boolean hasPublishedDpp(AgencyTopic agencyTopic,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
-    return legalTextInheritanceResolver.resolveDpp(agencyTopic, ownTenant, mainTenant).isPresent();
+    return legalTextInheritanceResolver.resolveDppForList(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   /** Same fix for the imprint half — an inherited imprint is reachable and must be reported so. */
   private boolean hasPublishedImprint(AgencyTopic agencyTopic,
       Function<Agency, RestrictedTenantDTO> ownTenant, Supplier<RestrictedTenantDTO> mainTenant) {
-    return legalTextInheritanceResolver.resolveImprint(agencyTopic, ownTenant, mainTenant).isPresent();
+    return legalTextInheritanceResolver.resolveImprintForList(agencyTopic, ownTenant, mainTenant).isPresent();
   }
 
   private DemographicsDTO getDemographics(Agency agency) {

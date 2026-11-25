@@ -142,8 +142,9 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
       @Param("updateDate") java.time.LocalDateTime updateDate);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
-  @Query("UPDATE Agency a SET a.matrixUserId = :matrixUserId, a.matrixPassword = :matrixPassword WHERE a.id = :agencyId")
-  void updateMatrixCredentials(
+  @Query("UPDATE Agency a SET a.matrixUserId = :matrixUserId, a.matrixPassword = :matrixPassword, "
+      + "a.matrixAccountProvisioned = true WHERE a.id = :agencyId")
+  int updateMatrixCredentials(
       @Param("agencyId") Long agencyId,
       @Param("matrixUserId") String matrixUserId,
       @Param("matrixPassword") String matrixPassword);

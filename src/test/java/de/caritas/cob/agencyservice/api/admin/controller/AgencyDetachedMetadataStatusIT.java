@@ -138,11 +138,17 @@ public class AgencyDetachedMetadataStatusIT {
     authenticate("agency-admin", 1L);
     var loaded = new CountDownLatch(1);
     var finish = new CountDownLatch(1);
-    when(userClient.getAgencyConsultants("883")).thenAnswer(invocation -> {
+    // The deletion asks UserService for its preview before it marks the agency, and holds no row
+    // lock while it waits (ORISO-Admin#1524); a pause written meanwhile must survive the marking.
+    when(userClient.getAgencyDeletionPreview(883L)).thenAnswer(invocation -> {
       loaded.countDown();
       assertTrue("metadata write released", finish.await(10, TimeUnit.SECONDS));
-      return new AgencyConsultantResponseDTO().embedded(List.of());
+      return new de.caritas.cob.agencyservice.useradminservice.generated.web.model
+          .AgencyDeletionPreviewDTO();
     });
+    when(userClient.markAgencyContentsForDeletion(883L)).thenReturn(
+        new de.caritas.cob.agencyservice.useradminservice.generated.web.model
+            .AgencyDeletionResultDTO().complete(true).failures(List.of()));
     runInterleaving(delete("/agencyadmin/agencies/883"), loaded, finish);
     new org.springframework.transaction.support.TransactionTemplate(transactionManager)
         .executeWithoutResult(transaction -> {

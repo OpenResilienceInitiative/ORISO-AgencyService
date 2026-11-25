@@ -51,6 +51,7 @@ create table AGENCY
     AGENCY_LOGO longtext null default null,
     MATRIX_USER_ID varchar(255) null default null,
     MATRIX_PASSWORD varchar(255) null default null,
+    MATRIX_ACCOUNT_PROVISIONED tinyint not null default 0,
     SETTINGS longtext null default null,
     CONTENT_DPP longtext null default null,
     CONTENT_IMPRINT longtext null default null,

@@ -31,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -212,6 +213,12 @@ public class Agency implements TenantAware {
 
   @Column(name = "matrix_password")
   private String matrixPassword;
+
+  @Column(name = "matrix_account_provisioned", nullable = false, columnDefinition = "tinyint")
+  @ColumnDefault("0")
+  @Convert(converter = NumericBooleanConverter.class)
+  @JdbcTypeCode(Types.TINYINT)
+  private boolean matrixAccountProvisioned;
 
   @Column(name = "settings", columnDefinition = "longtext")
   @JdbcTypeCode(Types.LONGVARCHAR)

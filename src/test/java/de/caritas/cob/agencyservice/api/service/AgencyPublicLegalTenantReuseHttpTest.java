@@ -3,6 +3,8 @@ package de.caritas.cob.agencyservice.api.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -30,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +48,7 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -120,8 +124,8 @@ class AgencyPublicLegalTenantReuseHttpTest {
     var sameTenant = agency(10L, 7L, 2);
     var other = agency(11L, 8L, 2);
     var service = service(List.of(first, sameTenant, other), false);
-    expect("id/7", 7L, true, true, "OWN-7");
-    expect("id/8", 8L, true, false, "OWN-8");
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(8L, true, false, "OWN-8"),
+        tenantJson(7L, true, true, "OWN-7")));
     var responses = service.getAgencies(List.of(9L, 10L, 11L));
     assertThat(responses).extracting(value -> value.getAgencySpecificPrivacy())
         .containsExactly("OWN-7 privacy", "OWN-7 privacy", "OWN-8 privacy");
@@ -130,12 +134,33 @@ class AgencyPublicLegalTenantReuseHttpTest {
     assertLegal(other, "OWN-8", LegalTextSourceLevel.TENANT);
     server.verify();
     server.reset();
-    expect("id/7", 7L, true, false, "UPDATED-7");
-    expect("id/8", 8L, true, true, "UPDATED-8");
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(7L, true, false, "UPDATED-7"),
+        tenantJson(8L, true, true, "UPDATED-8")));
     assertThat(service.getAgencies(List.of(9L, 10L, 11L)))
         .extracting(value -> value.getAgencySpecificPrivacy())
         .containsExactly("UPDATED-7 privacy", "UPDATED-7 privacy", "UPDATED-8 privacy");
     server.verify();
+  }
+
+  @Test
+  void fixedIdListUsesTwoBoundedReadsAndPreservesOrderFor101Tenants() {
+    var tenantIds = LongStream.rangeClosed(1, 101).boxed().toList();
+    var agencies = tenantIds.stream().map(id -> agency(id + 1000L, id, 0)).toList();
+    var agencyIds = agencies.stream().map(Agency::getId).toList();
+    expectActiveTenantBatch(tenantIds.subList(0, 100));
+    expectActiveTenantBatch(tenantIds.subList(100, 101));
+
+    var response = service(agencies, false).getAgencies(agencyIds);
+
+    assertThat(response).extracting(value -> value.getId()).containsExactlyElementsOf(agencyIds);
+    assertThat(response.getFirst().getOffline()).isTrue();
+    assertThat(response.getLast().getOffline()).isFalse();
+    server.verify();
+  }
+
+  private void expectActiveTenantBatch(List<Long> ids) {
+    expectBatch(ids, ids.reversed().stream().map(id ->
+        "{\"id\":" + id + ",\"active\":" + (id != 1L) + "}").toList());
   }
 
   @ParameterizedTest
@@ -145,9 +170,14 @@ class AgencyPublicLegalTenantReuseHttpTest {
     var agencies = path.equals("white-spot") ? List.of(first)
         : List.of(first, agency(10L, 7L, 2), agency(11L, 8L, 2));
     var service = service(agencies, path.equals("white-spot"));
-    expect("id/7", 7L, false, true, "LEGAL-7");
-    if (!path.equals("white-spot")) {
-      expect("id/8", 8L, false, false, "LEGAL-8");
+    if (path.equals("consulting-search")) {
+      expectBatch(List.of(7L, 8L), List.of(tenantJson(8L, false, false, "LEGAL-8"),
+          tenantJson(7L, false, true, "LEGAL-7")));
+    } else {
+      expect("id/7", 7L, false, true, "LEGAL-7");
+      if (path.equals("tenant-topic-search")) {
+        expect("id/8", 8L, false, false, "LEGAL-8");
+      }
     }
     var result = path.equals("tenant-topic-search") ? service.getAgencies("12345", 1)
         : service.getAgencies(Optional.of("12345"), 1, Optional.empty());
@@ -158,12 +188,44 @@ class AgencyPublicLegalTenantReuseHttpTest {
   }
 
   @Test
+  void registrationBatchesOnlineCandidatesAndReadsWhiteSpotOnlyWhenTheyAreInactive() {
+    var offline = agency(12L, 10L, 1);
+    offline.setOffline(true);
+    var fallback = agency(9L, 11L, 1);
+    var service = service(List.of(agency(10L, 7L, 1), offline, agency(11L, 8L, 1)),
+        Optional.of(fallback));
+    expectBatch(List.of(7L, 8L), List.of(
+        "{\"id\":7,\"active\":false}", "{\"id\":8,\"active\":false}"));
+    expect("id/11", 11L, false, false, "WHITE-SPOT");
+
+    var result = service.getAgencies(Optional.of("12345"), 1, Optional.empty());
+
+    assertThat(result).extracting(value -> value.getId()).containsExactly(9L);
+    assertLegal(fallback, "WHITE-SPOT", LegalTextSourceLevel.TENANT);
+    server.verify();
+  }
+
+  @Test
+  void registrationRetainsTheSingleReadFailureForAnOmittedTenant() {
+    var service = service(List.of(agency(10L, 7L, 1), agency(11L, 8L, 1)),
+        Optional.of(agency(9L, 11L, 1)));
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(7L, false, false, "LEGAL-7")));
+    server.expect(requestTo("http://tenant.test/tenant/public/id/8"))
+        .andRespond(withServerError());
+
+    assertThatThrownBy(() -> service.getAgencies(Optional.of("12345"), 1, Optional.empty()))
+        .isInstanceOf(ServiceUnavailableException.class);
+    assertThat(renderedLegal).isEmpty();
+    server.verify();
+  }
+
+  @Test
   void mainLegalFallbackIsSharedWithoutBecomingAnotherTenantsFeatureAuthority() {
     final var first = agency(9L, 7L, 2);
     final var other = agency(11L, 8L, 2);
     singleDomain(false);
-    expect("id/7", 7L, true, true, "OWN-7");
-    expect("id/8", 8L, true, false, "OWN-8");
+    expectBatch(List.of(7L, 8L), List.of(tenantJson(8L, true, false, "OWN-8"),
+        tenantJson(7L, true, true, "OWN-7")));
     expect("main", 1L, true, false, "MAIN");
     var response = service(List.of(first, other), false).getAgencies(List.of(9L, 11L));
     assertThat(response).extracting(value -> value.getAgencySpecificPrivacy())
@@ -186,11 +248,11 @@ class AgencyPublicLegalTenantReuseHttpTest {
     singleDomain(false);
     expect("id/7", 7L, false, true, "UNUSED-TENANT");
     service(List.of(agency), false).getAgencies(List.of(9L));
-    assertThat(renderedLegal.get("9/900/resolveDpp").content()).contains("DEPARTMENT-DPP");
-    assertThat(renderedLegal.get("9/900/resolveDpp").sourceLevel())
+    assertThat(renderedLegal.get("9/900/resolveDppForList").content()).contains("DEPARTMENT-DPP");
+    assertThat(renderedLegal.get("9/900/resolveDppForList").sourceLevel())
         .isEqualTo(LegalTextSourceLevel.DEPARTMENT);
-    assertThat(renderedLegal.get("9/901/resolveDpp").content()).contains("AGENCY-DPP");
-    assertThat(renderedLegal.get("9/901/resolveDpp").sourceLevel()).isEqualTo(LegalTextSourceLevel.AGENCY);
+    assertThat(renderedLegal.get("9/901/resolveDppForList").content()).contains("AGENCY-DPP");
+    assertThat(renderedLegal.get("9/901/resolveDppForList").sourceLevel()).isEqualTo(LegalTextSourceLevel.AGENCY);
     server.verify();
   }
 
@@ -300,17 +362,22 @@ class AgencyPublicLegalTenantReuseHttpTest {
   }
 
   private AgencyService service(List<Agency> agencies, boolean whiteSpot) {
+    return whiteSpot ? service(List.of(), Optional.of(agencies.getFirst()))
+        : service(agencies, Optional.empty());
+  }
+
+  private AgencyService service(List<Agency> agencies, Optional<Agency> whiteSpot) {
     var result = mock(AgencyService.class, Answers.CALLS_REAL_METHODS);
     var repository = mock(AgencyRepository.class, call -> switch (call.getMethod().getName()) {
-      case "findByIdIn", "findByConsultingTypeId" -> new ArrayList<>(agencies);
-      case "searchWithoutTopic", "searchWithTopic" -> whiteSpot ? List.of() : new ArrayList<>(agencies);
-      case "findByIdAndDeleteDateNull" -> Optional.of(agencies.getFirst());
+      case "findByIdIn", "findByConsultingTypeId", "searchWithoutTopic", "searchWithTopic" ->
+          new ArrayList<>(agencies);
+      case "findByIdAndDeleteDateNull" -> whiteSpot;
       default -> Answers.RETURNS_DEFAULTS.answer(call);
     });
     var consulting = mock(ConsultingTypeManager.class, call ->
         call.getMethod().getName().equals("getConsultingTypeSettings")
             ? new ExtendedConsultingTypeResponseDTO().whiteSpot(new WhiteSpotDTO()
-                .whiteSpotAgencyAssigned(whiteSpot).whiteSpotAgencyId(9))
+                .whiteSpotAgencyAssigned(whiteSpot.isPresent()).whiteSpotAgencyId(9))
             : Answers.RETURNS_DEFAULTS.answer(call));
     ReflectionTestUtils.setField(result, "tenantService", tenants);
     ReflectionTestUtils.setField(result, "agencyRepository", repository);
@@ -323,21 +390,33 @@ class AgencyPublicLegalTenantReuseHttpTest {
   }
 
   private void expect(String route, long id, boolean central, boolean video, String sentinel) {
-    server.expect(requestTo("http://tenant.test/tenant/public/" + route)).andRespond(withSuccess("""
+    server.expect(requestTo("http://tenant.test/tenant/public/" + route))
+        .andRespond(withSuccess(tenantJson(id, central, video, sentinel), MediaType.APPLICATION_JSON));
+  }
+
+  private void expectBatch(List<Long> ids, List<String> tenants) {
+    server.expect(requestTo("http://tenant.test/tenant/public/ids"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(content().json(ids.toString()))
+        .andRespond(withSuccess("[" + String.join(",", tenants) + "]", MediaType.APPLICATION_JSON));
+  }
+
+  private String tenantJson(long id, boolean central, boolean video, String sentinel) {
+    return """
         {"id":%d,"settings":{"featureCentralDataProtectionTemplateEnabled":%s,
         "featureVideoCallsOneOnOneChatsEnabled":%s},"permissionPolicies":{
         "featureVideoCallsOneOnOneChatsEnabled":{"value":%s,"mode":"ENFORCED"}},
         "content":{"privacy":"%s privacy","impressum":"%s imprint"}}
-        """.formatted(id, central, video, video, sentinel, sentinel), MediaType.APPLICATION_JSON));
+        """.formatted(id, central, video, video, sentinel, sentinel);
   }
 
   private void assertLegal(Agency agency, String sentinel, LegalTextSourceLevel level) {
     for (var topic : agency.getAgencyTopics()) {
       var key = agency.getId() + "/" + topic.getTopicId() + "/";
-      assertThat(renderedLegal.get(key + "resolveDpp").content()).contains(sentinel + " privacy");
-      assertThat(renderedLegal.get(key + "resolveImprint").content()).contains(sentinel + " imprint");
-      assertThat(renderedLegal.get(key + "resolveDpp").sourceLevel()).isEqualTo(level);
-      assertThat(renderedLegal.get(key + "resolveImprint").sourceLevel()).isEqualTo(level);
+      assertThat(renderedLegal.get(key + "resolveDppForList").content()).contains(sentinel + " privacy");
+      assertThat(renderedLegal.get(key + "resolveImprintForList").content()).contains(sentinel + " imprint");
+      assertThat(renderedLegal.get(key + "resolveDppForList").sourceLevel()).isEqualTo(level);
+      assertThat(renderedLegal.get(key + "resolveImprintForList").sourceLevel()).isEqualTo(level);
     }
   }
 }

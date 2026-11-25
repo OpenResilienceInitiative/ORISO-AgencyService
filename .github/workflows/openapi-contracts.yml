@@ -39,14 +39,14 @@ jobs:
       uses: actions/checkout@v6
       with:
         repository: OpenResilienceInitiative/ORISO-TenantService
-        ref: ${{ github.event_name == 'pull_request' && '5dc8a1f2abf4f316257671b85ae1f23540ec91c1' || 'dev' }}
+        ref: ${{ github.event_name == 'pull_request' && '836a324997b376a8ffef8f24b79c83b511978bf2' || 'dev' }}
         path: .providers/tenant
 
     - name: Checkout UserService provider
       uses: actions/checkout@v6
       with:
         repository: OpenResilienceInitiative/ORISO-UserService
-        ref: ${{ github.event_name == 'pull_request' && '004417e44e7882033f90e08d658f77b11d721f64' || 'dev' }}
+        ref: ${{ github.event_name == 'pull_request' && 'cc03ff613409c41419e993f8c854e7c97a2678a4' || 'dev' }}
         path: .providers/user
 
     - name: Set up Node.js

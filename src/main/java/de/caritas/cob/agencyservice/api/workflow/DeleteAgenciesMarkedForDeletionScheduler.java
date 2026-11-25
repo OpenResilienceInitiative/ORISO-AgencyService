@@ -1,5 +1,6 @@
 package de.caritas.cob.agencyservice.api.workflow;
 
+import de.caritas.cob.agencyservice.api.tenant.TenantContext;
 import de.caritas.cob.agencyservice.api.tenant.TenantContextProvider;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -12,10 +13,16 @@ public class DeleteAgenciesMarkedForDeletionScheduler {
 
   private final @NonNull DeleteAgencyService deleteAgencyService;
   private final @NonNull TenantContextProvider tenantContextProvider;
+  private final @NonNull AgencyPurgeRunLock purgeRunLock;
 
   @Scheduled(cron = "${agency.deleteworkflow.cron}")
   public void performDeletionWorkflow() {
-    tenantContextProvider.setTechnicalContextIfMultiTenancyIsEnabled();
-    this.deleteAgencyService.deleteAgenciesMarkedForDeletion();
+    TenantContext.clear();
+    try {
+      tenantContextProvider.setTechnicalContextIfMultiTenancyIsEnabled();
+      purgeRunLock.runIfAcquired(deleteAgencyService::deleteAgenciesMarkedForDeletion);
+    } finally {
+      TenantContext.clear();
+    }
   }
 }

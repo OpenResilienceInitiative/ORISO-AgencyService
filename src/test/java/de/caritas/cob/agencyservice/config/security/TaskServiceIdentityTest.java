@@ -149,7 +149,8 @@ class TaskServiceIdentityTest {
           "matrix-agency-provision",
           "appointment-sync",
           "appointment-participant-cleanup",
-          "deletion-audit-read");
+          "deletion-audit-read",
+          "tenant-deletion");
 
   @Test
   void groupedRuntimeReadsTheDeletionAuditOutboxOnlyWithItsCompleteRoleUnion() {
@@ -200,6 +201,23 @@ class TaskServiceIdentityTest {
                     environment.withProperty(
                         "TASK_IDENTITY_REQUIRED_TASKS", "DELETION_AUDIT_READ")))
         .isInstanceOf(IllegalStateException.class);
+  }
+
+  /**
+   * RUNTIME also finishes Träger deletions in TenantService (ORISO-Admin#1525), so Keycloak issues
+   * it tenant-deletion. This receiver checks the exact union: it must accept the new set and refuse
+   * the one before, or its own RUNTIME calls break once the role is issued.
+   */
+  @Test
+  void groupedRuntimeCarriesTheTenantDeletionRoleInItsExactUnion() {
+    var identity = new TaskServiceIdentity(runtimeBindings("DELETION_AUDIT_READ"));
+
+    assertThat(identity.allows(runtimeCaller(RUNTIME_ROLES, "receiver"), "DELETION_AUDIT_READ"))
+        .isTrue();
+    assertThat(
+            identity.allows(
+                runtimeCaller(RUNTIME_ROLES.subList(0, 6), "receiver"), "DELETION_AUDIT_READ"))
+        .isFalse();
   }
 
   private MockEnvironment runtimeBindings(String purposes) {
