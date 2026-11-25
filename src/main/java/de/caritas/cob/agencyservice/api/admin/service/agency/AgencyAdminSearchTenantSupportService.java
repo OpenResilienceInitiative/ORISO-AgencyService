@@ -35,6 +35,12 @@ public class AgencyAdminSearchTenantSupportService extends AgencyAdminSearchServ
         agencyAdminFilterPredicate(criteriaBuilder, root)};
   }
 
+  @Override
+  public Predicate callerScopePredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
+    return criteriaBuilder.and(
+        agencyAdminFilterPredicate(criteriaBuilder, root), tenantPredicate(criteriaBuilder, root));
+  }
+
   protected Predicate tenantPredicate(CriteriaBuilder criteriaBuilder, Root<Agency> root) {
     if (TenantContext.getCurrentTenant() != null && TenantContext.getCurrentTenant().equals(0L)) {
       return criteriaBuilder.isNotNull(root.get(TENANT_ID_SEARCH_FIELD));

@@ -7,6 +7,8 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResp
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminSearchService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySearchFilter;
 import de.caritas.cob.agencyservice.api.admin.service.agencypostcoderange.AgencyPostcodeRangeAdminService;
+import de.caritas.cob.agencyservice.api.admin.service.casesharing.AgencyCaseSharingChangeQueryService;
+import de.caritas.cob.agencyservice.api.model.AgencyCaseSharingChangeListDTO;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdStepDirection;
 import de.caritas.cob.agencyservice.api.admin.service.department.DepartmentDetailsService;
@@ -113,6 +115,7 @@ public class AgencyAdminController implements AgencyadminApi {
   private final @NonNull AgencyLegalProposalFacade agencyLegalProposalFacade;
   private final @NonNull LegalAdminAccessGuard legalAdminAccessGuard;
   private final @NonNull AgencyIdAllocationService agencyIdAllocationService;
+  private final @NonNull AgencyCaseSharingChangeQueryService agencyCaseSharingChangeQueryService;
 
   /**
    * Creates the root hal based navigation entity.
@@ -159,6 +162,23 @@ public class AgencyAdminController implements AgencyadminApi {
 
     logCompletedSearch();
     return new ResponseEntity<>(agencyAdminSearchResultDTO, HttpStatus.OK);
+  }
+
+  /**
+   * Log of changes of the centres' effective case sharing model (ORISO-Admin#2494), newest first.
+   * Authority and scope mirror {@link #searchAgencies}: {@code AUTHORIZATION_SEARCH_AGENCIES} in
+   * the security config, and the search's tenant and restricted-admin predicate in the query.
+   *
+   * @param agencyId only changes of this agency (optional)
+   * @param page 0-based page
+   * @param perPage entries per page, at most 100
+   * @return one page of changes
+   */
+  @Override
+  public ResponseEntity<AgencyCaseSharingChangeListDTO> getAgencyCaseSharingChanges(
+      Long agencyId, Integer page, Integer perPage) {
+    return ResponseEntity.ok(
+        agencyCaseSharingChangeQueryService.findChanges(agencyId, page, perPage));
   }
 
   private static void logCompletedSearch() {

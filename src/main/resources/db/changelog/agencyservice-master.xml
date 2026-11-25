@@ -123,4 +123,8 @@
   <include file="db/changelog/changeset/0041_deletion_audit_outbox/0041_changeSet.xml"/>
 
   <include file="db/changelog/changeset/0042_agency_matrix_provisioning/0042_changeSet.xml"/>
+
+  <!-- ORISO-Admin#2494: append-only log of changes of a centre's effective case sharing model,
+       shown in the Admin "Logs" area. No update or delete path. -->
+  <include file="db/changelog/changeset/0043_agency_case_sharing_change/0043_changeSet.xml"/>
 </databaseChangeLog>

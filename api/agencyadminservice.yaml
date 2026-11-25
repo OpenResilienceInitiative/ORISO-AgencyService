@@ -335,6 +335,63 @@ paths:
       security:
         - Bearer: [ ]
 
+  /agencyadmin/agencies/case-sharing-changes:
+    get:
+      tags:
+        - admin-agency-controller
+      summary: >-
+        Log of changes of a counselling centre's effective case sharing model, newest first
+        (ORISO-Admin#2494). Each case keeps the model it was created under; a change applies to new
+        cases only. Scope is the same as the agency search (GET /agencyadmin/agencies): a tenant
+        admin sees their tenant, a platform admin every tenant, a restricted agency admin only the
+        agencies they administer.
+        [Authorization: Authority: AUTHORIZATION_SEARCH_AGENCIES]
+      operationId: getAgencyCaseSharingChanges
+      parameters:
+        - name: agencyId
+          in: query
+          description: >-
+            Only changes of this agency. Narrows the caller's scope and never widens it: an agency
+            outside that scope returns an empty result.
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          description: Page number, 0 = first page
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: perPage
+          in: query
+          description: Number of entries per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        200:
+          description: OK - one page of changes, newest first
+          content:
+            'application/json':
+              schema:
+                $ref: '#/components/schemas/AgencyCaseSharingChangeListDTO'
+        400:
+          description: BAD REQUEST - invalid page or perPage
+        401:
+          description: UNAUTHORIZED - no/invalid role/authorization
+        403:
+          description: FORBIDDEN - caller lacks the agency search authority
+        500:
+          description: INTERNAL SERVER ERROR - server encountered unexpected condition
+      security:
+        - Bearer: [ ]
+
   /agencyadmin/agencyids/{agencyId}/availability:
     get:
       tags:
@@ -3244,6 +3301,64 @@ components:
       $ref: './components/agency-settings.yaml#/components/schemas/AgencyAdminControls'
     Settings:
       $ref: './components/agency-settings.yaml#/components/schemas/Settings'
+
+    AgencyCaseSharingMode:
+      $ref: './components/agency-settings.yaml#/components/schemas/AgencyCaseSharingMode'
+
+    AgencyCaseSharingChangeListDTO:
+      type: object
+      required: [total, entries]
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: Number of changes in the caller's scope matching the filter
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgencyCaseSharingChangeDTO'
+
+    AgencyCaseSharingChangeDTO:
+      type: object
+      description: >-
+        One change of a counselling centre's effective case sharing model (ORISO-Admin#2494).
+      required: [id, agencyId, changedAt, newModel, source]
+      properties:
+        id:
+          type: integer
+          format: int64
+        agencyId:
+          type: integer
+          format: int64
+        agencyName:
+          type: string
+          nullable: true
+        tenantId:
+          type: integer
+          format: int64
+          nullable: true
+        changedAt:
+          type: string
+          description: When the change was saved, ISO-8601 in UTC, e.g. 2026-11-25T09:30:00Z
+          example: "2026-11-25T09:30:00Z"
+        changedBy:
+          type: string
+          nullable: true
+          description: Username of the admin who saved the change; null if unknown
+        previousModel:
+          allOf:
+            - $ref: '#/components/schemas/AgencyCaseSharingMode'
+          nullable: true
+          description: Effective model before the change; null if unknown
+        newModel:
+          $ref: '#/components/schemas/AgencyCaseSharingMode'
+        source:
+          type: string
+          description: >-
+            AGENCY_SETTINGS = the centre's own case sharing mode was changed; AGENCY_TYPE = the
+            centre's team agency flag was changed
+          enum: [AGENCY_SETTINGS, AGENCY_TYPE]
+
 
   securitySchemes:
     Bearer:

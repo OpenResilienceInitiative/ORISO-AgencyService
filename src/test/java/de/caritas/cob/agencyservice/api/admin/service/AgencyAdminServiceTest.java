@@ -149,6 +149,10 @@ class AgencyAdminServiceTest {
   @Mock
   OneTopicPerAgencyPolicy oneTopicPerAgencyPolicy;
 
+  @Mock
+  de.caritas.cob.agencyservice.api.admin.service.casesharing.AgencyCaseSharingChangeRecorder
+      caseSharingChangeRecorder;
+
   @Captor
   private ArgumentCaptor<Agency> agencyArgumentCaptor;
 
@@ -779,6 +783,72 @@ class AgencyAdminServiceTest {
     verify(this.userAdminService).adaptRelatedConsultantsForChange(AGENCY_ID,
         requestDTO.getAgencyType().getValue());
     verify(this.agencyRepository).save(any());
+  }
+
+  @Test
+  void updateAgency_Should_passOwnCaseSharingModeBeforeAndAfterToTheChangeLog() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setTeamAgency(false);
+    agency.setSettings("{\"caseSharingMode\":\"CASE_HANDOVER\"}");
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    ReflectionTestUtils.setField(agencyAdminService, "agencySettingsService", new AgencySettingsService());
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateWithSettings(agency,
+        new Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING)));
+
+    verify(caseSharingChangeRecorder).recordIfEffectiveModelChanged(
+        agency.getId(), agency.getTenantId(),
+        de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.CASE_HANDOVER, false,
+        de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.TEAM_COUNSELLING, false,
+        de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChangeSource.AGENCY_SETTINGS);
+  }
+
+  @Test
+  void changeAgencyType_Should_passTeamAgencyBeforeAndAfterToTheChangeLog() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    agency.setTeamAgency(false);
+    when(agencyRepository.findById(AGENCY_ID)).thenReturn(Optional.of(agency));
+
+    agencyAdminService.changeAgencyType(AGENCY_ID, new AgencyTypeRequestDTO().agencyType(TEAM_AGENCY));
+
+    verify(caseSharingChangeRecorder).recordIfEffectiveModelChanged(
+        agency.getId(), agency.getTenantId(), null, false, null, true,
+        de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChangeSource.AGENCY_TYPE);
+  }
+
+  @Test
+  void updateAgency_Should_saveAndLogTheChange_When_TenantDataIsUnavailable() {
+    var agency = this.easyRandom.nextObject(Agency.class);
+    clearDataProtection(agency);
+    agency.setCounsellingRelations(null);
+    agency.setTeamAgency(false);
+    agency.setSettings("{\"caseSharingMode\":\"CASE_HANDOVER\"}");
+    when(agencyRepository.findLockedById(AGENCY_ID)).thenReturn(Optional.of(agency));
+    when(agencyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    ReflectionTestUtils.setField(agencyAdminService, "agencySettingsService", new AgencySettingsService());
+    var tenantService = mock(de.caritas.cob.agencyservice.api.service.TenantService.class);
+    when(tenantService.getRestrictedTenantDataForPermissionPolicies(any()))
+        .thenThrow(new org.springframework.web.client.RestClientException("TenantService down"));
+    var changeRepository = mock(
+        de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChangeRepository.class);
+    ReflectionTestUtils.setField(agencyAdminService, "caseSharingChangeRecorder",
+        new de.caritas.cob.agencyservice.api.admin.service.casesharing.AgencyCaseSharingChangeRecorder(
+            changeRepository, tenantService, authenticatedUser));
+    var changeCaptor = ArgumentCaptor.forClass(
+        de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChange.class);
+
+    agencyAdminService.updateAgency(AGENCY_ID, updateWithSettings(agency,
+        new Settings().caseSharingMode(
+            de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode.NONE)));
+
+    verify(agencyRepository).save(any());
+    verify(changeRepository).save(changeCaptor.capture());
+    assertThat(changeCaptor.getValue().getPreviousModel(), is("CASE_HANDOVER"));
+    assertThat(changeCaptor.getValue().getNewModel(), is("NONE"));
   }
 
   @Test

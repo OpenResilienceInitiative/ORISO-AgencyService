@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+  <!-- ORISO-Admin#2494: append-only log of every change of a counselling centre's EFFECTIVE case
+       sharing model. A case keeps the model it was created under, so this log is what shows which
+       model applied from when to when. MariaDB DDL commits implicitly, so table and each index
+       are separate changesets: a run that stops between them re-runs only the missing step. -->
+  <changeSet id="createAgencyCaseSharingChange" author="oriso">
+    <preConditions onFail="MARK_RAN">
+      <not><tableExists tableName="agency_case_sharing_change"/></not>
+    </preConditions>
+    <createTable tableName="agency_case_sharing_change">
+      <column name="id" type="BIGINT" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="agency_id" type="BIGINT"><constraints nullable="false"/></column>
+      <column name="tenant_id" type="BIGINT"/>
+      <column name="changed_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+      <column name="changed_by_user_id" type="VARCHAR(36)"/>
+      <column name="changed_by_name" type="VARCHAR(255)"/>
+      <column name="previous_model" type="VARCHAR(32)"/>
+      <column name="new_model" type="VARCHAR(32)"><constraints nullable="false"/></column>
+      <column name="source" type="VARCHAR(32)"><constraints nullable="false"/></column>
+    </createTable>
+    <rollback><dropTable tableName="agency_case_sharing_change"/></rollback>
+  </changeSet>
+  <changeSet id="indexAgencyCaseSharingChangeTenant" author="oriso">
+    <preConditions onFail="MARK_RAN">
+      <not><indexExists tableName="agency_case_sharing_change" indexName="idx_agency_case_sharing_change_tenant"/></not>
+    </preConditions>
+    <createIndex tableName="agency_case_sharing_change" indexName="idx_agency_case_sharing_change_tenant">
+      <column name="tenant_id"/>
+      <column name="changed_at"/>
+    </createIndex>
+    <rollback><dropIndex tableName="agency_case_sharing_change" indexName="idx_agency_case_sharing_change_tenant"/></rollback>
+  </changeSet>
+  <changeSet id="indexAgencyCaseSharingChangeAgency" author="oriso">
+    <preConditions onFail="MARK_RAN">
+      <not><indexExists tableName="agency_case_sharing_change" indexName="idx_agency_case_sharing_change_agency"/></not>
+    </preConditions>
+    <createIndex tableName="agency_case_sharing_change" indexName="idx_agency_case_sharing_change_agency">
+      <column name="agency_id"/>
+      <column name="changed_at"/>
+    </createIndex>
+    <rollback><dropIndex tableName="agency_case_sharing_change" indexName="idx_agency_case_sharing_change_agency"/></rollback>
+  </changeSet>
+</databaseChangeLog>
