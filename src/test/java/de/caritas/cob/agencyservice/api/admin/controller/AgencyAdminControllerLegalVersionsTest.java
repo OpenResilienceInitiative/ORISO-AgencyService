@@ -54,6 +54,9 @@ class AgencyAdminControllerLegalVersionsTest {
   @Mock private LegalTextAdminService legalTextAdminService;
   @Mock private LegalTextVersionAdminService legalTextVersionAdminService;
   @Mock private AgencyIdAllocationService agencyIdAllocationService;
+  @Mock
+  private de.caritas.cob.agencyservice.api.admin.service.casesharing.AgencyCaseSharingChangeQueryService
+      agencyCaseSharingChangeQueryService;
 
   @Mock private de.caritas.cob.agencyservice.api.admin.service.legal.AgencyLegalDraftService agencyLegalDraftService;
   @Mock

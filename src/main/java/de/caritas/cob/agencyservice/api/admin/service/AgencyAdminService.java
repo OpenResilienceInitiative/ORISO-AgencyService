@@ -11,6 +11,7 @@ import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyAdminFullResp
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencySettingsService;
 import de.caritas.cob.agencyservice.api.admin.service.allocation.AgencyIdAllocationService;
 import de.caritas.cob.agencyservice.api.admin.service.agencyadmincontrol.AgencyAdminControlsService;
+import de.caritas.cob.agencyservice.api.admin.service.casesharing.AgencyCaseSharingChangeRecorder;
 import de.caritas.cob.agencyservice.api.admin.service.agency.AgencyTopicEnrichmentService;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DataProtectionConverter;
 import de.caritas.cob.agencyservice.api.admin.service.agency.DemographicsConverter;
@@ -32,6 +33,8 @@ import de.caritas.cob.agencyservice.api.repository.agency.AgencyRepository;
 import de.caritas.cob.agencyservice.api.repository.agency.AgencyTenantUnawareRepository;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopic;
 import de.caritas.cob.agencyservice.api.repository.agencytopic.AgencyTopicRepository;
+import de.caritas.cob.agencyservice.api.repository.casesharingchange.AgencyCaseSharingChangeSource;
+import de.caritas.cob.agencyservice.api.model.AgencyCaseSharingMode;
 import de.caritas.cob.agencyservice.api.service.AppointmentService;
 import de.caritas.cob.agencyservice.api.service.AgencyService;
 import de.caritas.cob.agencyservice.api.tenant.TenantContext;
@@ -96,6 +99,7 @@ public class AgencyAdminService {
   private final @NonNull LegalTextVersionService legalTextVersionService;
   private final @NonNull ConsentTextService consentTextService;
   private final @NonNull OneTopicPerAgencyPolicy oneTopicPerAgencyPolicy;
+  private final @NonNull AgencyCaseSharingChangeRecorder caseSharingChangeRecorder;
 
   @Autowired(required = false)
   private AgencyTopicEnrichmentService agencyTopicEnrichmentService;
@@ -214,6 +218,7 @@ public class AgencyAdminService {
     return agencyCreationTransaction.execute(status -> {
       var savedAgency = agencyRepository.save(agency);
       agencyIdAllocationService.guardAssignmentAgainstOpenReservations(savedAgency.getId());
+      recordCaseSharingAtCreation(savedAgency);
       return savedAgency;
     });
   }
@@ -242,8 +247,17 @@ public class AgencyAdminService {
         agencyIdAllocationService.claimReservedId(reservedAgencyId, agency.getTenantId(), agency.getName());
       }
       agency.setId(reservedAgencyId);
-      return agencyRepository.save(agency);
+      var savedAgency = agencyRepository.save(agency);
+      recordCaseSharingAtCreation(savedAgency);
+      return savedAgency;
     });
+  }
+
+  /** ORISO-Frontend#2494: the log starts with the model a centre is created under. */
+  private void recordCaseSharingAtCreation(Agency savedAgency) {
+    caseSharingChangeRecorder.recordCreation(
+        savedAgency.getId(), savedAgency.getTenantId(),
+        ownCaseSharingMode(savedAgency.getSettings()), savedAgency.isTeamAgency());
   }
 
   private void setTenantIdOnCreate(AgencyDTO agencyDTO, Agency agency) {
@@ -376,11 +390,19 @@ public class AgencyAdminService {
     final var storedDpp = agency.getContentDpp();
     final var storedConsent = agency.getConsentText();
     final var storedImprint = agency.getContentImprint();
+    // ORISO-Frontend#2494: the own case sharing mode before the merge overwrites the stored settings.
+    final var storedCaseSharingMode = ownCaseSharingMode(agency.getSettings());
+    final var storedTeamAgency = agency.isTeamAgency();
     var updatedAgency = agencyRepository.save(mergeAgencies(agency, updateAgencyDTO));
     enrichWithAgencyTopicsIfTopicFeatureEnabled(updatedAgency);
     this.appointmentService.syncAgencyDataToAppointmentService(updatedAgency);
     agencyRepository.flush();
     recordAgencyLegalTextVersions(updatedAgency, storedDpp, storedConsent, storedImprint);
+    caseSharingChangeRecorder.recordIfEffectiveModelChanged(
+        updatedAgency.getId(), updatedAgency.getTenantId(),
+        storedCaseSharingMode, storedTeamAgency,
+        ownCaseSharingMode(updatedAgency.getSettings()), updatedAgency.isTeamAgency(),
+        AgencyCaseSharingChangeSource.AGENCY_SETTINGS);
     return buildAgencyAdminFullResponse(updatedAgency);
   }
 
@@ -626,8 +648,24 @@ public class AgencyAdminService {
     }
     this.userAdminService
         .adaptRelatedConsultantsForChange(agencyId, agencyTypeDTO.getAgencyType().getValue());
+    boolean storedTeamAgency = agency.isTeamAgency();
     agency.setTeamAgency(isTeamAgency);
     this.agencyRepository.save(agency);
+    var ownMode = ownCaseSharingMode(agency.getSettings());
+    caseSharingChangeRecorder.recordIfEffectiveModelChanged(
+        agency.getId(), agency.getTenantId(), ownMode, storedTeamAgency, ownMode, isTeamAgency,
+        AgencyCaseSharingChangeSource.AGENCY_TYPE);
+  }
+
+  /** The centre's own mode for the case sharing log; unreadable settings never fail a save. */
+  private AgencyCaseSharingMode ownCaseSharingMode(String settingsJson) {
+    try {
+      var settings = agencySettingsService.toSettings(settingsJson);
+      return settings == null ? null : settings.getCaseSharingMode();
+    } catch (RuntimeException e) {
+      log.warn("Stored settings unreadable; case sharing log treats the own mode as unset", e);
+      return null;
+    }
   }
 
   /**
